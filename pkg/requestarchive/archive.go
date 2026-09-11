@@ -8,10 +8,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -25,7 +28,9 @@ var Default *Archive
 type Config struct {
 	Directory     string
 	MaxBodyBytes  int
-	RetentionDays int // Zero keeps archives until the operator removes them.
+	RetentionDays int   // Zero disables age-based deletion.
+	MaxFileBytes  int64 // Zero disables size rotation; a single record is never split.
+	MaxFiles      int   // Zero disables file-count cleanup; includes the current file.
 }
 
 // Entry stores bodies as nested JSON rather than escaped JSON strings. Every
@@ -78,6 +83,7 @@ func OpenFromEnv() (*Archive, error) {
 	for name, target := range map[string]*int{
 		"REQUEST_ARCHIVE_MAX_BODY_BYTES": &config.MaxBodyBytes,
 		"REQUEST_ARCHIVE_RETENTION_DAYS": &config.RetentionDays,
+		"REQUEST_ARCHIVE_MAX_FILES":      &config.MaxFiles,
 	} {
 		if value := os.Getenv(name); value != "" {
 			parsed, err := strconv.Atoi(value)
@@ -86,6 +92,27 @@ func OpenFromEnv() (*Archive, error) {
 			}
 			*target = parsed
 		}
+	}
+	if value := os.Getenv("REQUEST_ARCHIVE_MAX_FILE_SIZE"); value != "" {
+		value = strings.ToUpper(strings.TrimSpace(value))
+		megabytes, hasMB := strings.CutSuffix(value, "MB")
+		gigabytes, hasGB := strings.CutSuffix(value, "GB")
+		var multiplier int64 = 1
+		switch {
+		case hasMB:
+			value = strings.TrimSpace(megabytes)
+			multiplier = 1 << 20
+		case hasGB:
+			value = strings.TrimSpace(gigabytes)
+			multiplier = 1 << 30
+		case value != "0":
+			return nil, errors.New("REQUEST_ARCHIVE_MAX_FILE_SIZE must be 0 or a whole number with MB/GB units")
+		}
+		parsed, err := strconv.ParseInt(value, 10, 64)
+		if err != nil || parsed < 0 || parsed > math.MaxInt64/multiplier {
+			return nil, errors.New("REQUEST_ARCHIVE_MAX_FILE_SIZE is invalid or exceeds the supported size")
+		}
+		config.MaxFileBytes = parsed * multiplier
 	}
 	return Open(config)
 }
@@ -100,6 +127,9 @@ func Open(config Config) (*Archive, error) {
 	if config.RetentionDays < 0 || config.RetentionDays > 36500 {
 		return nil, errors.New("request archive retention must be between 0 and 36500 days")
 	}
+	if config.MaxFileBytes < 0 || config.MaxFiles < 0 {
+		return nil, errors.New("request archive file size and count limits must be non-negative")
+	}
 	directory, err := filepath.Abs(config.Directory)
 	if err != nil {
 		return nil, err
@@ -112,7 +142,7 @@ func Open(config Config) (*Archive, error) {
 	if err := archive.rotate(time.Now().UTC().Format(time.DateOnly)); err != nil {
 		return nil, err
 	}
-	if config.RetentionDays > 0 {
+	if config.RetentionDays > 0 || config.MaxFiles > 0 {
 		go archive.cleanupLoop()
 	}
 	return archive, nil
@@ -121,9 +151,6 @@ func Open(config Config) (*Archive, error) {
 func (a *Archive) MaxBodyBytes() int { return a.config.MaxBodyBytes }
 
 func (a *Archive) rotate(day string) error {
-	if a.file != nil && a.day == day {
-		return nil
-	}
 	if a.file != nil {
 		err := a.file.Close()
 		a.file = nil
@@ -139,6 +166,12 @@ func (a *Archive) rotate(day string) error {
 		return fmt.Errorf("open request archive: %w", err)
 	}
 	a.file, a.day, a.size = file, day, 0
+	if a.config.MaxFiles > 0 {
+		// Cleanup failures must not prevent the newly opened file from recording.
+		if err := a.cleanupLocked(time.Now(), false); err != nil {
+			common.SysError("request archive cleanup failed: " + err.Error())
+		}
+	}
 	return nil
 }
 
@@ -146,9 +179,6 @@ func (a *Archive) Append(entry Entry) error {
 	entry.Version = 1
 	if entry.CreatedAt == 0 {
 		entry.CreatedAt = time.Now().Unix()
-	}
-	if len(entry.Request) > a.config.MaxBodyBytes {
-		entry.Request, entry.RequestState = nil, "too_large"
 	}
 	if len(entry.Response) > a.config.MaxBodyBytes {
 		entry.Response, entry.ResponseState = nil, "too_large"
@@ -163,8 +193,13 @@ func (a *Archive) Append(entry Entry) error {
 	if a.closed {
 		return os.ErrClosed
 	}
-	if err := a.rotate(time.Unix(entry.CreatedAt, 0).UTC().Format(time.DateOnly)); err != nil {
-		return err
+	day := time.Unix(entry.CreatedAt, 0).UTC().Format(time.DateOnly)
+	sizeRotation := a.config.MaxFileBytes > 0 && a.size > 0 &&
+		(a.size >= a.config.MaxFileBytes || int64(len(data)) > a.config.MaxFileBytes-a.size)
+	if a.file == nil || a.day != day || sizeRotation {
+		if err := a.rotate(day); err != nil {
+			return err
+		}
 	}
 	n, err := a.file.Write(data)
 	if err == nil && n != len(data) {
@@ -184,10 +219,10 @@ func (a *Archive) Append(entry Entry) error {
 	return nil
 }
 
-// Cleanup only removes this archive format's closed daily files. The UTC date
-// cutoff retains at least RetentionDays complete days; zero disables deletion.
+// Cleanup applies age and file-count limits to recognized archive files.
+// The current file is protected from count-based deletion.
 func (a *Archive) Cleanup(now time.Time) error {
-	if a.config.RetentionDays == 0 {
+	if a.config.RetentionDays == 0 && a.config.MaxFiles == 0 {
 		return nil
 	}
 	a.mu.Lock()
@@ -195,24 +230,30 @@ func (a *Archive) Cleanup(now time.Time) error {
 	if a.closed {
 		return os.ErrClosed
 	}
+	return a.cleanupLocked(now, true)
+}
+
+// cleanupLocked is also used during rotation while the writer lock is held.
+func (a *Archive) cleanupLocked(now time.Time, applyAge bool) error {
 	files, err := os.ReadDir(a.config.Directory)
 	if err != nil {
 		return err
 	}
 	cutoff := now.UTC().AddDate(0, 0, -a.config.RetentionDays).Format(time.DateOnly)
-	if a.file != nil && a.day < cutoff {
+	if applyAge && a.config.RetentionDays > 0 && a.file != nil && a.day < cutoff {
 		err := a.file.Close()
 		a.file = nil
 		if err != nil {
 			return err
 		}
 	}
+	var retained []os.FileInfo
 	for _, file := range files {
 		if !file.Type().IsRegular() {
 			continue
 		}
 		matches := archiveFilename.FindStringSubmatch(file.Name())
-		if len(matches) != 2 || matches[1] >= cutoff {
+		if len(matches) != 2 {
 			continue
 		}
 		if _, err := time.Parse(time.DateOnly, matches[1]); err != nil {
@@ -222,8 +263,36 @@ func (a *Archive) Cleanup(now time.Time) error {
 		if a.file != nil && path == a.file.Name() {
 			continue
 		}
-		if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
+		if applyAge && a.config.RetentionDays > 0 && matches[1] < cutoff {
+			if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
+				return err
+			}
+			continue
+		}
+		info, err := file.Info()
+		if errors.Is(err, os.ErrNotExist) {
+			continue
+		}
+		if err != nil {
 			return err
+		}
+		retained = append(retained, info)
+	}
+	if a.config.MaxFiles > 0 {
+		slots := a.config.MaxFiles
+		if a.file != nil {
+			slots--
+		}
+		slices.SortFunc(retained, func(left, right os.FileInfo) int {
+			if order := left.ModTime().Compare(right.ModTime()); order != 0 {
+				return order
+			}
+			return strings.Compare(left.Name(), right.Name())
+		})
+		for _, file := range retained[:max(0, len(retained)-slots)] {
+			if err := os.Remove(filepath.Join(a.config.Directory, file.Name())); err != nil && !errors.Is(err, os.ErrNotExist) {
+				return err
+			}
 		}
 	}
 	return nil

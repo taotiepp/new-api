@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -116,7 +117,7 @@ func TestRequestArchiveCaptureDoesNotChangeDelivery(t *testing.T) {
 		{"disabled", "application/json", `{"messages":[]}`, "application/json", `{"ok":true}`, "", "", true},
 		{"json", "application/json", `{"messages":[{"content":"hello"}],"api_key":"secret"}`, "application/json", `{"answer":"你好\nworld"}`, "complete", "complete", false},
 		{"sse", "application/json", `{"stream":true}`, "text/event-stream", "data: {\"choices\":[{\"index\":0,\"delta\":{\"content\":\"hello\"},\"finish_reason\":\"stop\"}]}\n\ndata: [DONE]\n\n", "complete", "complete", false},
-		{"oversized request", "application/json", `{"text":"` + strings.Repeat("x", 1024) + `"}`, "application/json", `{}`, "too_large", "complete", false},
+		{"request beyond response limit", "application/json", `{"text":"` + strings.Repeat("x", 2<<20) + `"}`, "application/json", `{}`, "complete", "complete", false},
 		{"oversized response", "application/json", `{}`, "application/json", `{"text":"` + strings.Repeat("x", 1024) + `"}`, "complete", "too_large", false},
 		{"binary", "audio/wav", "binary audio", "audio/mpeg", "binary output", "unsupported", "unsupported", false},
 	} {
@@ -167,8 +168,10 @@ func TestRequestArchiveCaptureDoesNotChangeDelivery(t *testing.T) {
 			assert.Equal(t, tc.responseState, record.ResponseState)
 			assert.NotContains(t, string(record.Response), "data:")
 			assert.NotContains(t, string(record.Request), "secret")
-			if tc.requestState == "too_large" {
-				assert.Empty(t, record.Request)
+			if tc.requestState == "complete" {
+				expected, state := service.NormalizeArchivedJSON([]byte(tc.request))
+				require.Equal(t, "complete", state)
+				assert.JSONEq(t, string(expected), string(record.Request))
 			}
 			if tc.responseState == "too_large" {
 				assert.Empty(t, record.Response)
@@ -299,6 +302,8 @@ func TestRequestArchiveEnvironmentIsOptInAndValidated(t *testing.T) {
 	t.Setenv("REQUEST_ARCHIVE_DIR", directory)
 	t.Setenv("REQUEST_ARCHIVE_MAX_BODY_BYTES", "1024")
 	t.Setenv("REQUEST_ARCHIVE_RETENTION_DAYS", "0")
+	t.Setenv("REQUEST_ARCHIVE_MAX_FILE_SIZE", "0")
+	t.Setenv("REQUEST_ARCHIVE_MAX_FILES", "0")
 	archive, err := requestarchive.OpenFromEnv()
 	require.NoError(t, err)
 	assert.Nil(t, archive)
@@ -312,8 +317,105 @@ func TestRequestArchiveEnvironmentIsOptInAndValidated(t *testing.T) {
 	_, err = requestarchive.OpenFromEnv()
 	require.Error(t, err)
 	t.Setenv("REQUEST_ARCHIVE_RETENTION_DAYS", "0")
+	for _, name := range []string{"REQUEST_ARCHIVE_MAX_FILE_SIZE", "REQUEST_ARCHIVE_MAX_FILES"} {
+		for _, value := range []string{"-1", "invalid", "999999999999999999999"} {
+			t.Setenv(name, value)
+			_, err = requestarchive.OpenFromEnv()
+			require.Error(t, err)
+		}
+		t.Setenv(name, "0")
+	}
+	for _, value := range []string{"104857600", "1TB", "-1MB", "999999999999GB", "1.5MB"} {
+		t.Setenv("REQUEST_ARCHIVE_MAX_FILE_SIZE", value)
+		_, err = requestarchive.OpenFromEnv()
+		require.Error(t, err)
+	}
+	for _, value := range []string{"100MB", "1GB", " 2 mb "} {
+		t.Setenv("REQUEST_ARCHIVE_MAX_FILE_SIZE", value)
+		archive, err = requestarchive.OpenFromEnv()
+		require.NoError(t, err)
+		require.NoError(t, archive.Close())
+	}
+	t.Setenv("REQUEST_ARCHIVE_MAX_FILE_SIZE", "100MB")
+	t.Setenv("REQUEST_ARCHIVE_MAX_FILES", "10")
 	archive, err = requestarchive.OpenFromEnv()
 	require.NoError(t, err)
 	require.NoError(t, archive.Close())
 	assert.DirExists(t, directory)
+}
+
+func TestRequestArchiveSizeRotationPreservesWholeRecords(t *testing.T) {
+	directory := t.TempDir()
+	entry := requestarchive.Entry{Version: 1, CreatedAt: time.Now().Unix(), Request: json.RawMessage(`{"text":"hello"}`)}
+	encoded, err := common.Marshal(entry)
+	require.NoError(t, err)
+	limit := int64(2 * (len(encoded) + 1))
+	archive, err := requestarchive.Open(requestarchive.Config{Directory: directory, MaxBodyBytes: 1024, MaxFileBytes: limit})
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, archive.Close()) })
+	for range 3 {
+		require.NoError(t, archive.Append(entry))
+	}
+	files, err := filepath.Glob(filepath.Join(directory, "*.jsonl"))
+	require.NoError(t, err)
+	require.Len(t, files, 2)
+	var sizes []int64
+	for _, path := range files {
+		info, err := os.Stat(path)
+		require.NoError(t, err)
+		sizes = append(sizes, info.Size())
+	}
+	assert.ElementsMatch(t, []int64{limit, limit / 2}, sizes)
+	assert.Len(t, readRequestArchive(t, directory), 3)
+}
+
+func TestRequestArchiveFileCountAndOversizedRecords(t *testing.T) {
+	for _, maxFiles := range []int{0, 1, 2} {
+		t.Run(strconv.Itoa(maxFiles), func(t *testing.T) {
+			directory := t.TempDir()
+			config := requestarchive.Config{Directory: directory, MaxBodyBytes: 1024, MaxFileBytes: 128, MaxFiles: maxFiles}
+			archive, err := requestarchive.Open(config)
+			require.NoError(t, err)
+			t.Cleanup(func() { require.NoError(t, archive.Close()) })
+			body := json.RawMessage(`{"text":"` + strings.Repeat("x", 2048) + `"}`)
+			for index, id := range []string{"first", "second", "third"} {
+				require.NoError(t, archive.Append(requestarchive.Entry{RequestID: id, Request: body}))
+				// Keep modification ordering deterministic without sleeps.
+				files, err := filepath.Glob(filepath.Join(directory, "*.jsonl"))
+				require.NoError(t, err)
+				for _, path := range files {
+					data, err := os.ReadFile(path)
+					require.NoError(t, err)
+					if strings.Contains(string(data), `"request_id":"`+id+`"`) {
+						stamp := time.Date(2000, 1, 1, 0, 0, index, 0, time.UTC)
+						require.NoError(t, os.Chtimes(path, stamp, stamp))
+					}
+				}
+			}
+			records := readRequestArchive(t, directory)
+			want := 3
+			if maxFiles > 0 {
+				want = maxFiles
+			}
+			require.Len(t, records, want)
+			var ids []string
+			for _, record := range records {
+				ids = append(ids, record.RequestID)
+				assert.JSONEq(t, string(body), string(record.Request))
+			}
+			assert.Contains(t, ids, "third")
+			if maxFiles == 2 {
+				assert.ElementsMatch(t, []string{"second", "third"}, ids)
+			}
+			require.NoError(t, archive.Close())
+			reopened, err := requestarchive.Open(config)
+			require.NoError(t, err)
+			defer reopened.Close()
+			files, err := filepath.Glob(filepath.Join(directory, "*.jsonl"))
+			require.NoError(t, err)
+			if maxFiles > 0 {
+				assert.Len(t, files, maxFiles)
+			}
+		})
+	}
 }

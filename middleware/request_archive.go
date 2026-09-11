@@ -77,7 +77,7 @@ func RequestArchiving(archive *requestarchive.Archive) gin.HandlerFunc {
 			return
 		}
 		started := time.Now()
-		requestBuffer := &recordBuffer{limit: archive.MaxBodyBytes()}
+		requestBuffer := &bytes.Buffer{}
 		responseBuffer := &recordBuffer{limit: archive.MaxBodyBytes()}
 		contentType, _, _ := mime.ParseMediaType(c.GetHeader("Content-Type"))
 		isJSON := contentType == "" || contentType == "application/json" || strings.HasSuffix(contentType, "+json")
@@ -89,7 +89,7 @@ func RequestArchiving(archive *requestarchive.Archive) gin.HandlerFunc {
 		c.Writer = writer
 		finished := false
 		defer func() {
-			requestBody, requestExceeded := requestBuffer.snapshot()
+			requestBody := requestBuffer.Bytes()
 			responseBody, responseExceeded := responseBuffer.snapshot()
 			record := requestarchive.Entry{
 				RequestID: c.GetString(common.RequestIdKey),
@@ -113,9 +113,6 @@ func RequestArchiving(archive *requestarchive.Archive) gin.HandlerFunc {
 				if len(requestBody) == 0 && c.Request.ContentLength > 0 {
 					record.RequestState = "not_read"
 				}
-			}
-			if requestExceeded {
-				record.Request, record.RequestState = nil, "too_large"
 			}
 			responseType, _, _ := mime.ParseMediaType(writer.Header().Get("Content-Type"))
 			record.Stream = responseType == "text/event-stream"
