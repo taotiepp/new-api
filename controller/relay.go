@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
@@ -130,9 +131,19 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 
 	needSensitiveCheck := setting.ShouldCheckPromptSensitive()
 	needCountToken := constant.CountToken
-	// Avoid building huge CombineText (strings.Join) when token counting and sensitive check are both disabled.
+	deferTokenCount := needCountToken && service.HasTrustedWalletQuota(c, relayInfo)
+	switch relayInfo.RelayMode {
+	case relayconstant.RelayModeChatCompletions, relayconstant.RelayModeCompletions, relayconstant.RelayModeResponses:
+	default:
+		deferTokenCount = false
+	}
+	if common.NormalizeBillingPreference(relayInfo.UserSetting.BillingPreference) == "subscription_only" {
+		deferTokenCount = false
+	}
+	// Trusted requests also avoid building CombineText unless sensitive checking
+	// needs it; usage fallback constructs it only on demand.
 	var meta *types.TokenCountMeta
-	if needSensitiveCheck || needCountToken {
+	if needSensitiveCheck || (needCountToken && !deferTokenCount) {
 		meta = request.GetTokenCountMeta()
 	} else {
 		meta = fastTokenCountMetaForPricing(request)
@@ -147,7 +158,12 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		}
 	}
 
-	tokens, err := service.EstimateRequestToken(c, meta, relayInfo)
+	tokens := 0
+	if deferTokenCount {
+		deferRequestTokenEstimation(c, request, relayInfo)
+	} else {
+		tokens, err = service.EstimateRequestToken(c, meta, relayInfo)
+	}
 	if err != nil {
 		newAPIError = types.NewError(err, types.ErrorCodeCountTokenFailed)
 		return
@@ -322,6 +338,8 @@ func fastTokenCountMetaForPricing(request dto.Request) *types.TokenCountMeta {
 		meta.MaxTokens = int(lo.FromPtrOr(r.MaxOutputTokens, uint(0)))
 	case *dto.ClaudeRequest:
 		meta.MaxTokens = int(lo.FromPtr(r.MaxTokens))
+	case *dto.GeminiChatRequest:
+		meta.MaxTokens = int(lo.FromPtr(r.GenerationConfig.MaxOutputTokens))
 	case *dto.ImageRequest:
 		// Pricing for image requests depends on ImagePriceRatio; safe to compute even when CountToken is disabled.
 		return r.GetTokenCountMeta()
@@ -329,6 +347,38 @@ func fastTokenCountMetaForPricing(request dto.Request) *types.TokenCountMeta {
 		// Best-effort: leave CombineText empty to avoid large allocations.
 	}
 	return meta
+}
+
+// deferRequestTokenEstimation keeps the original request available for missing
+// upstream usage, without constructing its combined prompt on the trusted path.
+func deferRequestTokenEstimation(c *gin.Context, request dto.Request, info *relaycommon.RelayInfo) {
+	count := sync.OnceValues(func() (int, error) {
+		meta := request.GetTokenCountMeta()
+		tokens, err := service.CountRequestToken(c, meta, info)
+		if err != nil {
+			// Preserve the text portion if an optional media fetch fails after
+			// forwarding; never replace a long prompt with zero or a fixed count.
+			logger.LogError(c, "deferred prompt token estimation failed: "+err.Error())
+			return service.CountTextToken(meta.CombineText, info.OriginModelName), err
+		}
+		return tokens, nil
+	})
+	info.DeferredPromptTokens = func() int {
+		tokens, _ := count()
+		return tokens
+	}
+	info.PrepareUntrustedBilling = func() (int, *types.NewAPIError) {
+		tokens, err := count()
+		if err != nil {
+			return 0, types.NewError(err, types.ErrorCodeCountTokenFailed)
+		}
+		info.SetEstimatePromptTokens(tokens)
+		price, err := helper.ModelPriceHelper(c, info, tokens, fastTokenCountMetaForPricing(request))
+		if err != nil {
+			return 0, types.NewError(err, types.ErrorCodeModelPriceError, types.ErrOptionWithStatusCode(http.StatusBadRequest))
+		}
+		return price.QuotaToPreConsume, nil
+	}
 }
 
 func getChannel(c *gin.Context, info *relaycommon.RelayInfo, retryParam *service.RetryParam) (*model.Channel, *types.NewAPIError) {

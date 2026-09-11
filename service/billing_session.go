@@ -293,10 +293,11 @@ func (s *BillingSession) reserveToken(delta int) error {
 	return nil
 }
 
-// shouldTrust 统一信任额度检查，适用于钱包和订阅。
-func (s *BillingSession) shouldTrust(c *gin.Context) bool {
+// HasTrustedWalletQuota shares the wallet and API-token threshold between
+// request estimation and the final funding decision.
+func HasTrustedWalletQuota(c *gin.Context, info *relaycommon.RelayInfo) bool {
 	// 异步任务（ForcePreConsume=true）必须预扣全额，不允许信任旁路
-	if s.relayInfo.ForcePreConsume {
+	if info == nil || info.ForcePreConsume {
 		return false
 	}
 
@@ -306,7 +307,7 @@ func (s *BillingSession) shouldTrust(c *gin.Context) bool {
 	}
 
 	// 检查令牌是否充足
-	tokenTrusted := s.relayInfo.TokenUnlimited
+	tokenTrusted := info.TokenUnlimited
 	if !tokenTrusted {
 		tokenQuota := c.GetInt("token_quota")
 		tokenTrusted = tokenQuota > trustQuota
@@ -315,9 +316,13 @@ func (s *BillingSession) shouldTrust(c *gin.Context) bool {
 		return false
 	}
 
+	return info.UserQuota > trustQuota
+}
+
+func (s *BillingSession) shouldTrust(c *gin.Context) bool {
 	switch s.funding.Source() {
 	case BillingSourceWallet:
-		return s.relayInfo.UserQuota > trustQuota
+		return HasTrustedWalletQuota(c, s.relayInfo)
 	case BillingSourceSubscription:
 		// 订阅不能启用信任旁路。原因：
 		// 1. PreConsumeUserSubscription 要求 amount>0 来创建预扣记录并锁定订阅
@@ -373,13 +378,20 @@ func NewBillingSession(c *gin.Context, relayInfo *relaycommon.RelayInfo, preCons
 				types.ErrorCodeInsufficientUserQuota, http.StatusForbidden,
 				types.ErrOptionWithSkipRetry(), types.ErrOptionWithNoRecordErrorLog())
 		}
+		relayInfo.UserQuota = userQuota
+		if !HasTrustedWalletQuota(c, relayInfo) && relayInfo.PrepareUntrustedBilling != nil {
+			var apiErr *types.NewAPIError
+			preConsumedQuota, apiErr = relayInfo.PrepareUntrustedBilling()
+			if apiErr != nil {
+				return nil, apiErr
+			}
+		}
 		if userQuota-preConsumedQuota < 0 {
 			return nil, types.NewErrorWithStatusCode(
 				fmt.Errorf("预扣费额度失败, 用户剩余额度: %s, 需要预扣费额度: %s", logger.FormatQuota(userQuota), logger.FormatQuota(preConsumedQuota)),
 				types.ErrorCodeInsufficientUserQuota, http.StatusForbidden,
 				types.ErrOptionWithSkipRetry(), types.ErrOptionWithNoRecordErrorLog())
 		}
-		relayInfo.UserQuota = userQuota
 
 		session := &BillingSession{
 			relayInfo: relayInfo,
@@ -392,6 +404,13 @@ func NewBillingSession(c *gin.Context, relayInfo *relaycommon.RelayInfo, preCons
 	}
 
 	trySubscription := func() (*BillingSession, *types.NewAPIError) {
+		if relayInfo.PrepareUntrustedBilling != nil {
+			var apiErr *types.NewAPIError
+			preConsumedQuota, apiErr = relayInfo.PrepareUntrustedBilling()
+			if apiErr != nil {
+				return nil, apiErr
+			}
+		}
 		subConsume := int64(preConsumedQuota)
 		if subConsume <= 0 {
 			subConsume = 1

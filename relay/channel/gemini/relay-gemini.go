@@ -30,6 +30,13 @@ func buildUsageFromGeminiMetadata(metadata *dto.GeminiUsageMetadata, fallbackPro
 	return *usage
 }
 
+func geminiUsageFallbackPromptTokens(info *relaycommon.RelayInfo, metadata *dto.GeminiUsageMetadata) int {
+	if metadata != nil && metadata.PromptTokenCount > 0 {
+		return 0
+	}
+	return info.GetPromptTokensForUsage()
+}
+
 func attachEstimatedGeminiBillingUsage(usage *dto.Usage) *dto.Usage {
 	if usage != nil && usage.BillingUsage == nil {
 		usage.BillingUsage = dto.NewEstimatedGeminiChatBillingUsage(usage)
@@ -111,11 +118,11 @@ func countGeminiBillableFunctionCalls(info *relaycommon.RelayInfo, response *dto
 func buildUsageFromGeminiResponse(c *gin.Context, info *relaycommon.RelayInfo, response *dto.GeminiChatResponse) dto.Usage {
 	metadata := response.GetUsageMetadata()
 	if dto.HasGeminiUsageMetadataTokens(metadata) {
-		usage := buildUsageFromGeminiMetadata(metadata, info.GetEstimatePromptTokens())
+		usage := buildUsageFromGeminiMetadata(metadata, geminiUsageFallbackPromptTokens(info, metadata))
 		patchGeminiZeroCompletionUsage(c, info, &usage, geminiResponseUsageText(response), geminiResponseInlineImageCount(response))
 		return usage
 	}
-	usage := service.ResponseText2Usage(c, geminiResponseUsageText(response), info.UpstreamModelName, info.GetEstimatePromptTokens())
+	usage := service.ResponseText2Usage(c, geminiResponseUsageText(response), info.UpstreamModelName, info.GetPromptTokensForUsage())
 	attachEstimatedGeminiBillingUsage(usage)
 	return *usage
 }
@@ -202,7 +209,7 @@ func geminiStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http
 		// 更新使用量统计
 		if metadata := geminiResponse.GetUsageMetadata(); dto.HasGeminiUsageMetadataTokens(metadata) {
 			accumulatedUsageMetadata = dto.MergeGeminiUsageMetadataNonZero(accumulatedUsageMetadata, metadata)
-			mappedUsage := buildUsageFromGeminiMetadata(accumulatedUsageMetadata, info.GetEstimatePromptTokens())
+			mappedUsage := buildUsageFromGeminiMetadata(accumulatedUsageMetadata, geminiUsageFallbackPromptTokens(info, accumulatedUsageMetadata))
 			*usage = mappedUsage
 			hasBillableUsageMetadata = true
 		}
@@ -219,7 +226,7 @@ func geminiStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http
 
 	if !hasBillableUsageMetadata {
 		if info.ReceivedResponseCount > 0 {
-			usage = service.ResponseText2Usage(c, responseText.String(), info.UpstreamModelName, info.GetEstimatePromptTokens())
+			usage = service.ResponseText2Usage(c, responseText.String(), info.UpstreamModelName, info.GetPromptTokensForUsage())
 		} else {
 			usage = &dto.Usage{}
 		}
@@ -471,7 +478,7 @@ func GeminiEmbeddingHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *h
 	// Google has not yet clarified how embedding models will be billed
 	// refer to openai billing method to use input tokens billing
 	// https://platform.openai.com/docs/guides/embeddings#what-are-embeddings
-	usage := service.ResponseText2Usage(c, "", info.UpstreamModelName, info.GetEstimatePromptTokens())
+	usage := service.ResponseText2Usage(c, "", info.UpstreamModelName, info.GetPromptTokensForUsage())
 	openAIResponse.Usage = *usage
 
 	jsonResponse, jsonErr := common.Marshal(openAIResponse)

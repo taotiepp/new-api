@@ -249,9 +249,9 @@ func calculateTextQuotaSummary(ctx *gin.Context, relayInfo *relaycommon.RelayInf
 
 	if usage == nil {
 		usage = &dto.Usage{
-			PromptTokens:     relayInfo.GetEstimatePromptTokens(),
+			PromptTokens:     relayInfo.GetPromptTokensForUsage(),
 			CompletionTokens: 0,
-			TotalTokens:      relayInfo.GetEstimatePromptTokens(),
+			TotalTokens:      relayInfo.GetPromptTokensForUsage(),
 		}
 	}
 

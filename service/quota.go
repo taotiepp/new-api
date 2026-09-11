@@ -285,7 +285,7 @@ func CalcOpenRouterCacheCreateTokens(usage dto.Usage, priceData types.PriceData)
 
 func PostAudioConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, usage *dto.Usage, extraContent string) {
 	if usage == nil {
-		usage = &dto.Usage{PromptTokens: relayInfo.GetEstimatePromptTokens(), TotalTokens: relayInfo.GetEstimatePromptTokens()}
+		usage = &dto.Usage{PromptTokens: relayInfo.GetPromptTokensForUsage(), TotalTokens: relayInfo.GetPromptTokensForUsage()}
 	}
 
 	var tieredUsedVars map[string]bool

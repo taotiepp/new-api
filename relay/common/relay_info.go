@@ -79,6 +79,11 @@ type ChannelMeta struct {
 type TokenCountMeta struct {
 	//promptTokens int
 	estimatePromptTokens int
+	// DeferredPromptTokens is evaluated only when local usage is needed.
+	DeferredPromptTokens func() int `json:"-"`
+	// PrepareUntrustedBilling restores full estimation before a funding source
+	// that cannot use the wallet trust bypass reserves quota.
+	PrepareUntrustedBilling func() (int, *types.NewAPIError) `json:"-"`
 }
 
 type RelayInfo struct {
@@ -758,6 +763,19 @@ func (info *RelayInfo) SetEstimatePromptTokens(promptTokens int) {
 func (info *RelayInfo) GetEstimatePromptTokens() int {
 	if info == nil {
 		return 0
+	}
+	return info.estimatePromptTokens
+}
+
+// GetPromptTokensForUsage resolves deferred counting for settlement fallbacks.
+// Protocol converters use GetEstimatePromptTokens so provisional stream frames
+// never trigger full prompt tokenization.
+func (info *RelayInfo) GetPromptTokensForUsage() int {
+	if info == nil {
+		return 0
+	}
+	if info.DeferredPromptTokens != nil {
+		return info.DeferredPromptTokens()
 	}
 	return info.estimatePromptTokens
 }

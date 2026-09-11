@@ -169,7 +169,7 @@ func cohereStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http
 		}
 	})
 	if usage.PromptTokens == 0 {
-		usage = service.ResponseText2Usage(c, responseText, info.UpstreamModelName, info.GetEstimatePromptTokens())
+		usage = service.ResponseText2Usage(c, responseText, info.UpstreamModelName, info.GetPromptTokensForUsage())
 	}
 	return usage, nil
 }
@@ -229,9 +229,9 @@ func cohereRerankHandler(c *gin.Context, resp *http.Response, info *relaycommon.
 	}
 	usage := dto.Usage{}
 	if cohereResp.Meta.BilledUnits.InputTokens == 0 {
-		usage.PromptTokens = info.GetEstimatePromptTokens()
+		usage.PromptTokens = info.GetPromptTokensForUsage()
 		usage.CompletionTokens = 0
-		usage.TotalTokens = info.GetEstimatePromptTokens()
+		usage.TotalTokens = info.GetPromptTokensForUsage()
 	} else {
 		usage.PromptTokens = cohereResp.Meta.BilledUnits.InputTokens
 		usage.CompletionTokens = cohereResp.Meta.BilledUnits.OutputTokens
