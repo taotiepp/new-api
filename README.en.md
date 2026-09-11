@@ -330,6 +330,13 @@ docker run --name new-api -d --restart always \
 | `MAX_REQUEST_BODY_MB` | Max request body size (MB, counted **after decompression**; prevents huge requests/zip bombs from exhausting memory). Exceeding it returns `413` | `32` |
 | `AZURE_DEFAULT_API_VERSION` | Azure API version | `2025-04-01-preview` |
 | `ERROR_LOG_ENABLED` | Error log switch | `false` |
+| `TRUST_QUOTA_USD` | Wallet/API-token trust threshold in USD; accepts decimals. `0` disables the trust bypass | `10` |
+| `REQUEST_ARCHIVE_ENABLED` | Enable independent JSONL request/response archives | `false` |
+| `REQUEST_ARCHIVE_DIR` | Archive directory; use persistent storage in containers | `./data/request-archives` |
+| `REQUEST_ARCHIVE_MAX_FILE_SIZE` | Rotate at an integer size such as `100MB` or `1GB` (case-insensitive, base 1024); `0` disables size rotation | `0` |
+| `REQUEST_ARCHIVE_MAX_FILES` | Maximum archive files, including the current file; `0` disables count cleanup | `0` |
+| `REQUEST_ARCHIVE_MAX_BODY_BYTES` | Response capture limit in bytes, including SSE and merged JSON; request bodies have no archive size limit | `1048576` |
+| `REQUEST_ARCHIVE_RETENTION_DAYS` | Remove archives older than the configured UTC retention period; `0` disables age cleanup | `0` |
 | `PYROSCOPE_URL` | Pyroscope server address | - |
 | `PYROSCOPE_APP_NAME` | Pyroscope application name | `new-api` |
 | `PYROSCOPE_BASIC_AUTH_USER` | Pyroscope basic auth user | - |
@@ -341,6 +348,25 @@ docker run --name new-api -d --restart always \
 📖 **Complete configuration:** [Environment Variables Documentation](https://docs.newapi.pro/en/docs/installation/config-maintenance/environment-variables)
 
 </details>
+
+### Request Archives and Trusted Wallets
+
+```dotenv
+REQUEST_ARCHIVE_ENABLED=true
+REQUEST_ARCHIVE_DIR=./data/request-archives
+REQUEST_ARCHIVE_MAX_FILE_SIZE=100MB
+REQUEST_ARCHIVE_MAX_FILES=10
+REQUEST_ARCHIVE_RETENTION_DAYS=0
+TRUST_QUOTA_USD=10
+```
+
+Archives are independent of consumption logs and databases. Captured JSON request bodies are saved in full; the gateway's request admission limits still apply. Supported SSE responses are merged into non-stream JSON. Binary/multipart bodies are omitted, and common credential fields are redacted.
+
+Rotation preserves complete JSONL records: a single oversized record can exceed the file threshold, and the next record starts a new file. Count cleanup removes the oldest closed files by modification time; date rotation and optional age cleanup also apply. Each service instance must use a separate archive directory when file-count cleanup is enabled.
+
+Trusted wallet requests can skip upfront prompt tokenization for chat/completions and Responses. The wallet balance must exceed `TRUST_QUOTA_USD`, and the API token must be unlimited or also exceed that threshold. Missing upstream usage triggers local counting on demand. Subscription funding and forced pre-consumption retain full estimation; final billing still applies.
+
+Restart after changing these variables. See [Request archive details](pkg/requestarchive/README.md) and [.env.example](.env.example) for capture states, limits and configuration.
 
 ### 🔧 Deployment Methods
 

@@ -331,6 +331,13 @@ docker run --name new-api -d --restart always \
 | `MAX_REQUEST_BODY_MB` | 请求体最大大小（MB，**解压后**计；防止超大请求/zip bomb 导致内存暴涨），超过将返回 `413` | `32` |
 | `AZURE_DEFAULT_API_VERSION` | Azure API 版本                                                 | `2025-04-01-preview` |
 | `ERROR_LOG_ENABLED` | 错误日志开关                                                       | `false` |
+| `TRUST_QUOTA_USD` | 钱包及 API 令牌的信任额度阈值（美元），支持小数；`0` 关闭信任旁路 | `10` |
+| `REQUEST_ARCHIVE_ENABLED` | 开启独立的 JSONL 请求/响应归档 | `false` |
+| `REQUEST_ARCHIVE_DIR` | 归档目录；容器部署应挂载持久化存储 | `./data/request-archives` |
+| `REQUEST_ARCHIVE_MAX_FILE_SIZE` | 按文件大小轮转，如 `100MB`、`1GB`；支持整数，不区分大小写，按 1024 换算；`0` 不按大小轮转 | `0` |
+| `REQUEST_ARCHIVE_MAX_FILES` | 最多保留的归档文件数（含当前文件）；`0` 不限制数量 | `0` |
+| `REQUEST_ARCHIVE_MAX_BODY_BYTES` | 响应体采集上限（字节），同时约束 SSE 和合并后的 JSON；请求体不设归档大小限制 | `1048576` |
+| `REQUEST_ARCHIVE_RETENTION_DAYS` | 按 UTC 日期清理超过保留期的归档；`0` 不按天数清理 | `0` |
 | `PYROSCOPE_URL` | Pyroscope 服务地址                                            | - |
 | `PYROSCOPE_APP_NAME` | Pyroscope 应用名                                        | `new-api` |
 | `PYROSCOPE_BASIC_AUTH_USER` | Pyroscope Basic Auth 用户名                        | - |
@@ -342,6 +349,25 @@ docker run --name new-api -d --restart always \
 📖 **完整配置：** [环境变量文档](https://docs.newapi.pro/zh/docs/installation/config-maintenance/environment-variables)
 
 </details>
+
+### 请求归档与信任额度
+
+```dotenv
+REQUEST_ARCHIVE_ENABLED=true
+REQUEST_ARCHIVE_DIR=./data/request-archives
+REQUEST_ARCHIVE_MAX_FILE_SIZE=100MB
+REQUEST_ARCHIVE_MAX_FILES=10
+REQUEST_ARCHIVE_RETENTION_DAYS=0
+TRUST_QUOTA_USD=10
+```
+
+归档独立于消费日志和数据库。已采集的 JSON 请求体完整保存，不设归档大小限制；网关本身的请求接收大小限制仍有效。支持的 SSE 响应会合并成非流式 JSON。二进制及 multipart 正文不归档，常见凭据字段会脱敏。
+
+轮转不会拆分或截断单条 JSONL 记录：单条记录超过文件阈值时仍完整写入，下一条记录另起文件。数量超限时按修改时间删除最旧的已关闭归档；按日期轮转和可选的按天清理也会生效。启用文件数量限制时，每个服务实例必须使用独立归档目录。
+
+对于聊天/Completions 和 Responses 请求，钱包余额超过 `TRUST_QUOTA_USD`，且 API 令牌无限额或余额也超过该阈值时，可跳过前置输入 token 计数。上游缺少 usage 时再按需补算；订阅计费和强制预扣保留完整估算，最终费用仍正常结算。
+
+修改环境变量后需重启。采集状态、限制和配置详见[请求归档说明](pkg/requestarchive/README.md)及 [.env.example](.env.example)。
 
 ### 🔧 部署方式
 
