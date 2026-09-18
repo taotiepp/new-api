@@ -461,6 +461,9 @@ func PostTextConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, us
 		logger.LogError(ctx, "error settling billing: "+err.Error())
 	}
 
+	// Deduct actual token usage from the per-user/per-model TPM bucket.
+	RecordUserModelTokenUsage(ctx, relayInfo, summary.PromptTokens, summary.CompletionTokens)
+
 	logModel := summary.ModelName
 	if strings.HasPrefix(logModel, "gpt-4-gizmo") {
 		logModel = "gpt-4-gizmo-*"

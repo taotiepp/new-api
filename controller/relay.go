@@ -177,6 +177,14 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		return
 	}
 
+	// Per-user/per-model TPM & RPM admission. Runs before pre-consume so a
+	// rejected request is never charged. TPM uses the pre-request estimate
+	// (prompt + max_tokens); the actual usage is deducted at settlement.
+	if rateLimitErr := service.AdmitUserModelRateLimit(c, relayInfo, tokens, meta.MaxTokens); rateLimitErr != nil {
+		newAPIError = rateLimitErr
+		return
+	}
+
 	// common.SetContextKey(c, constant.ContextKeyTokenCountMeta, meta)
 
 	if priceData.FreeModel {
@@ -189,6 +197,7 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 	}
 
 	defer func() {
+		service.ReleaseUnsettledUserModelTPM(c, relayInfo)
 		// Only return quota if downstream failed and quota was actually pre-consumed
 		if newAPIError != nil {
 			newAPIError = service.NormalizeViolationFeeError(newAPIError)

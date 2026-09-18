@@ -356,6 +356,15 @@ func SetApiRouter(router *gin.Engine) {
 			prefillGroupRoute.DELETE("/:id", controller.DeletePrefillGroup)
 		}
 
+		userModelRateLimitRoute := apiRouter.Group("/user_model_rate_limit")
+		userModelRateLimitRoute.Use(middleware.AdminAuth())
+		{
+			userModelRateLimitRoute.GET("/", controller.GetUserModelRateLimits)
+			userModelRateLimitRoute.POST("/", controller.CreateUserModelRateLimit)
+			userModelRateLimitRoute.PUT("/", controller.UpdateUserModelRateLimit)
+			userModelRateLimitRoute.DELETE("/:id", controller.DeleteUserModelRateLimit)
+		}
+
 		mjRoute := apiRouter.Group("/mj")
 		mjRoute.GET("/self", middleware.UserAuth(), controller.GetUserMidjourney)
 		mjRoute.GET("/", middleware.AdminAuth(), controller.GetAllMidjourney)

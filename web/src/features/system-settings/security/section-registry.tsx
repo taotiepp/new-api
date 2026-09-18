@@ -20,6 +20,8 @@ import { RateLimitSection } from '../request-limits/rate-limit-section'
 import { SensitiveWordsSection } from '../request-limits/sensitive-words-section'
 import { SSRFSection } from '../request-limits/ssrf-section'
 import { TokenLimitSection } from '../request-limits/token-limit-section'
+import { UserModelOverrideSection } from '../request-limits/user-model-override-section'
+import { UserModelRateLimitSection } from '../request-limits/user-model-rate-limit-section'
 import type { SecuritySettings } from '../types'
 import { createSectionRegistry } from '../utils/section-registry'
 
@@ -40,6 +42,22 @@ const SECURITY_SECTIONS = [
         }}
       />
     ),
+  },
+  {
+    id: 'user-model-rate-limit',
+    titleKey: 'Per-user Model Rate Limits',
+    build: (settings: SecuritySettings) => (
+      <UserModelRateLimitSection
+        defaultValues={{
+          UserModelRateLimitConfig: settings.UserModelRateLimitConfig,
+        }}
+      />
+    ),
+  },
+  {
+    id: 'user-model-overrides',
+    titleKey: 'Per-user Overrides',
+    build: () => <UserModelOverrideSection />,
   },
   {
     id: 'sensitive-words',

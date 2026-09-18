@@ -176,6 +176,14 @@ type RelayInfo struct {
 	// It is surfaced onto the consume/task log's admin_info for auditing.
 	QuotaClamp *common.QuotaClamp
 
+	// User-model TPM reservation (scaled token-bucket units). Admit deducts
+	// the estimate; settlement applies actual-reserved; unsettled reservations
+	// are released when the request ends.
+	UserModelTPMReserved int64
+	UserModelTPMCapacity int64
+	UserModelTPMRate     int64
+	UserModelTPMSettled  bool
+
 	// TieredBillingSnapshot captures tiered billing rules at pre-consume time.
 	// Auto-group retries refresh its group-dependent fields before each attempt
 	// and again before settlement. Non-nil only when billing mode is "tiered_expr".
