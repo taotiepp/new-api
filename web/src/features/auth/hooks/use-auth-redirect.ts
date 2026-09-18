@@ -24,6 +24,7 @@ import {
   getSavedLanguage,
   sanitizeAuthRedirect,
 } from '@/features/auth/lib/auth-redirect'
+import { resolvePostLoginTarget } from '@/features/user-portal/lib/access'
 import { applyAuthBundle, isAuthBundle } from '@/lib/api'
 import { AuthOperationError } from '@/lib/secure-verification'
 import { useAuthStore, type AuthBundle } from '@/stores/auth-store'
@@ -63,8 +64,11 @@ export function useAuthRedirect() {
         await i18n.changeLanguage(savedLang)
       }
 
-      const targetPath =
-        sanitizeAuthRedirect(redirectTo, window.location.origin) ?? '/dashboard'
+      const targetPath = resolvePostLoginTarget(
+        redirectTo,
+        bundle.user.role,
+        window.location.origin
+      )
       await navigate({ href: targetPath, replace: true })
     },
     [navigate, sessionID]

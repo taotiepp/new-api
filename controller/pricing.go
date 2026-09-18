@@ -64,6 +64,23 @@ func GetPricing(c *gin.Context) {
 		}
 	}
 
+	catalogView := c.Query("catalog") == "1"
+	if catalogView {
+		pricing = redactPricingForUserCatalog(pricing)
+		c.JSON(200, gin.H{
+			"success":            true,
+			"data":               pricing,
+			"vendors":            catalogVendorsForItems(pricing, model.GetVendors()),
+			"group_ratio":        map[string]float64{},
+			"usable_group":       map[string]string{},
+			"supported_endpoint": model.GetSupportedEndpointMap(),
+			"auto_groups":        []string{},
+			"pricing_version":    "a42d372ccf0b5dd13ecf71203521f9d2",
+			"catalog":            true,
+		})
+		return
+	}
+
 	c.JSON(200, gin.H{
 		"success":            true,
 		"data":               pricing,

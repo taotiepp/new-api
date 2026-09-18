@@ -54,14 +54,21 @@ const UsageLogsContext = createContext<UsageLogsContextValue | undefined>(
   undefined
 )
 
-export function UsageLogsProvider({ children }: { children: ReactNode }) {
+type UsageLogsProviderProps = {
+  children: ReactNode
+  defaultViewScope?: LogsViewScope
+}
+
+export function UsageLogsProvider(props: UsageLogsProviderProps) {
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null)
   const [userInfoDialogOpen, setUserInfoDialogOpen] = useState(false)
   const [affinityTarget, setAffinityTarget] =
     useState<ChannelAffinityInfo | null>(null)
   const [affinityDialogOpen, setAffinityDialogOpen] = useState(false)
   const [sensitiveVisible, setSensitiveVisible] = useState(true)
-  const [viewScope, setViewScope] = useState<LogsViewScope>('all')
+  const [viewScope, setViewScope] = useState<LogsViewScope>(
+    props.defaultViewScope ?? 'all'
+  )
 
   return (
     <UsageLogsContext.Provider
@@ -80,7 +87,7 @@ export function UsageLogsProvider({ children }: { children: ReactNode }) {
         setViewScope,
       }}
     >
-      {children}
+      {props.children}
     </UsageLogsContext.Provider>
   )
 }

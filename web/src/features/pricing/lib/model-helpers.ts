@@ -101,6 +101,39 @@ export function replaceModelInPath(path: string, modelName: string): string {
   return path.replaceAll('{model}', modelName)
 }
 
+export type ModelApiEndpoint = {
+  type: string
+  path: string
+  method: string
+}
+
+export type ModelApiEndpointMap = Record<
+  string,
+  string | { path?: string; method?: string } | undefined
+>
+
+export function resolveModelApiEndpoints(
+  model: PricingModel,
+  endpointMap: ModelApiEndpointMap,
+): ModelApiEndpoint[] {
+  const types = model.supported_endpoint_types || []
+  return types.map((type) => {
+    const raw = endpointMap[type]
+    let path = ''
+    let method = 'POST'
+    if (typeof raw === 'string') {
+      path = raw
+    } else if (raw) {
+      path = raw.path || ''
+      method = raw.method || 'POST'
+    }
+    if (path.includes('{model}')) {
+      path = replaceModelInPath(path, model.model_name || '')
+    }
+    return { type, path, method }
+  })
+}
+
 /**
  * Check if model is token-based pricing
  */

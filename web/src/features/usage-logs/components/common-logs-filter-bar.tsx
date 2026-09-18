@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { useQueryClient, useIsFetching, useQuery } from '@tanstack/react-query'
-import { useNavigate, getRouteApi } from '@tanstack/react-router'
+import { useNavigate, useRouterState, useSearch } from '@tanstack/react-router'
 import type { Table } from '@tanstack/react-table'
 import { Eye, EyeOff } from 'lucide-react'
 import { useState, useCallback, useMemo } from 'react'
@@ -46,6 +46,7 @@ import { requireServerSuccess } from '@/lib/server-error-message'
 
 import { LOG_TYPE_ALL_VALUE, LOG_TYPE_FILTERS } from '../constants'
 import { buildSearchParams } from '../lib/filter'
+import { navigateToUsageLogsSection } from '../lib/logs-navigation'
 import { getDefaultTimeRange } from '../lib/utils'
 import type { CommonLogFilters } from '../types'
 import { CommonLogsStats } from './common-logs-stats'
@@ -56,8 +57,6 @@ import {
   LogsFilterToolbar,
 } from './logs-filter-toolbar'
 import { useLogsViewScope, useUsageLogsContext } from './usage-logs-provider'
-
-const route = getRouteApi('/_authenticated/usage-logs/$section')
 
 type LogTypeValue = (typeof LOG_TYPE_FILTERS)[number]['value']
 const logTypeValueSet = new Set<string>(
@@ -121,8 +120,11 @@ export function CommonLogsFilterBar<TData>(
   const { t } = useTranslation()
   const isMobile = useMediaQuery('(max-width: 640px)')
   const navigate = useNavigate()
+  const pathname = useRouterState({
+    select: (state) => state.location.pathname,
+  })
+  const searchParams = useSearch({ strict: false })
   const queryClient = useQueryClient()
-  const searchParams = route.useSearch()
   const { isAdminView: isAdmin } = useLogsViewScope()
   const { sensitiveVisible, setSensitiveVisible } = useUsageLogsContext()
   const fetchingLogs = useIsFetching({ queryKey: ['logs'] })
@@ -164,13 +166,34 @@ export function CommonLogsFilterBar<TData>(
         ? new Date(searchParams.startTime)
         : start,
       endTime: searchParams.endTime ? new Date(searchParams.endTime) : end,
-      channel: searchParams.channel || undefined,
-      model: searchParams.model || undefined,
-      token: searchParams.token || undefined,
-      group: searchParams.group || undefined,
-      username: searchParams.username || undefined,
-      requestId: searchParams.requestId || undefined,
-      upstreamRequestId: searchParams.upstreamRequestId || undefined,
+      channel:
+        typeof searchParams.channel === 'string'
+          ? searchParams.channel || undefined
+          : undefined,
+      model:
+        typeof searchParams.model === 'string'
+          ? searchParams.model || undefined
+          : undefined,
+      token:
+        typeof searchParams.token === 'string'
+          ? searchParams.token || undefined
+          : undefined,
+      group:
+        typeof searchParams.group === 'string'
+          ? searchParams.group || undefined
+          : undefined,
+      username:
+        typeof searchParams.username === 'string'
+          ? searchParams.username || undefined
+          : undefined,
+      requestId:
+        typeof searchParams.requestId === 'string'
+          ? searchParams.requestId || undefined
+          : undefined,
+      upstreamRequestId:
+        typeof searchParams.upstreamRequestId === 'string'
+          ? searchParams.upstreamRequestId || undefined
+          : undefined,
     }
     return {
       sourceKey: buildSearchSourceKey(sourceValues),
@@ -213,19 +236,20 @@ export function CommonLogsFilterBar<TData>(
   const handleApply = useCallback(
     (nextFilters: CommonLogFilters = filters) => {
       const filterParams = buildSearchParams(nextFilters, 'common')
-      navigate({
-        to: '/usage-logs/$section',
-        params: { section: 'common' },
+      navigateToUsageLogsSection({
+        pathname,
+        section: 'common',
         search: {
           ...filterParams,
           type: [logType],
           page: 1,
         },
+        navigate,
       })
       queryClient.invalidateQueries({ queryKey: ['logs'] })
       queryClient.invalidateQueries({ queryKey: ['usage-logs-stats'] })
     },
-    [filters, logType, navigate, queryClient]
+    [filters, logType, navigate, pathname, queryClient]
   )
 
   const handleReset = useCallback(() => {
@@ -242,17 +266,18 @@ export function CommonLogsFilterBar<TData>(
       logType: LOG_TYPE_ALL_VALUE,
     })
 
-    navigate({
-      to: '/usage-logs/$section',
-      params: { section: 'common' },
+    navigateToUsageLogsSection({
+      pathname,
+      section: 'common',
       search: {
         page: 1,
         ...resetSearch,
       },
+      navigate,
     })
     queryClient.invalidateQueries({ queryKey: ['logs'] })
     queryClient.invalidateQueries({ queryKey: ['usage-logs-stats'] })
-  }, [navigate, queryClient])
+  }, [navigate, pathname, queryClient])
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {

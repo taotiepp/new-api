@@ -29,3 +29,9 @@ export async function getPricing(): Promise<PricingData> {
   const res = await api.get('/api/pricing')
   return res.data
 }
+
+/** User portal catalog: omits billing groups, keeps vendor metadata. */
+export async function getUserPortalCatalogPricing(): Promise<PricingData> {
+  const res = await api.get('/api/pricing', { params: { catalog: '1' } })
+  return res.data
+}

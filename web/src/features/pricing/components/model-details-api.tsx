@@ -20,6 +20,7 @@ import {
   ChevronRight,
   Gauge,
   KeyRound,
+  Route,
   ScrollText,
   Sigma,
   Zap,
@@ -32,6 +33,7 @@ import {
   CodeBlock,
   CodeBlockCopyButton,
 } from '@/components/ai-elements/code-block'
+import { CopyButton } from '@/components/copy-button'
 import {
   StaticDataTable,
   staticDataTableClassNames as tableStyles,
@@ -41,12 +43,16 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useStatus } from '@/hooks/use-status'
 
 import {
+  getEndpointTypeLabels,
+  type EndpointTypeOption,
+} from '../constants'
+import {
   buildRateLimits,
   buildSupportedParameters,
   formatRateLimit,
   type SupportedParameter,
 } from '../lib/mock-stats'
-import { replaceModelInPath } from '../lib/model-helpers'
+import { resolveModelApiEndpoints } from '../lib/model-helpers'
 import type { PricingModel } from '../types'
 
 // ---------------------------------------------------------------------------
@@ -109,7 +115,7 @@ function buildChatSample(lang: Lang, ctx: SampleContext): string {
       `curl ${url} \\`,
       `  -H "Authorization: Bearer $${ctx.apiKeyEnv}" \\`,
       `  -H "Content-Type: application/json" \\`,
-      `  -d '${bodyJson.replace(/\n/g, '\n     ')}'`,
+      `  -d '${bodyJson.replaceAll('\n', '\n     ')}'`,
     ].join('\n')
   }
 
@@ -177,7 +183,7 @@ function buildAnthropicSample(lang: Lang, ctx: SampleContext): string {
       `  -H "x-api-key: $${ctx.apiKeyEnv}" \\`,
       `  -H "anthropic-version: 2023-06-01" \\`,
       `  -H "Content-Type: application/json" \\`,
-      `  -d '${body.replace(/\n/g, '\n     ')}'`,
+      `  -d '${body.replaceAll('\n', '\n     ')}'`,
     ].join('\n')
   }
   if (lang === 'python') {
@@ -249,7 +255,7 @@ function buildGeminiSample(lang: Lang, ctx: SampleContext): string {
     return [
       `curl '${url}' \\`,
       `  -H 'Content-Type: application/json' \\`,
-      `  -d '${body.replace(/\n/g, '\n     ')}'`,
+      `  -d '${body.replaceAll('\n', '\n     ')}'`,
     ].join('\n')
   }
   if (lang === 'python') {
@@ -299,7 +305,7 @@ function buildEmbeddingSample(lang: Lang, ctx: SampleContext): string {
       `curl ${url} \\`,
       `  -H "Authorization: Bearer $${ctx.apiKeyEnv}" \\`,
       `  -H "Content-Type: application/json" \\`,
-      `  -d '${body.replace(/\n/g, '\n     ')}'`,
+      `  -d '${body.replaceAll('\n', '\n     ')}'`,
     ].join('\n')
   }
   if (lang === 'python') {
@@ -365,7 +371,7 @@ function buildImageSample(lang: Lang, ctx: SampleContext): string {
       `curl ${url} \\`,
       `  -H "Authorization: Bearer $${ctx.apiKeyEnv}" \\`,
       `  -H "Content-Type: application/json" \\`,
-      `  -d '${body.replace(/\n/g, '\n     ')}'`,
+      `  -d '${body.replaceAll('\n', '\n     ')}'`,
     ].join('\n')
   }
   if (lang === 'python') {
@@ -428,11 +434,18 @@ function buildSample(
   endpointType: string,
   ctx: SampleContext
 ): string {
-  if (endpointType === 'anthropic') return buildAnthropicSample(lang, ctx)
-  if (endpointType === 'gemini') return buildGeminiSample(lang, ctx)
-  if (endpointType === 'embeddings' || endpointType === 'jina-rerank')
+  if (endpointType === 'anthropic') {
+    return buildAnthropicSample(lang, ctx)
+  }
+  if (endpointType === 'gemini') {
+    return buildGeminiSample(lang, ctx)
+  }
+  if (endpointType === 'embeddings' || endpointType === 'jina-rerank') {
     return buildEmbeddingSample(lang, ctx)
-  if (endpointType === 'image-generation') return buildImageSample(lang, ctx)
+  }
+  if (endpointType === 'image-generation') {
+    return buildImageSample(lang, ctx)
+  }
   return buildChatSample(lang, ctx)
 }
 
@@ -460,19 +473,13 @@ function CodeSamplesSection(props: {
     return 'https://api.example.com'
   }, [status])
 
-  const endpoints = useMemo(() => {
-    const types = props.model.supported_endpoint_types || []
-    return types
-      .map((type) => {
-        const info = props.endpointMap[type] || {}
-        let path = info.path || ''
-        if (path && path.includes('{model}')) {
-          path = replaceModelInPath(path, props.model.model_name || '')
-        }
-        return { type, path, method: info.method || 'POST' }
-      })
-      .filter((e) => Boolean(e.path))
-  }, [props.model, props.endpointMap])
+  const endpoints = useMemo(
+    () =>
+      resolveModelApiEndpoints(props.model, props.endpointMap).filter((endpoint) =>
+        Boolean(endpoint.path),
+      ),
+    [props.model, props.endpointMap],
+  )
 
   const [endpointType, setEndpointType] = useState<string>(
     endpoints[0]?.type ?? ''
@@ -758,12 +765,87 @@ function AuthSection() {
 // Composite API tab
 // ---------------------------------------------------------------------------
 
+function formatEndpointTypeLabel(
+  type: string,
+  labels: Record<EndpointTypeOption, string>,
+): string {
+  if (Object.hasOwn(labels, type) && type !== 'all') {
+    return labels[type as EndpointTypeOption]
+  }
+  return type
+}
+
+function SupportedEndpointsSection(props: {
+  model: PricingModel
+  endpointMap: Record<string, { path?: string; method?: string }>
+}) {
+  const { t } = useTranslation()
+  const labels = getEndpointTypeLabels(t)
+  const endpoints = useMemo(
+    () => resolveModelApiEndpoints(props.model, props.endpointMap),
+    [props.model, props.endpointMap],
+  )
+
+  return (
+    <section>
+      <SectionTitle icon={Route}>{t('Supported endpoints')}</SectionTitle>
+      {endpoints.length === 0 ? (
+        <p className='text-muted-foreground text-sm'>
+          {t('No endpoints inferred from channels')}
+        </p>
+      ) : (
+        <ul className='divide-border/60 border-border/60 divide-y overflow-hidden rounded-lg border'>
+          {endpoints.map((endpoint) => (
+            <li
+              key={endpoint.type}
+              className='grid grid-cols-[3.5rem_minmax(0,1fr)_auto] items-start gap-2 px-3 py-2.5'
+            >
+              <Badge
+                variant='outline'
+                className='mt-0.5 justify-center font-mono font-normal'
+              >
+                {endpoint.method}
+              </Badge>
+              <div className='min-w-0 space-y-1'>
+                <p className='text-sm font-medium'>
+                  {formatEndpointTypeLabel(endpoint.type, labels)}
+                </p>
+                {endpoint.path ? (
+                  <p className='text-muted-foreground font-mono text-xs break-all'>
+                    {endpoint.path}
+                  </p>
+                ) : (
+                  <p className='text-muted-foreground font-mono text-xs'>
+                    {endpoint.type}
+                  </p>
+                )}
+              </div>
+              {endpoint.path ? (
+                <CopyButton
+                  value={endpoint.path}
+                  className='size-7'
+                  iconClassName='size-3.5'
+                  aria-label={t('Copy endpoint path')}
+                />
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  )
+}
+
 export function ModelDetailsApi(props: {
   model: PricingModel
   endpointMap: Record<string, { path?: string; method?: string }>
 }) {
   return (
     <div className='space-y-6'>
+      <SupportedEndpointsSection
+        model={props.model}
+        endpointMap={props.endpointMap}
+      />
       <CodeSamplesSection model={props.model} endpointMap={props.endpointMap} />
       <AuthSection />
       <SupportedParametersSection model={props.model} />

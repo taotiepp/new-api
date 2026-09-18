@@ -16,6 +16,9 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { useSearch } from '@tanstack/react-router'
+import { useEffect, useRef } from 'react'
+
 import { PlaygroundChat } from './components/chat/playground-chat'
 import { PlaygroundInput } from './components/input/playground-input'
 import {
@@ -26,6 +29,8 @@ import {
 } from './hooks'
 
 export function Playground() {
+  const search = useSearch({ strict: false }) as { model?: string }
+  const appliedModelRef = useRef<string | null>(null)
   const {
     config,
     parameterEnabled,
@@ -73,6 +78,13 @@ export function Playground() {
     setModels,
     updateConfig,
   })
+
+  useEffect(() => {
+    const model = search.model?.trim()
+    if (!model || appliedModelRef.current === model) return
+    appliedModelRef.current = model
+    updateConfig('model', model)
+  }, [search.model, updateConfig])
 
   return (
     <div className='relative flex size-full min-h-0 flex-col overflow-hidden'>

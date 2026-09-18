@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { useQuery } from '@tanstack/react-query'
-import { getRouteApi } from '@tanstack/react-router'
+import { useNavigate, useSearch } from '@tanstack/react-router'
 import { flexRender, type Table as TanstackTable } from '@tanstack/react-table'
 import { Database } from 'lucide-react'
 import { useEffect, useState } from 'react'
@@ -40,7 +40,7 @@ import {
 } from '@/components/ui/empty'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
-import { useTableUrlState } from '@/hooks/use-table-url-state'
+import { useTableUrlState, type NavigateFn } from '@/hooks/use-table-url-state'
 import { createServerError } from '@/lib/server-error-message'
 import { cn } from '@/lib/utils'
 
@@ -64,8 +64,13 @@ import { useApiKeys } from './api-keys-provider'
 import { DataTableBulkActions } from './data-table-bulk-actions'
 import { DataTableRowActions } from './data-table-row-actions'
 
-const route = getRouteApi('/_authenticated/keys/')
 const API_KEYS_COLUMN_VISIBILITY_STORAGE_KEY = 'api-keys:column-visibility'
+const API_KEYS_PORTAL_COLUMN_VISIBILITY_STORAGE_KEY =
+  'api-keys:portal:column-visibility'
+const API_KEYS_PORTAL_DEFAULT_HIDDEN = {
+  model_limits: false,
+  allow_ips: false,
+} as const
 const API_KEYS_MOBILE_SKELETON_IDS = Array.from(
   { length: 5 },
   (_, index) => `api-key-mobile-skeleton-${index + 1}`
@@ -215,8 +220,11 @@ function ApiKeysMobileList({
   )
 }
 
-export function ApiKeysTable() {
+export function ApiKeysTable(props: { variant?: 'console' | 'portal' }) {
   const { t } = useTranslation()
+  const navigate = useNavigate()
+  const search = useSearch({ strict: false })
+  const variant = props.variant ?? 'console'
   const { refreshTrigger } = useApiKeys()
   const [now, setNow] = useState(() => Date.now())
   const columns = useApiKeysColumns(now)
@@ -238,8 +246,8 @@ export function ApiKeysTable() {
     onPaginationChange,
     ensurePageInRange,
   } = useTableUrlState({
-    search: route.useSearch(),
-    navigate: route.useNavigate(),
+    search,
+    navigate: navigate as NavigateFn,
     pagination: { defaultPage: 1, defaultPageSize: 20 },
     globalFilter: { enabled: true, key: 'filter' },
     columnFilters: [
@@ -309,7 +317,12 @@ export function ApiKeysTable() {
     columns,
     enableRowSelection: true,
     columnFilters,
-    columnVisibilityStorageKey: API_KEYS_COLUMN_VISIBILITY_STORAGE_KEY,
+    columnVisibilityStorageKey:
+      variant === 'portal'
+        ? API_KEYS_PORTAL_COLUMN_VISIBILITY_STORAGE_KEY
+        : API_KEYS_COLUMN_VISIBILITY_STORAGE_KEY,
+    initialColumnVisibility:
+      variant === 'portal' ? API_KEYS_PORTAL_DEFAULT_HIDDEN : undefined,
     globalFilter,
     pagination,
     globalFilterFn: () => true,

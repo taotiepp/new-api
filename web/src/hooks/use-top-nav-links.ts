@@ -21,6 +21,7 @@ import { useTranslation } from 'react-i18next'
 
 import { useStatus } from '@/hooks/use-status'
 import { parseHeaderNavModulesFromStatus } from '@/lib/nav-modules'
+import { ROLE } from '@/lib/roles'
 import { useAuthStore } from '@/stores/auth-store'
 
 export type TopNavLink = {
@@ -70,6 +71,10 @@ export function useTopNavLinks(): TopNavLink[] {
   // Console -> /dashboard (new console path)
   if (modules?.console !== false) {
     links.push({ title: t('Console'), href: '/dashboard' })
+  }
+
+  if (isAuthed && (auth.user?.role ?? ROLE.GUEST) >= ROLE.ADMIN) {
+    links.push({ title: t('User Portal'), href: '/app' })
   }
 
   // Pricing

@@ -526,15 +526,19 @@ function ModelBackendSignalsSection(props: { model: PricingModel }) {
   )
 }
 
-function ModelBackendProviderSection(props: { model: PricingModel }) {
+function ModelBackendProviderSection(props: {
+  model: PricingModel
+  catalogPresentation?: ModelDetailsContentProps['catalogPresentation']
+}) {
   const { t } = useTranslation()
   const model = props.model
+  const hideProviderDetails = props.catalogPresentation === 'user_portal'
   const groups = normalizeCatalogItems(model.enable_groups)
   const endpoints = normalizeCatalogItems(model.supported_endpoint_types)
   const tags = parseTags(model.tags)
   const cells: React.ReactNode[] = []
 
-  if (model.vendor_name) {
+  if (!hideProviderDetails && model.vendor_name) {
     cells.push(
       <CatalogInfoCell key='provider' label={t('Provider')}>
         <CatalogTextValue>{model.vendor_name}</CatalogTextValue>
@@ -548,7 +552,7 @@ function ModelBackendProviderSection(props: { model: PricingModel }) {
     </CatalogInfoCell>
   )
 
-  if (groups.length > 0) {
+  if (!hideProviderDetails && groups.length > 0) {
     cells.push(
       <CatalogInfoCell key='groups' label={t('Groups')}>
         <CatalogPillList items={groups} />
@@ -592,12 +596,18 @@ function ModelBackendProviderSection(props: { model: PricingModel }) {
   )
 }
 
-function ModelBackendDetailsSection(props: { model: PricingModel }) {
+function ModelBackendDetailsSection(props: {
+  model: PricingModel
+  catalogPresentation?: ModelDetailsContentProps['catalogPresentation']
+}) {
   return (
     <>
       <ModelBackendQuickStats model={props.model} />
       <ModelBackendSignalsSection model={props.model} />
-      <ModelBackendProviderSection model={props.model} />
+      <ModelBackendProviderSection
+        model={props.model}
+        catalogPresentation={props.catalogPresentation}
+      />
     </>
   )
 }
@@ -606,12 +616,18 @@ function ModelBackendDetailsSection(props: { model: PricingModel }) {
 // Model header (always visible above the detail sections)
 // ----------------------------------------------------------------------------
 
-function ModelHeader(props: { model: PricingModel }) {
+function ModelHeader(props: {
+  model: PricingModel
+  catalogPresentation?: ModelDetailsContentProps['catalogPresentation']
+}) {
   const { t } = useTranslation()
   const model = props.model
-  const modelIconKey = model.icon || model.vendor_icon
+  const isPortal = props.catalogPresentation === 'user_portal'
+  const modelIconKey = isPortal ? model.icon : model.icon || model.vendor_icon
   const modelIcon = modelIconKey ? getLobeIcon(modelIconKey, 20) : null
-  const description = model.description || model.vendor_description || null
+  const description = isPortal
+    ? model.description || null
+    : model.description || model.vendor_description || null
 
   return (
     <header className='pb-4'>
@@ -630,10 +646,12 @@ function ModelHeader(props: { model: PricingModel }) {
         />
       </div>
       <div className='mt-1 flex flex-wrap items-center gap-1.5 text-xs'>
-        {model.vendor_name && (
+        {!isPortal && model.vendor_name && (
           <span className='text-muted-foreground'>{model.vendor_name}</span>
         )}
-        <span className='text-muted-foreground/30'>·</span>
+        {!isPortal && model.vendor_name ? (
+          <span className='text-muted-foreground/30'>·</span>
+        ) : null}
         <ModelBillingModeBadge model={model} />
       </div>
       {description && (
@@ -1366,11 +1384,14 @@ export interface ModelDetailsContentProps {
   usdExchangeRate: number
   tokenUnit: TokenUnit
   showRechargePrice?: boolean
+  /** User portal hides vendor/group catalog fields and group pricing tables. */
+  catalogPresentation?: 'default' | 'user_portal'
 }
 
 export function ModelDetailsContent(props: ModelDetailsContentProps) {
   const { t } = useTranslation()
   const showRechargePrice = props.showRechargePrice ?? false
+  const isPortal = props.catalogPresentation === 'user_portal'
 
   const isDynamic =
     props.model.billing_mode === 'tiered_expr' &&
@@ -1388,7 +1409,12 @@ export function ModelDetailsContent(props: ModelDetailsContentProps) {
 
   return (
     <div className='@container/details space-y-4'>
-      <ModelHeader model={props.model} />
+      {!isPortal ? (
+        <ModelHeader
+          model={props.model}
+          catalogPresentation={props.catalogPresentation}
+        />
+      ) : null}
 
       <Tabs defaultValue='overview' className='gap-4'>
         <TabsList className='bg-muted/60 grid w-full grid-cols-3 gap-1 rounded-lg p-1 group-data-horizontal/tabs:h-auto'>
@@ -1432,19 +1458,24 @@ export function ModelDetailsContent(props: ModelDetailsContentProps) {
                 }}
               />
             )}
-            <GroupPricingSection
-              model={props.model}
-              groupRatio={props.groupRatio}
-              usableGroup={props.usableGroup}
-              autoGroups={props.autoGroups}
-              priceRate={props.priceRate}
-              usdExchangeRate={props.usdExchangeRate}
-              tokenUnit={props.tokenUnit}
-              showRechargePrice={showRechargePrice}
-            />
+            {!isPortal ? (
+              <GroupPricingSection
+                model={props.model}
+                groupRatio={props.groupRatio}
+                usableGroup={props.usableGroup}
+                autoGroups={props.autoGroups}
+                priceRate={props.priceRate}
+                usdExchangeRate={props.usdExchangeRate}
+                tokenUnit={props.tokenUnit}
+                showRechargePrice={showRechargePrice}
+              />
+            ) : null}
           </section>
 
-          <ModelBackendDetailsSection model={props.model} />
+          <ModelBackendDetailsSection
+            model={props.model}
+            catalogPresentation={props.catalogPresentation}
+          />
         </TabsContent>
 
         <TabsContent value='performance' className='outline-none'>
