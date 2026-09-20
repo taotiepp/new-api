@@ -22,6 +22,34 @@ import type { PricingModel } from '@/features/pricing/types'
 export const PORTAL_VENDOR_ALL = FILTER_ALL
 export const PORTAL_VENDOR_OTHER = '__other__'
 
+const PORTAL_PINNED_VENDOR_ALIASES = [
+  ['openai'],
+  ['anthropic', 'claude'],
+  ['google', 'gemini'],
+] as const
+
+function pinnedVendorRank(name: string): number {
+  const key = name.toLowerCase()
+  for (const [rank, aliases] of PORTAL_PINNED_VENDOR_ALIASES.entries()) {
+    for (const alias of aliases) {
+      if (key === alias || key.includes(alias)) return rank
+    }
+  }
+  return PORTAL_PINNED_VENDOR_ALIASES.length
+}
+
+function comparePortalVendorNames(left: string, right: string): number {
+  const leftName = left.trim()
+  const rightName = right.trim()
+  if (!leftName && rightName) return 1
+  if (leftName && !rightName) return -1
+  if (!leftName && !rightName) return 0
+
+  const rankDelta = pinnedVendorRank(leftName) - pinnedVendorRank(rightName)
+  if (rankDelta !== 0) return rankDelta
+  return leftName.localeCompare(rightName, undefined, { sensitivity: 'base' })
+}
+
 export type PortalVendorOption = {
   value: string
   name: string
@@ -77,11 +105,9 @@ export function listPortalCatalogVendors(
     })
   }
 
-  return [...counts.values()].sort((a, b) => {
-    if (a.value === PORTAL_VENDOR_OTHER) return 1
-    if (b.value === PORTAL_VENDOR_OTHER) return -1
-    return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
-  })
+  return [...counts.values()].sort((a, b) =>
+    comparePortalVendorNames(a.name, b.name),
+  )
 }
 
 export function sortPortalCatalogModels(
@@ -91,13 +117,10 @@ export function sortPortalCatalogModels(
   const sorted = [...models]
   if (sortBy === SORT_OPTIONS.NAME) {
     sorted.sort((a, b) => {
-      const aVendor = a.vendor_name || ''
-      const bVendor = b.vendor_name || ''
-      if (!aVendor && bVendor) return 1
-      if (aVendor && !bVendor) return -1
-      const vendorCmp = aVendor.localeCompare(bVendor, undefined, {
-        sensitivity: 'base',
-      })
+      const vendorCmp = comparePortalVendorNames(
+        a.vendor_name || '',
+        b.vendor_name || '',
+      )
       if (vendorCmp !== 0) return vendorCmp
       return (a.model_name || '').localeCompare(b.model_name || '', undefined, {
         sensitivity: 'base',

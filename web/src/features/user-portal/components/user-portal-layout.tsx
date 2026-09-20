@@ -16,26 +16,45 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { Outlet } from '@tanstack/react-router'
+import { Outlet, useRouterState } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 
 import { cn } from '@/lib/utils'
 
-import '@/features/user-portal/styles/user-portal.css'
+import '@/styles/portal.css'
 
+import { isUserPortalConsolePath } from '../lib/nav'
+import { PortalConsoleNav } from './portal-console-nav'
 import { PortalNavLinks } from './portal-nav-links'
 import { UserPortalHeader } from './user-portal-header'
 
 export function UserPortalLayout() {
   const { t } = useTranslation()
+  const pathname = useRouterState({ select: (s) => s.location.pathname })
+  const consolePath = isUserPortalConsolePath(pathname)
 
   return (
-    <div className={cn('portal-shell min-h-dvh')} data-user-portal>
+    <div
+      className={cn('portal-shell min-h-dvh')}
+      data-portal-console={consolePath ? '' : undefined}
+      data-user-portal
+    >
       <div aria-hidden className='portal-mesh-bg' />
       <div className='portal-main'>
         <UserPortalHeader />
         <main className='portal-content' id='user-portal-main'>
-          <Outlet />
+          {consolePath ? (
+            <div className='portal-console-body'>
+              <PortalConsoleNav />
+              <div className='portal-console-stage'>
+                <div className='portal-module portal-console-main'>
+                  <Outlet />
+                </div>
+              </div>
+            </div>
+          ) : (
+            <Outlet />
+          )}
         </main>
       </div>
       <nav

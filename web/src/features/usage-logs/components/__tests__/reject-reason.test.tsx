@@ -98,4 +98,11 @@ describe('usage log reject reason', () => {
     expect(screen.queryByText('Reject Reason')).toBeNull()
     expect(screen.queryByText('blocked by channel policy')).toBeNull()
   })
+
+  test('shows the failure reason to the log owner', () => {
+    renderDetails(false)
+
+    expect(screen.getByText('Failure reason')).toBeInTheDocument()
+    expect(screen.getByText('request rejected')).toBeInTheDocument()
+  })
 })

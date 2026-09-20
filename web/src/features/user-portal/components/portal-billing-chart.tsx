@@ -17,49 +17,39 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { VChart } from '@visactor/react-vchart'
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { EmptyState } from '@/components/empty-state'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { useTheme } from '@/context/theme-provider'
-import { formatQuota } from '@/lib/format'
+import { usePricingCurrency } from '@/lib/currency'
+import { useChartTheme } from '@/lib/use-chart-theme'
 import { VCHART_OPTION } from '@/lib/vchart'
 
 import {
+  compactPortalBillingAxisLabel,
   PORTAL_BILLING_CHART_COLORS,
   type PortalBillingBarPoint,
-  type PortalBillingGroup,
 } from '../lib/billing'
 
 type PortalBillingChartProps = {
   points: PortalBillingBarPoint[]
-  group: PortalBillingGroup
-  onGroupChange: (group: PortalBillingGroup) => void
   totalQuota: number
   loading: boolean
 }
 
 export function PortalBillingChart(props: PortalBillingChartProps) {
   const { t } = useTranslation()
-  const { resolvedTheme } = useTheme()
-  const [themeReady, setThemeReady] = useState(false)
-  const stacked = props.group === 'model'
-
-  useEffect(() => {
-    let cancelled = false
-    void import('@visactor/vchart').then((mod) => {
-      if (cancelled) return
-      mod.ThemeManager.setCurrentTheme(
-        resolvedTheme === 'dark' ? 'dark' : 'light',
-      )
-      setThemeReady(true)
-    })
-    return () => {
-      cancelled = true
-    }
-  }, [resolvedTheme])
+  const { formatQuota } = usePricingCurrency()
+  const { resolvedTheme, themeReady } = useChartTheme()
+  const seriesNames = useMemo(
+    () => [...new Set(props.points.map((point) => point.series))],
+    [props.points]
+  )
+  const axisBuckets = useMemo(
+    () => [...new Set(props.points.map((point) => point.bucket))],
+    [props.points]
+  )
 
   const spec = useMemo(
     () => ({
@@ -67,17 +57,35 @@ export function PortalBillingChart(props: PortalBillingChartProps) {
       data: [{ id: 'billing', values: props.points }],
       xField: 'bucket',
       yField: 'quota',
-      seriesField: stacked ? 'series' : undefined,
-      stack: stacked,
-      color: PORTAL_BILLING_CHART_COLORS,
-      padding: { top: 12, right: 8, bottom: 8, left: 8 },
+      seriesField: 'series',
+      stack: true,
+      color: {
+        type: 'ordinal' as const,
+        domain: seriesNames,
+        range: PORTAL_BILLING_CHART_COLORS,
+      },
+      padding: { top: 12, right: 8, bottom: 28, left: 8 },
       legends: {
-        visible: stacked,
+        visible: seriesNames.length > 1,
         position: 'bottom' as const,
-        select: false,
+        select: true,
+        selectMode: 'multiple' as const,
       },
       axes: [
-        { orient: 'bottom' as const, sampling: false },
+        {
+          orient: 'bottom' as const,
+          trim: true,
+          sampling: true,
+          tick: { visible: false },
+          label: {
+            autoHide: true,
+            autoHideSeparation: 4,
+            autoLimit: true,
+            flush: true,
+            formatMethod: (value: string | number) =>
+              compactPortalBillingAxisLabel(String(value), axisBuckets),
+          },
+        },
         { orient: 'left' as const, min: 0 },
       ],
       tooltip: {
@@ -92,7 +100,7 @@ export function PortalBillingChart(props: PortalBillingChartProps) {
         },
       },
     }),
-    [props.points, stacked],
+    [axisBuckets, props.points, seriesNames, formatQuota]
   )
 
   const hasQuota = props.points.some((point) => point.quota > 0)
@@ -101,7 +109,7 @@ export function PortalBillingChart(props: PortalBillingChartProps) {
     <div className='h-64 sm:h-80'>
       {themeReady ? (
         <VChart
-          key={`${props.group}-${props.points.length}-${resolvedTheme}`}
+          key={`${seriesNames.join('|')}-${axisBuckets.length}-${resolvedTheme}`}
           spec={{
             ...spec,
             theme: resolvedTheme === 'dark' ? 'dark' : 'light',
@@ -130,27 +138,10 @@ export function PortalBillingChart(props: PortalBillingChartProps) {
       <div className='mb-4 flex flex-wrap items-center justify-between gap-3'>
         <p className='text-sm font-medium text-[var(--portal-ink)]'>
           {t('Consumption')}
-          <span className='text-[var(--portal-ink-muted)] ml-2 tabular-nums'>
+          <span className='ml-2 text-[var(--portal-ink-muted)] tabular-nums'>
             {formatQuota(props.totalQuota)}
           </span>
         </p>
-        <Tabs
-          value={props.group}
-          onValueChange={(value) => {
-            if (value === 'model' || value === 'api_key') {
-              props.onGroupChange(value)
-            }
-          }}
-        >
-          <TabsList className='rounded-full'>
-            <TabsTrigger value='model' className='rounded-full px-3'>
-              {t('Model')}
-            </TabsTrigger>
-            <TabsTrigger value='api_key' className='rounded-full px-3'>
-              {t('API Key')}
-            </TabsTrigger>
-          </TabsList>
-        </Tabs>
       </div>
       {chartBody}
     </section>

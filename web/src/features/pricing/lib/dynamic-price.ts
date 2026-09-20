@@ -16,7 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { formatBillingCurrencyFromUSD } from '@/lib/currency'
+import { formatPricingCurrencyFromUSD } from '@/lib/currency'
 
 import { TOKEN_UNIT_DIVISORS } from '../constants'
 import type {
@@ -44,6 +44,7 @@ import {
 } from './task-expr'
 
 export type DynamicPriceOptions = {
+  formatCurrency?: typeof formatPricingCurrencyFromUSD
   tokenUnit: TokenUnit
   showCurrencySymbol?: boolean
   showRechargePrice?: boolean
@@ -193,12 +194,15 @@ export function formatDynamicUnitPrice(
     usdExchangeRate
   )
 
-  return formatBillingCurrencyFromUSD(displayPrice, {
-    showSymbol: options.showCurrencySymbol ?? true,
-    digitsLarge: 4,
-    digitsSmall: 6,
-    abbreviate: false,
-  })
+  return (options.formatCurrency ?? formatPricingCurrencyFromUSD)(
+    displayPrice,
+    {
+      showSymbol: options.showCurrencySymbol ?? true,
+      digitsLarge: 4,
+      digitsSmall: 6,
+      abbreviate: false,
+    }
+  )
 }
 
 export function formatTaskUsageUnitPrice(
@@ -216,12 +220,15 @@ export function formatTaskUsageUnitPrice(
     usdExchangeRate
   )
 
-  return formatBillingCurrencyFromUSD(displayPrice, {
-    showSymbol: options.showCurrencySymbol ?? true,
-    digitsLarge: 4,
-    digitsSmall: 6,
-    abbreviate: false,
-  })
+  return (options.formatCurrency ?? formatPricingCurrencyFromUSD)(
+    displayPrice,
+    {
+      showSymbol: options.showCurrencySymbol ?? true,
+      digitsLarge: 4,
+      digitsSmall: 6,
+      abbreviate: false,
+    }
+  )
 }
 
 export function getDynamicPricingTiers(

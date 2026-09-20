@@ -32,6 +32,7 @@ type UserPortalPageProps = {
   contentClassName?: string
   fixedHeight?: boolean
   centeredHero?: boolean
+  framed?: boolean
 }
 
 export function UserPortalPage(props: UserPortalPageProps) {
@@ -40,6 +41,11 @@ export function UserPortalPage(props: UserPortalPageProps) {
     props.description != null ||
     props.actions != null ||
     props.eyebrow != null
+  const framed = props.framed !== false
+  const shellOverflow = props.fixedHeight ? 'overflow-hidden' : 'overflow-auto'
+  const shellPad = framed
+    ? 'py-4 sm:py-6 lg:py-7'
+    : 'px-4 py-4 sm:px-6 sm:py-5'
 
   return (
     <div
@@ -49,75 +55,76 @@ export function UserPortalPage(props: UserPortalPageProps) {
         props.className,
       )}
     >
-      {showHeader ? (
-        <div
-          className={cn(
-            'shrink-0 pt-6 pb-4 sm:pt-10',
-            PORTAL_PAGE_GUTTER,
-            props.centeredHero && 'portal-page-centered',
-          )}
-        >
-          {props.centeredHero ? (
-            <div>
-              {props.eyebrow != null ? (
-                <p className='portal-eyebrow'>{props.eyebrow}</p>
-              ) : null}
-              {props.title != null ? (
-                <h1 className='portal-hero-title'>{props.title}</h1>
-              ) : null}
-              {props.description != null ? (
-                <p className='portal-hero-subtitle'>{props.description}</p>
-              ) : null}
-            </div>
-          ) : (
-            <div
-              className={cn(
-                'mx-auto flex w-full flex-wrap items-start justify-between gap-4',
-                PORTAL_PAGE_WIDTH,
-              )}
-            >
-              <div className='min-w-0 max-w-3xl'>
-                {props.eyebrow != null ? (
-                  <p className='portal-eyebrow mb-3'>{props.eyebrow}</p>
-                ) : null}
-                {props.title != null ? (
-                  <h1 className='portal-hero-title text-start text-2xl sm:text-[2rem]'>
-                    {props.title}
-                  </h1>
-                ) : null}
-                {props.description != null ? (
-                  <p className='portal-hero-subtitle mx-0 mt-3 max-w-2xl text-start'>
-                    {props.description}
-                  </p>
-                ) : null}
-              </div>
-              {props.actions != null ? (
-                <div className='flex shrink-0 flex-wrap items-center gap-2'>
-                  {props.actions}
-                </div>
-              ) : null}
-            </div>
-          )}
-        </div>
-      ) : null}
       <div
         className={cn(
-          'min-h-0 flex-1',
-          PORTAL_PAGE_GUTTER,
-          props.fixedHeight
-            ? 'overflow-hidden pb-4 sm:pb-6'
-            : 'overflow-auto pb-10 sm:pb-14',
+          'flex min-h-0 flex-1 flex-col',
+          framed && PORTAL_PAGE_GUTTER,
+          shellOverflow,
+          shellPad,
         )}
       >
         <div
           className={cn(
-            'mx-auto w-full',
-            PORTAL_PAGE_WIDTH,
-            props.fixedHeight && 'flex h-full min-h-0 flex-col',
+            'mx-auto flex w-full min-h-0 flex-1 flex-col',
+            framed && 'portal-module',
+            framed && PORTAL_PAGE_WIDTH,
+            props.fixedHeight && 'overflow-hidden',
             props.contentClassName,
           )}
         >
-          {props.children}
+          {showHeader ? (
+            <div
+              className={cn(
+                'shrink-0 pb-5',
+                props.centeredHero && 'portal-page-centered',
+              )}
+            >
+              {props.centeredHero ? (
+                <div>
+                  {props.eyebrow != null ? (
+                    <p className='portal-eyebrow'>{props.eyebrow}</p>
+                  ) : null}
+                  {props.title != null ? (
+                    <h1 className='portal-hero-title'>{props.title}</h1>
+                  ) : null}
+                  {props.description != null ? (
+                    <p className='portal-hero-subtitle'>{props.description}</p>
+                  ) : null}
+                </div>
+              ) : (
+                <div className='flex w-full flex-wrap items-start justify-between gap-4'>
+                  <div className='min-w-0 max-w-3xl'>
+                    {props.eyebrow != null ? (
+                      <p className='portal-eyebrow mb-3'>{props.eyebrow}</p>
+                    ) : null}
+                    {props.title != null ? (
+                      <h1 className='portal-hero-title mt-0 text-start text-2xl sm:text-[2rem]'>
+                        {props.title}
+                      </h1>
+                    ) : null}
+                    {props.description != null ? (
+                      <p className='portal-hero-subtitle mx-0 mt-3 max-w-2xl text-start'>
+                        {props.description}
+                      </p>
+                    ) : null}
+                  </div>
+                  {props.actions != null ? (
+                    <div className='flex shrink-0 flex-wrap items-center gap-2'>
+                      {props.actions}
+                    </div>
+                  ) : null}
+                </div>
+              )}
+            </div>
+          ) : null}
+          <div
+            className={cn(
+              'min-h-0 flex-1',
+              props.fixedHeight ? 'overflow-hidden' : 'overflow-visible',
+            )}
+          >
+            {props.children}
+          </div>
         </div>
       </div>
     </div>

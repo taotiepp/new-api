@@ -30,18 +30,22 @@ import { memo, type KeyboardEvent, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { CopyButton } from '@/components/copy-button'
+import { PortalBezel } from '@/components/layout/portal/portal-bezel'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { ModelBillingModeBadge } from '@/features/pricing/components/model-billing-mode-badge'
 import { DEFAULT_TOKEN_UNIT } from '@/features/pricing/constants'
 import { useBillingTime } from '@/features/pricing/hooks/use-billing-time'
-import { parseTags } from '@/features/pricing/lib/filters'
+import { usePricingFormatters } from '@/features/pricing/hooks/use-pricing-formatters'
 import {
   getDynamicDisplayGroupRatio,
-  getDynamicPricingSummary,
+  getDynamicPriceUnitLabelKey,
+  isDynamicPricingModel,
   isUnconfiguredTaskUsageModel,
 } from '@/features/pricing/lib/dynamic-price'
+import { parseTags } from '@/features/pricing/lib/filters'
 import { isTokenBasedModel } from '@/features/pricing/lib/model-helpers'
-import { formatPrice, formatRequestPrice } from '@/features/pricing/lib/price'
+import { taskPriceLabel } from '@/features/pricing/lib/task-price-display'
 import type {
   Modality,
   PricingModel,
@@ -50,16 +54,11 @@ import type {
 } from '@/features/pricing/types'
 import { getLobeIcon } from '@/lib/lobe-icon'
 
-import { PortalBezel } from './portal-bezel'
-
 const TOKEN_FORMAT = new Intl.NumberFormat(undefined, {
   maximumFractionDigits: 1,
 })
 
-const MODALITY_ICONS: Record<
-  Modality,
-  typeof Type
-> = {
+const MODALITY_ICONS: Record<Modality, typeof Type> = {
   text: Type,
   image: ImageIcon,
   audio: AudioLines,
@@ -76,9 +75,11 @@ type PortalModelCardProps = {
 }
 
 export const PortalModelCard = memo(function PortalModelCard(
-  props: PortalModelCardProps,
+  props: PortalModelCardProps
 ) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
+  const { formatPrice, formatRequestPrice, getDynamicPricingSummary } =
+    usePricingFormatters()
   const tokenUnit = props.tokenUnit ?? DEFAULT_TOKEN_UNIT
   const priceRate = props.priceRate ?? 1
   const usdExchangeRate = props.usdExchangeRate ?? 1
@@ -94,9 +95,7 @@ export const PortalModelCard = memo(function PortalModelCard(
   const maxOutput = formatCompactTokens(props.model.max_output_tokens)
   const inputModalities = props.model.input_modalities ?? []
   const outputModalities = props.model.output_modalities ?? []
-  const isDynamicPricing =
-    props.model.billing_mode === 'tiered_expr' &&
-    Boolean(props.model.billing_expr)
+  const isDynamicPricing = isDynamicPricingModel(props.model)
   const isUnconfiguredTaskUsage = isUnconfiguredTaskUsageModel(props.model)
   const billingTime = useBillingTime(props.model.billing_expr)
   const dynamicSummary = isDynamicPricing
@@ -108,10 +107,20 @@ export const PortalModelCard = memo(function PortalModelCard(
         usdExchangeRate,
         groupRatioMultiplier: getDynamicDisplayGroupRatio(
           props.model,
-          undefined,
+          undefined
         ),
       })
     : null
+  const dynamicPriceEntries = dynamicSummary
+    ? [
+        ...(dynamicSummary.isTaskUsage
+          ? dynamicSummary.primaryEntries.slice(0, 3)
+          : dynamicSummary.primaryEntries),
+        ...dynamicSummary.secondaryEntries.filter(
+          (entry) => entry.variable?.group === 'cache'
+        ),
+      ]
+    : []
 
   let priceBlock: ReactNode = null
   if (isUnconfiguredTaskUsage) {
@@ -120,24 +129,55 @@ export const PortalModelCard = memo(function PortalModelCard(
         {t('Usage-based billing · price not configured')}
       </p>
     )
-  } else if (isDynamicPricing && !dynamicSummary?.primaryEntries.length) {
-    priceBlock = (
-      <p className='text-[13px] text-[var(--portal-ink-muted)]'>
-        {t('Dynamic Pricing')}
-      </p>
-    )
-  } else if (dynamicSummary?.primaryEntries.length) {
+  } else if (dynamicPriceEntries.length > 0) {
     priceBlock = (
       <div className='flex flex-col gap-1'>
-        {dynamicSummary.primaryEntries.slice(0, 2).map((entry) => (
-          <p
-            key={entry.key}
-            className='text-[13px] tabular-nums text-[var(--portal-ink-muted)]'
-          >
-            {entry.formattedRange ?? entry.formatted}
-            {isTokenBased ? ` / ${tokenUnitLabel}` : ''}
+        <ModelBillingModeBadge model={props.model} appearance='caption' />
+        {dynamicPriceEntries.map((entry) => {
+          const unitLabelKey = getDynamicPriceUnitLabelKey(entry)
+          const label =
+            entry.labelKind === 'schema'
+              ? taskPriceLabel(
+                  entry.description,
+                  entry.shortLabel,
+                  i18n.language
+                )
+              : t(entry.shortLabel)
+          let unitSuffix = ''
+          if (unitLabelKey) {
+            unitSuffix = ` / ${t(unitLabelKey)}`
+          } else if (isTokenBased) {
+            unitSuffix = ` / ${tokenUnitLabel}`
+          }
+          return (
+            <p
+              key={entry.key}
+              className='text-[13px] text-[var(--portal-ink-muted)] tabular-nums'
+            >
+              {label} {entry.formattedRange ?? entry.formatted}
+              {unitSuffix}
+            </p>
+          )
+        })}
+        {dynamicSummary?.isTimePricing ? (
+          <p className='text-[11px] text-[var(--portal-ink-muted)]'>
+            {t('Current period price')}
           </p>
-        ))}
+        ) : null}
+        {dynamicSummary?.isMixedBilling ? (
+          <p className='text-[11px] text-[var(--portal-ink-muted)]'>
+            {t('Token or per-call pricing')}
+          </p>
+        ) : null}
+      </div>
+    )
+  } else if (isDynamicPricing) {
+    priceBlock = (
+      <div className='flex flex-col gap-1'>
+        <ModelBillingModeBadge model={props.model} appearance='caption' />
+        <p className='text-[13px] text-[var(--portal-ink-muted)]'>
+          {t('Dynamic Pricing')}
+        </p>
       </div>
     )
   } else if (isTokenBased) {
@@ -145,12 +185,18 @@ export const PortalModelCard = memo(function PortalModelCard(
       { type: 'input', label: t('Input') },
       { type: 'output', label: t('Output') },
     ]
+    if (props.model.cache_ratio != null) {
+      rows.push({ type: 'cache', label: t('Cached') })
+    }
+    if (props.model.create_cache_ratio != null) {
+      rows.push({ type: 'create_cache', label: t('Cache Write') })
+    }
     priceBlock = (
       <div className='flex flex-col gap-1'>
         {rows.map((row) => (
           <p
             key={row.type}
-            className='text-[13px] tabular-nums text-[var(--portal-ink-muted)]'
+            className='text-[13px] text-[var(--portal-ink-muted)] tabular-nums'
           >
             {row.label}{' '}
             {formatPrice(
@@ -159,7 +205,7 @@ export const PortalModelCard = memo(function PortalModelCard(
               tokenUnit,
               false,
               priceRate,
-              usdExchangeRate,
+              usdExchangeRate
             )}{' '}
             / {tokenUnitLabel}
           </p>
@@ -168,7 +214,7 @@ export const PortalModelCard = memo(function PortalModelCard(
     )
   } else {
     priceBlock = (
-      <p className='text-[13px] tabular-nums text-[var(--portal-ink-muted)]'>
+      <p className='text-[13px] text-[var(--portal-ink-muted)] tabular-nums'>
         {formatRequestPrice(props.model, false, priceRate, usdExchangeRate)} /{' '}
         {t('request')}
       </p>
@@ -184,8 +230,9 @@ export const PortalModelCard = memo(function PortalModelCard(
 
   return (
     <PortalBezel
+      tone='card'
       className='portal-model-tile group h-full'
-      innerClassName='flex h-full flex-col p-5'
+      innerClassName='flex h-full flex-col bg-[var(--portal-card)] p-5'
       as='article'
     >
       <div
@@ -199,7 +246,7 @@ export const PortalModelCard = memo(function PortalModelCard(
           <div className='flex min-w-0 items-center gap-2'>
             <div
               aria-hidden
-              className='flex size-8 shrink-0 items-center justify-center rounded-xl bg-[var(--portal-surface-muted)]'
+              className='flex size-8 shrink-0 items-center justify-center rounded-xl bg-[var(--portal-module)]'
             >
               {modelIcon || (
                 <span className='text-xs font-semibold text-[var(--portal-accent)]'>
@@ -239,15 +286,13 @@ export const PortalModelCard = memo(function PortalModelCard(
         </div>
 
         <h3
-          className='mt-4 line-clamp-1 text-[17px] font-semibold tracking-tight text-[var(--portal-ink)] [overflow-wrap:anywhere]'
+          className='mt-4 line-clamp-1 text-[17px] font-semibold tracking-tight [overflow-wrap:anywhere] text-[var(--portal-ink)]'
           title={props.model.model_name}
         >
           {props.model.model_name}
         </h3>
         <div className='mt-1 flex min-w-0 items-center gap-1 text-xs text-[var(--portal-ink-muted)]'>
-          <span className='truncate'>
-            {vendorLabel || t('Latest version')}
-          </span>
+          <span className='truncate'>{vendorLabel || t('Latest version')}</span>
           <div
             className='shrink-0'
             onClick={(event) => event.stopPropagation()}
@@ -281,13 +326,13 @@ export const PortalModelCard = memo(function PortalModelCard(
         {contextLength || maxOutput ? (
           <div className='mt-4 grid grid-cols-2 gap-3 border-t border-[var(--portal-hairline)] pt-3'>
             <div>
-              <p className='text-lg font-semibold tabular-nums text-[var(--portal-ink)]'>
+              <p className='text-lg font-semibold text-[var(--portal-ink)] tabular-nums'>
                 {contextLength || '—'}
               </p>
               <p className='text-muted-foreground text-xs'>{t('Context')}</p>
             </div>
             <div className='text-end'>
-              <p className='text-lg font-semibold tabular-nums text-[var(--portal-ink)]'>
+              <p className='text-lg font-semibold text-[var(--portal-ink)] tabular-nums'>
                 {maxOutput || '—'}
               </p>
               <p className='text-muted-foreground text-xs'>{t('Max output')}</p>

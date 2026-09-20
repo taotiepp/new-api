@@ -21,6 +21,7 @@ import dayjs from '@/lib/dayjs'
 import {
   formatCurrencyFromUSD,
   formatQuotaWithCurrency,
+  formatQuotaWithPricingCurrency,
   getCurrencyDisplay,
   getCurrencyFractionDigits,
 } from './currency'
@@ -72,6 +73,14 @@ export function formatCurrencyUSD(value: number | null | undefined): string {
  */
 export function formatQuota(quota: number): string {
   return formatQuotaWithCurrency(quota, {
+    digitsLarge: 2,
+    digitsSmall: 4,
+    abbreviate: true,
+  })
+}
+
+export function formatPricingQuota(quota: number): string {
+  return formatQuotaWithPricingCurrency(quota, {
     digitsLarge: 2,
     digitsSmall: 4,
     abbreviate: true,

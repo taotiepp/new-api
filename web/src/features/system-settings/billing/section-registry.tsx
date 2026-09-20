@@ -16,7 +16,10 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { parseCurrencyDisplayType } from '@/lib/currency'
+import {
+  parseCurrencyDisplayType,
+  parsePricingDisplayType,
+} from '@/lib/currency'
 
 import { CheckinSettingsSection } from '../general/checkin-settings-section'
 import { PricingSection } from '../general/pricing-section'
@@ -92,6 +95,12 @@ const BILLING_SECTIONS = [
           general_setting: {
             quota_display_type: parseCurrencyDisplayType(
               settings['general_setting.quota_display_type']
+            ),
+            pricing_display_type: parsePricingDisplayType(
+              settings['general_setting.pricing_display_type'],
+              parseCurrencyDisplayType(
+                settings['general_setting.quota_display_type']
+              )
             ),
             custom_currency_symbol:
               settings['general_setting.custom_currency_symbol'] ?? '¤',

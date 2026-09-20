@@ -20,7 +20,7 @@ import { useTranslation } from 'react-i18next'
 
 import { Playground } from '@/features/playground'
 
-import { PortalBezel } from './portal-bezel'
+import { PortalBezel } from '@/components/layout/portal/portal-bezel'
 import { UserPortalPage } from './user-portal-page'
 
 export function UserPortalPlayground() {

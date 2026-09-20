@@ -107,7 +107,7 @@ function VendorChip(props: {
       className={cn(
         'h-8 rounded-full px-3',
         !props.selected &&
-          'border-[var(--portal-hairline)] bg-[var(--portal-surface)] text-[var(--portal-ink)]',
+          'border-0 bg-[var(--portal-card)] text-[var(--portal-ink)]',
       )}
       onClick={props.onSelect}
     >

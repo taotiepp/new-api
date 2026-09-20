@@ -2,8 +2,18 @@ package common
 
 import "github.com/QuantumNous/new-api/constant"
 
-// GetEndpointTypesByChannelType 获取渠道最优先端点类型（所有的渠道都支持 OpenAI 端点）
+// GetEndpointTypesByChannelType infers gateway endpoints a channel can serve
+// for a model. Specialized models (embedding, rerank, image, responses-only)
+// take precedence over the channel-type default so model details do not show
+// chat completions for an embedding model.
 func GetEndpointTypesByChannelType(channelType int, modelName string) []constant.EndpointType {
+	if IsRerankModel(modelName) {
+		return []constant.EndpointType{constant.EndpointTypeJinaRerank}
+	}
+	if channelType == constant.ChannelTypeMokaAI || IsEmbeddingModel(modelName) {
+		return []constant.EndpointType{constant.EndpointTypeEmbeddings}
+	}
+
 	var endpointTypes []constant.EndpointType
 	switch channelType {
 	case constant.ChannelTypeJina:

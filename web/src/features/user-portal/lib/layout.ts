@@ -16,7 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-/** Matches `.portal-island` via `--portal-page-width` (64rem). */
+/** Matches `.portal-island` via `--portal-page-width` (full viewport minus gutters). */
 export const PORTAL_PAGE_WIDTH = 'max-w-(--portal-page-width)'
 
 /** Matches `.portal-top-chrome` inline padding via `--portal-page-gutter`. */

@@ -18,15 +18,16 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { useTranslation } from 'react-i18next'
 
+import { usePricingFormatters } from '@/features/pricing/hooks/use-pricing-formatters'
+
 import { DEFAULT_TOKEN_UNIT } from '../constants'
 import { useBillingTime } from '../hooks/use-billing-time'
 import {
   getDynamicDisplayGroupRatio,
-  getDynamicPricingSummary,
   isUnconfiguredTaskUsageModel,
 } from '../lib/dynamic-price'
 import { isTokenBasedModel } from '../lib/model-helpers'
-import { formatPrice, stripTrailingZeros } from '../lib/price'
+import { stripTrailingZeros } from '../lib/price'
 import type { PricingModel } from '../types'
 import type { ModelPriceCellOptions } from './model-price-cell'
 
@@ -35,6 +36,7 @@ export function CachedPriceCell(props: {
   options: ModelPriceCellOptions
 }) {
   const { t } = useTranslation()
+  const { formatPrice, getDynamicPricingSummary } = usePricingFormatters()
   const {
     tokenUnit = DEFAULT_TOKEN_UNIT,
     priceRate = 1,

@@ -77,6 +77,12 @@ export type PricingModel = {
   billing_usage_examples?: BillingUsageExample[]
   /** Pricing version returned by backend, useful for cache busting */
   pricing_version?: string
+  /** Effective request limit per window for the current user (catalog view). */
+  rpm?: number
+  /** Effective token limit per window for the current user (catalog view). */
+  tpm?: number
+  /** Window for rpm/tpm counts; older servers default to 60 seconds. */
+  rate_limit_window_seconds?: number
   /**
    * Optional model metadata fields reserved for backend-provided catalog data.
    * Keep them data-driven; do not synthesize display values on the client.

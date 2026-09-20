@@ -42,10 +42,7 @@ import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useStatus } from '@/hooks/use-status'
 
-import {
-  getEndpointTypeLabels,
-  type EndpointTypeOption,
-} from '../constants'
+import { getEndpointTypeLabels, type EndpointTypeOption } from '../constants'
 import {
   buildRateLimits,
   buildSupportedParameters,
@@ -53,6 +50,7 @@ import {
   type SupportedParameter,
 } from '../lib/mock-stats'
 import { resolveModelApiEndpoints } from '../lib/model-helpers'
+import { getUserRateLimitDisplay } from '../lib/rate-limit-display'
 import type { PricingModel } from '../types'
 
 // ---------------------------------------------------------------------------
@@ -475,10 +473,10 @@ function CodeSamplesSection(props: {
 
   const endpoints = useMemo(
     () =>
-      resolveModelApiEndpoints(props.model, props.endpointMap).filter((endpoint) =>
-        Boolean(endpoint.path),
+      resolveModelApiEndpoints(props.model, props.endpointMap).filter(
+        (endpoint) => Boolean(endpoint.path)
       ),
-    [props.model, props.endpointMap],
+    [props.model, props.endpointMap]
   )
 
   const [endpointType, setEndpointType] = useState<string>(
@@ -674,7 +672,35 @@ function ParamRangeCell(props: { param: SupportedParameter }) {
 
 function RateLimitsSection(props: { model: PricingModel }) {
   const { t } = useTranslation()
-  const limits = useMemo(() => buildRateLimits(props.model), [props.model])
+  const userLimits = getUserRateLimitDisplay(props.model, t)
+  const hasUserLimits = userLimits.length > 0
+  const limits = useMemo(
+    () => (hasUserLimits ? [] : buildRateLimits(props.model)),
+    [hasUserLimits, props.model]
+  )
+
+  if (hasUserLimits) {
+    return (
+      <section>
+        <SectionTitle icon={Gauge}>{t('Rate limits')}</SectionTitle>
+        <div className='grid grid-cols-2 gap-2'>
+          {userLimits.map((limit) => (
+            <div key={limit.key} className='bg-muted/20 rounded-lg border p-3'>
+              <p className='text-muted-foreground text-[10px] font-medium tracking-wider uppercase'>
+                {limit.label}
+              </p>
+              <p className='mt-1 font-mono text-lg font-semibold tabular-nums'>
+                {limit.value}
+              </p>
+              <p className='text-muted-foreground mt-1 text-[11px]'>
+                {limit.hint}
+              </p>
+            </div>
+          ))}
+        </div>
+      </section>
+    )
+  }
 
   if (limits.length === 0) return null
 
@@ -767,7 +793,7 @@ function AuthSection() {
 
 function formatEndpointTypeLabel(
   type: string,
-  labels: Record<EndpointTypeOption, string>,
+  labels: Record<EndpointTypeOption, string>
 ): string {
   if (Object.hasOwn(labels, type) && type !== 'all') {
     return labels[type as EndpointTypeOption]
@@ -783,7 +809,7 @@ function SupportedEndpointsSection(props: {
   const labels = getEndpointTypeLabels(t)
   const endpoints = useMemo(
     () => resolveModelApiEndpoints(props.model, props.endpointMap),
-    [props.model, props.endpointMap],
+    [props.model, props.endpointMap]
   )
 
   return (

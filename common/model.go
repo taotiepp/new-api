@@ -8,6 +8,7 @@ var (
 		"o3-pro",
 		"o3-deep-research",
 		"o4-mini-deep-research",
+		"codex",
 	}
 	ImageGenerationModels = []string{
 		"dall-e-3",
@@ -16,6 +17,7 @@ var (
 		"prefix:imagen-",
 		"flux-",
 		"flux.1-",
+		"seedream",
 	}
 	OpenAITextModels = []string{
 		"gpt-",
@@ -27,6 +29,7 @@ var (
 )
 
 func IsOpenAIResponseOnlyModel(modelName string) bool {
+	modelName = strings.ToLower(modelName)
 	for _, m := range OpenAIResponseOnlyModels {
 		if strings.Contains(modelName, m) {
 			return true
@@ -56,4 +59,16 @@ func IsOpenAITextModel(modelName string) bool {
 		}
 	}
 	return false
+}
+
+func IsEmbeddingModel(modelName string) bool {
+	modelName = strings.ToLower(modelName)
+	return strings.Contains(modelName, "embedding") ||
+		strings.Contains(modelName, "embed") ||
+		strings.Contains(modelName, "bge-") ||
+		strings.HasPrefix(modelName, "m3e")
+}
+
+func IsRerankModel(modelName string) bool {
+	return strings.Contains(strings.ToLower(modelName), "rerank")
 }

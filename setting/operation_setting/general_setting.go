@@ -16,6 +16,8 @@ type GeneralSetting struct {
 	PingIntervalSeconds int    `json:"ping_interval_seconds"`
 	// 当前站点额度展示类型：USD / CNY / TOKENS
 	QuotaDisplayType string `json:"quota_display_type"`
+	// 模型定价展示币种：USD / CNY。空值表示跟随额度展示（人民币额度则人民币定价，否则美元）。
+	PricingDisplayType string `json:"pricing_display_type"`
 	// 自定义货币符号，用于 CUSTOM 展示类型
 	CustomCurrencySymbol string `json:"custom_currency_symbol"`
 	// 自定义货币与美元汇率（1 USD = X Custom）
@@ -54,6 +56,20 @@ func IsCNYDisplay() bool {
 // GetQuotaDisplayType 返回额度展示类型
 func GetQuotaDisplayType() string {
 	return generalSetting.QuotaDisplayType
+}
+
+// GetPricingDisplayType 返回模型定价页/模型广场使用的展示币种。
+// 未配置时跟随额度展示：额度是人民币则用人民币，否则美元。
+func GetPricingDisplayType() string {
+	switch generalSetting.PricingDisplayType {
+	case QuotaDisplayTypeUSD, QuotaDisplayTypeCNY:
+		return generalSetting.PricingDisplayType
+	default:
+		if generalSetting.QuotaDisplayType == QuotaDisplayTypeCNY {
+			return QuotaDisplayTypeCNY
+		}
+		return QuotaDisplayTypeUSD
+	}
 }
 
 // GetCurrencySymbol 返回当前展示类型对应符号

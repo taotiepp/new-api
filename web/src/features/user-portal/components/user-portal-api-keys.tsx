@@ -23,7 +23,7 @@ import { ApiKeysPrimaryButtons } from '@/features/keys/components/api-keys-prima
 import { ApiKeysProvider } from '@/features/keys/components/api-keys-provider'
 import { ApiKeysTable } from '@/features/keys/components/api-keys-table'
 
-import { PortalBezel } from './portal-bezel'
+import { PortalBezel } from '@/components/layout/portal/portal-bezel'
 import { UserPortalPage } from './user-portal-page'
 
 export function UserPortalApiKeys() {
@@ -32,6 +32,7 @@ export function UserPortalApiKeys() {
   return (
     <ApiKeysProvider>
       <UserPortalPage
+        framed={false}
         fixedHeight
         eyebrow={t('User Portal')}
         title={t('API Keys')}

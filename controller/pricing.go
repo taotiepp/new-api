@@ -67,6 +67,11 @@ func GetPricing(c *gin.Context) {
 	catalogView := c.Query("catalog") == "1"
 	if catalogView {
 		pricing = redactPricingForUserCatalog(pricing)
+		var uid int
+		if exists {
+			uid = userId.(int)
+		}
+		attachCatalogUserRateLimits(pricing, uid, group)
 		c.JSON(200, gin.H{
 			"success":            true,
 			"data":               pricing,

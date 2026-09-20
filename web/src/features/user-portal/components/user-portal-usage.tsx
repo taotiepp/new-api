@@ -21,7 +21,7 @@ import { PortalBillingPanel } from './portal-billing-panel'
 
 export function UserPortalUsage() {
   return (
-    <UserPortalPage>
+    <UserPortalPage framed={false}>
       <PortalBillingPanel />
     </UserPortalPage>
   )

@@ -19,67 +19,107 @@ For commercial licensing, please contact support@quantumnous.com
 import { Link, useRouterState } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 
+import { useStatus } from '@/hooks/use-status'
 import { cn } from '@/lib/utils'
 
 import {
-  USER_PORTAL_NAV_ITEMS,
+  isUserPortalNavActive,
+  resolveUserPortalDocsHref,
+  USER_PORTAL_TOP_NAV_ITEMS,
   type UserPortalNavItem,
 } from '@/features/user-portal/lib/nav'
 
 type PortalNavLinkProps = {
   item: UserPortalNavItem
   layout: 'island' | 'mobile'
-}
-
-function isNavActive(pathname: string, href: string) {
-  if (href === '/app') {
-    return pathname === '/app' || pathname === '/app/'
-  }
-  return pathname === href || pathname.startsWith(`${href}/`)
+  href: string
+  external?: boolean
 }
 
 export function PortalNavLink(props: PortalNavLinkProps) {
   const { t } = useTranslation()
   const pathname = useRouterState({ select: (s) => s.location.pathname })
-  const active = isNavActive(pathname, props.item.href)
+  const active = isUserPortalNavActive(pathname, props.item)
   const Icon = props.item.icon
+  const className =
+    props.layout === 'mobile'
+      ? cn('portal-mobile-nav-item', active && 'portal-nav-item-active')
+      : cn('portal-island-nav-link', active && 'portal-island-nav-active')
 
-  if (props.layout === 'mobile') {
-    return (
-      <Link
-        aria-current={active ? 'page' : undefined}
-        className={cn(
-          'portal-mobile-nav-item',
-          active && 'portal-nav-item-active',
-        )}
-        to={props.item.href}
-      >
-        <Icon aria-hidden className='size-[1.125rem] shrink-0' />
+  const label = (
+    <>
+      <Icon
+        aria-hidden
+        className={
+          props.layout === 'mobile'
+            ? 'size-[1.125rem] shrink-0'
+            : 'size-4 shrink-0 opacity-80'
+        }
+      />
+      {props.layout === 'mobile' ? (
         <span className='text-[10px] font-medium leading-tight'>
           {t(props.item.titleKey)}
         </span>
-      </Link>
+      ) : (
+        <span>{t(props.item.titleKey)}</span>
+      )}
+    </>
+  )
+
+  if (props.external) {
+    return (
+      <a
+        aria-current={active ? 'page' : undefined}
+        className={className}
+        href={props.href}
+        rel='noopener noreferrer'
+        target='_blank'
+      >
+        {label}
+      </a>
     )
   }
 
   return (
     <Link
       aria-current={active ? 'page' : undefined}
-      className={cn('portal-island-nav-link', active && 'portal-island-nav-active')}
-      to={props.item.href}
+      className={className}
+      to={props.href}
     >
-      <Icon aria-hidden className='size-4 shrink-0 opacity-80' />
-      <span>{t(props.item.titleKey)}</span>
+      {label}
     </Link>
   )
 }
 
 export function PortalNavLinks(props: { layout: 'island' | 'mobile' }) {
+  const { status } = useStatus()
+  const docs = resolveUserPortalDocsHref(
+    status?.docs_link as string | undefined,
+  )
+
   return (
     <>
-      {USER_PORTAL_NAV_ITEMS.map((item) => (
-        <PortalNavLink key={item.href} item={item} layout={props.layout} />
-      ))}
+      {USER_PORTAL_TOP_NAV_ITEMS.map((item) => {
+        if (item.match === 'docs') {
+          return (
+            <PortalNavLink
+              key={item.titleKey}
+              item={item}
+              layout={props.layout}
+              href={docs.href}
+              external={docs.external}
+            />
+          )
+        }
+        return (
+          <PortalNavLink
+            key={item.titleKey}
+            item={item}
+            layout={props.layout}
+            href={item.href}
+          />
+        )
+      })}
     </>
   )
 }

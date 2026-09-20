@@ -16,7 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { formatBillingCurrencyFromUSD } from '@/lib/currency'
+import { formatPricingCurrencyFromUSD } from '@/lib/currency'
 
 import { QUOTA_TYPE_VALUES, TOKEN_UNIT_DIVISORS } from '../constants'
 import type { PricingModel, TokenUnit, PriceType } from '../types'
@@ -108,7 +108,7 @@ function hasRatio(value: number | null | undefined): boolean {
  * priceRate represents how much users need to recharge (in the display currency)
  * to get 1 USD credit. usdExchangeRate is the real exchange rate.
  *
- * The returned value will be formatted by formatBillingCurrencyFromUSD, which will
+ * The returned value will be formatted by formatPricingCurrencyFromUSD, which will
  * multiply by the display currency's exchange rate.
  *
  * Examples:
@@ -118,14 +118,14 @@ function hasRatio(value: number | null | undefined): boolean {
  *    - priceRate = 0.5 (recharge $0.5 to get $1 credit)
  *    - usdExchangeRate = 1
  *    - Return: 1 × 0.5 / 1 = 0.5
- *    - formatBillingCurrencyFromUSD(0.5) → $0.5 ✓
+ *    - formatPricingCurrencyFromUSD(0.5) → $0.5 ✓
  *
  * 2. Display currency = CNY:
  *    - Model: 1 USD
  *    - priceRate = 4 (recharge ¥4 to get $1 credit)
  *    - usdExchangeRate = 7 (real rate: 1 USD = ¥7)
  *    - Return: 1 × 4 / 7 = 0.571
- *    - formatBillingCurrencyFromUSD(0.571) → 0.571 × 7 = ¥4 ✓
+ *    - formatPricingCurrencyFromUSD(0.571) → 0.571 × 7 = ¥4 ✓
  *    - Normal price: ¥7, Recharge price: ¥4 (cheaper!)
  */
 function applyRechargeRate(
@@ -141,7 +141,8 @@ function applyRechargeRate(
 /**
  * Format token-based price for display
  */
-export function formatPrice(
+function formatPriceWithCurrency(
+  formatCurrency: typeof formatPricingCurrencyFromUSD,
   model: PricingModel,
   type: PriceType,
   tokenUnit: TokenUnit,
@@ -166,7 +167,7 @@ export function formatPrice(
   )
 
   const price = priceInUSD / TOKEN_UNIT_DIVISORS[tokenUnit]
-  return formatBillingCurrencyFromUSD(price, {
+  return formatCurrency(price, {
     showSymbol: showCurrencySymbol,
     digitsLarge: 4,
     digitsSmall: 6,
@@ -177,7 +178,8 @@ export function formatPrice(
 /**
  * Format price for a specific group (token-based)
  */
-export function formatGroupPrice(
+function formatGroupPriceWithCurrency(
+  formatCurrency: typeof formatPricingCurrencyFromUSD,
   model: PricingModel,
   group: string,
   type: PriceType,
@@ -202,7 +204,7 @@ export function formatGroupPrice(
   )
 
   const price = priceInUSD / TOKEN_UNIT_DIVISORS[tokenUnit]
-  return formatBillingCurrencyFromUSD(price, {
+  return formatCurrency(price, {
     digitsLarge: 4,
     digitsSmall: 6,
     abbreviate: false,
@@ -212,7 +214,8 @@ export function formatGroupPrice(
 /**
  * Format fixed price for pay-per-request models (with specific group)
  */
-export function formatFixedPrice(
+function formatFixedPriceWithCurrency(
+  formatCurrency: typeof formatPricingCurrencyFromUSD,
   model: PricingModel,
   group: string,
   showWithRecharge = false,
@@ -234,7 +237,7 @@ export function formatFixedPrice(
     usdExchangeRate
   )
 
-  return formatBillingCurrencyFromUSD(priceInUSD, {
+  return formatCurrency(priceInUSD, {
     digitsLarge: 4,
     digitsSmall: 4,
     abbreviate: false,
@@ -244,7 +247,8 @@ export function formatFixedPrice(
 /**
  * Format fixed price for pay-per-request models (minimum price from all groups)
  */
-export function formatRequestPrice(
+function formatRequestPriceWithCurrency(
+  formatCurrency: typeof formatPricingCurrencyFromUSD,
   model: PricingModel,
   showWithRecharge = false,
   priceRate = 1,
@@ -267,10 +271,33 @@ export function formatRequestPrice(
     usdExchangeRate
   )
 
-  return formatBillingCurrencyFromUSD(priceInUSD, {
+  return formatCurrency(priceInUSD, {
     showSymbol: showCurrencySymbol,
     digitsLarge: 4,
     digitsSmall: 4,
     abbreviate: false,
   })
 }
+
+/** Bind the display currency once; price calculations retain their existing API. */
+export function createPriceFormatters(
+  formatCurrency: typeof formatPricingCurrencyFromUSD
+) {
+  return {
+    formatPrice: formatPriceWithCurrency.bind(null, formatCurrency),
+    formatGroupPrice: formatGroupPriceWithCurrency.bind(null, formatCurrency),
+    formatFixedPrice: formatFixedPriceWithCurrency.bind(null, formatCurrency),
+    formatRequestPrice: formatRequestPriceWithCurrency.bind(
+      null,
+      formatCurrency
+    ),
+  }
+}
+
+// Compatibility exports for non-reactive callers. Components use usePricingFormatters.
+export const {
+  formatPrice,
+  formatGroupPrice,
+  formatFixedPrice,
+  formatRequestPrice,
+} = createPriceFormatters(formatPricingCurrencyFromUSD)

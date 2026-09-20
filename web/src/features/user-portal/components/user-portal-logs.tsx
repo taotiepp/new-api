@@ -21,7 +21,7 @@ import { useTranslation } from 'react-i18next'
 import { UsageLogsTable } from '@/features/usage-logs/components/usage-logs-table'
 import { UsageLogsProvider } from '@/features/usage-logs/components/usage-logs-provider'
 
-import { PortalBezel } from './portal-bezel'
+import { PortalBezel } from '@/components/layout/portal/portal-bezel'
 import { UserPortalPage } from './user-portal-page'
 
 export function UserPortalLogs() {
@@ -30,6 +30,7 @@ export function UserPortalLogs() {
   return (
     <UsageLogsProvider defaultViewScope='self'>
       <UserPortalPage
+        framed={false}
         fixedHeight
         eyebrow={t('User Portal')}
         title={t('Request Logs')}

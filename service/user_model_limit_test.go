@@ -220,15 +220,15 @@ func TestResolveUserModelLimitPerUserOverride(t *testing.T) {
 	// Generic model: rpm from user default (99), tpm from settings (1000), total.
 	got, has := resolveUserModelLimit(&relaycommon.RelayInfo{UserId: userId, OriginModelName: "other", UserGroup: "default"})
 	require.True(t, has)
-	assert.EqualValues(t, 99, got.RPM)
-	assert.EqualValues(t, 1000, got.TPM)
+	assert.EqualValues(t, 99, got.Requests)
+	assert.EqualValues(t, 1000, got.Tokens)
 	assert.Equal(t, setting.UserModelTokenModeTotal, got.TokenMode)
 
 	// Special model: rpm 99 (user default), tpm 555 (user model), token_mode input.
 	got, has = resolveUserModelLimit(&relaycommon.RelayInfo{UserId: userId, OriginModelName: "special", UserGroup: "default"})
 	require.True(t, has)
-	assert.EqualValues(t, 99, got.RPM)
-	assert.EqualValues(t, 555, got.TPM)
+	assert.EqualValues(t, 99, got.Requests)
+	assert.EqualValues(t, 555, got.Tokens)
 	assert.Equal(t, setting.UserModelTokenModeInput, got.TokenMode)
 
 	// A disabled row is ignored.
@@ -236,5 +236,23 @@ func TestResolveUserModelLimitPerUserOverride(t *testing.T) {
 	model.InvalidateUserModelRateLimitCache(6162)
 	got, has = resolveUserModelLimit(&relaycommon.RelayInfo{UserId: 6162, OriginModelName: "x", UserGroup: "default"})
 	require.True(t, has, "settings default still applies")
-	assert.EqualValues(t, 10, got.RPM)
+	assert.EqualValues(t, 10, got.Requests)
+}
+
+func TestUserModelLimitResolverKeepsSettingsSnapshot(t *testing.T) {
+	require.NoError(t, model.DB.AutoMigrate(&model.UserModelRateLimit{}))
+	previous := setting.UserModelRateLimitConfig2JSONString()
+	t.Cleanup(func() { require.NoError(t, setting.UpdateUserModelRateLimitConfigByJSONString(previous)) })
+	require.NoError(t, setting.UpdateUserModelRateLimitConfigByJSONString(`{"enabled":true,"duration_minutes":5,"default":{"rpm":10},"models":{"m":{"tpm":500}}}`))
+	resolver := NewUserModelLimitResolver(99921, "default")
+	require.NoError(t, setting.UpdateUserModelRateLimitConfigByJSONString(`{"enabled":false,"duration_minutes":1,"default":{"rpm":99}}`))
+	got := resolver.Resolve("m")
+	assert.True(t, got.Enabled)
+	assert.Equal(t, 10, got.Requests)
+	assert.Equal(t, 500, got.Tokens)
+	assert.Equal(t, 300, got.WindowSeconds)
+	disabled := NewUserModelLimitResolver(99921, "default").Resolve("m")
+	assert.False(t, disabled.Enabled)
+	assert.Zero(t, disabled.Requests)
+	assert.Zero(t, disabled.Tokens)
 }

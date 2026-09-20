@@ -19,8 +19,8 @@ For commercial licensing, please contact support@quantumnous.com
 import { Link } from '@tanstack/react-router'
 import { CalendarDays, CircleHelp, Download } from 'lucide-react'
 import { useMemo, useState } from 'react'
-import { useTranslation } from 'react-i18next'
 import type { DateRange } from 'react-day-picker'
+import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
@@ -45,25 +45,24 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 import { parseUserSettings } from '@/features/profile/lib/format'
-import { getCurrencyDisplay } from '@/lib/currency'
+import { usePricingCurrency } from '@/lib/currency'
 import dayjs from '@/lib/dayjs'
-import { formatNumber, formatQuota } from '@/lib/format'
+import { formatNumber } from '@/lib/format'
 import { getEndOfDay, getStartOfDay } from '@/lib/time'
 import { useAuthStore } from '@/stores/auth-store'
 
 import { usePortalBillingData } from '../hooks/use-portal-billing-data'
 import {
-  PORTAL_BILLING_ALL_KEYS,
+  PORTAL_BILLING_ALL_MODELS,
   buildPortalBillingCsv,
-  buildPortalCategorySeries,
   buildPortalTimeSeries,
   createDefaultPortalBillingRange,
-  filterFlowRowsByTokenId,
+  filterRowsByModelName,
   formatPortalBillingRangeLabel,
   isDefaultPortalBillingRange,
   isPortalBillingRangeTooLong,
+  listPortalBillingModels,
   sumPortalBillingStats,
-  type PortalBillingGroup,
 } from '../lib/billing'
 import { PortalBillingChart } from './portal-billing-chart'
 
@@ -76,79 +75,42 @@ const RANGE_PRESETS = [
 
 export function PortalBillingPanel() {
   const { t } = useTranslation()
+  const { currency: catalogCurrency, formatQuota } = usePricingCurrency()
   const user = useAuthStore((state) => state.auth.user)
   const defaults = createDefaultPortalBillingRange()
   const [start, setStart] = useState(defaults.start)
   const [end, setEnd] = useState(defaults.end)
-  const [tokenId, setTokenId] = useState(PORTAL_BILLING_ALL_KEYS)
-  const [group, setGroup] = useState<PortalBillingGroup>('model')
+  const [modelName, setModelName] = useState(PORTAL_BILLING_ALL_MODELS)
   const [rangeOpen, setRangeOpen] = useState(false)
 
   const billing = usePortalBillingData(start, end)
-  const selectedTokenId =
-    tokenId === PORTAL_BILLING_ALL_KEYS ? null : Number(tokenId)
   const unknownModel = t('Unknown model')
-  const unknownKey = t('Unknown API key')
-
-  const flowRows = useMemo(
-    () => filterFlowRowsByTokenId(billing.flowRows, selectedTokenId),
-    [billing.flowRows, selectedTokenId],
+  const selectedModelName =
+    modelName === PORTAL_BILLING_ALL_MODELS ? null : modelName
+  const quotaRows = useMemo(
+    () =>
+      filterRowsByModelName(billing.quotaRows, selectedModelName, unknownModel),
+    [billing.quotaRows, selectedModelName, unknownModel]
   )
 
-  const keyNameById = useMemo(() => {
-    const names = new Map<number, string>()
-    for (const key of billing.apiKeys) {
-      names.set(key.id, key.name)
-    }
-    return names
-  }, [billing.apiKeys])
-
-  const points = useMemo(() => {
-    if (group === 'model' && selectedTokenId == null) {
-      return buildPortalTimeSeries(billing.quotaRows, start, end, unknownModel)
-    }
-    if (group === 'model') {
-      return buildPortalCategorySeries(
-        flowRows,
-        (row) => row.model_name?.trim() || unknownModel,
-      )
-    }
-    return buildPortalCategorySeries(flowRows, (row) => {
-      if (row.token_name?.trim()) return row.token_name
-      if (row.token_id && keyNameById.has(row.token_id)) {
-        return keyNameById.get(row.token_id) ?? unknownKey
-      }
-      return unknownKey
-    })
-  }, [
-    billing.quotaRows,
-    end,
-    flowRows,
-    group,
-    keyNameById,
-    selectedTokenId,
-    start,
-    unknownKey,
-    unknownModel,
-  ])
-
-  const stats = useMemo(() => {
-    if (group === 'model' && selectedTokenId == null) {
-      return sumPortalBillingStats(billing.quotaRows)
-    }
-    return sumPortalBillingStats(flowRows)
-  }, [billing.quotaRows, flowRows, group, selectedTokenId])
-
-  const keyItems = useMemo(
-    () => [
-      { value: PORTAL_BILLING_ALL_KEYS, label: t('All') },
-      ...billing.apiKeys.map((key) => ({
-        value: String(key.id),
-        label: key.name,
-      })),
-    ],
-    [billing.apiKeys, t],
+  const points = useMemo(
+    () => buildPortalTimeSeries(quotaRows, start, end, unknownModel),
+    [end, quotaRows, start, unknownModel]
   )
+
+  const stats = useMemo(() => sumPortalBillingStats(quotaRows), [quotaRows])
+
+  const modelItems = useMemo(() => {
+    const names = listPortalBillingModels(billing.quotaRows, unknownModel)
+    const items = [
+      { value: PORTAL_BILLING_ALL_MODELS, label: t('All models') },
+      ...names.map((name) => ({ value: name, label: name })),
+    ]
+    if (modelName !== PORTAL_BILLING_ALL_MODELS && !names.includes(modelName)) {
+      items.push({ value: modelName, label: modelName })
+    }
+    return items
+  }, [billing.quotaRows, modelName, t, unknownModel])
 
   let settingJson: string | undefined
   if (typeof user?.setting === 'string') {
@@ -158,15 +120,7 @@ export function PortalBillingPanel() {
   }
   const warningOff =
     (parseUserSettings(settingJson).quota_warning_threshold ?? 0) === 0
-  const currencyMeta = getCurrencyDisplay().meta
-  const currencyCode =
-    currencyMeta.kind === 'currency' ? currencyMeta.currencyCode : ''
-  const filtersAreDefault = isDefaultPortalBillingRange(
-    start,
-    end,
-    tokenId,
-    group,
-  )
+  const filtersAreDefault = isDefaultPortalBillingRange(start, end, modelName)
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone
 
   const applyRange = (nextStart: Date, nextEnd: Date) => {
@@ -207,7 +161,7 @@ export function PortalBillingPanel() {
         <p className='text-muted-foreground flex items-center gap-1.5 text-sm'>
           {t(
             'Dates are shown in {{timezone}}. Usage data may be delayed by a few minutes.',
-            { timezone },
+            { timezone }
           )}
           <Tooltip>
             <TooltipTrigger
@@ -217,7 +171,7 @@ export function PortalBillingPanel() {
                   className='text-muted-foreground inline-flex'
                   aria-label={t(
                     'Dates are shown in {{timezone}}. Usage data may be delayed by a few minutes.',
-                    { timezone },
+                    { timezone }
                   )}
                 >
                   <CircleHelp className='size-3.5' />
@@ -227,7 +181,7 @@ export function PortalBillingPanel() {
             <TooltipContent>
               {t(
                 'Dates are shown in {{timezone}}. Usage data may be delayed by a few minutes.',
-                { timezone },
+                { timezone }
               )}
             </TooltipContent>
           </Tooltip>
@@ -251,27 +205,29 @@ export function PortalBillingPanel() {
               ) : null}
               <p className='mt-3 text-3xl font-semibold tracking-tight tabular-nums'>
                 {formatQuota(user?.quota ?? 0)}
-                {currencyCode ? (
-                  <span className='text-muted-foreground ml-2 text-sm font-medium'>
-                    {currencyCode}
-                  </span>
-                ) : null}
+                <span className='text-muted-foreground ml-2 text-sm font-medium'>
+                  {catalogCurrency}
+                </span>
               </p>
             </div>
-            <Button size='sm' className='rounded-full' render={<Link to='/wallet' />}>
+            <Button
+              size='sm'
+              className='rounded-full'
+              render={<Link to='/wallet' />}
+            >
               {t('Recharge')}
             </Button>
           </div>
         </article>
         <article className='rounded-2xl bg-[var(--portal-surface-muted)] p-5'>
-          <p className='text-muted-foreground text-sm'>{t('Total consumption')}</p>
+          <p className='text-muted-foreground text-sm'>
+            {t('Total consumption')}
+          </p>
           <p className='mt-3 text-3xl font-semibold tracking-tight tabular-nums'>
             {formatQuota(user?.used_quota ?? 0)}
-            {currencyCode ? (
-              <span className='text-muted-foreground ml-2 text-sm font-medium'>
-                {currencyCode}
-              </span>
-            ) : null}
+            <span className='text-muted-foreground ml-2 text-sm font-medium'>
+              {catalogCurrency}
+            </span>
           </p>
         </article>
       </div>
@@ -324,22 +280,28 @@ export function PortalBillingPanel() {
             </PopoverContent>
           </Popover>
           <Select
-            items={keyItems}
-            value={tokenId}
+            items={modelItems}
+            value={modelName}
             onValueChange={(value) =>
-              setTokenId(value ?? PORTAL_BILLING_ALL_KEYS)
+              setModelName(value ?? PORTAL_BILLING_ALL_MODELS)
             }
           >
-            <SelectTrigger size='sm' className='min-w-36 rounded-full'>
+            <SelectTrigger
+              size='sm'
+              className='max-w-52 min-w-36 rounded-full'
+              aria-label={t('Model')}
+            >
               <SelectValue>
-                {t('API Key')}{' '}
-                {keyItems.find((item) => item.value === tokenId)?.label ??
-                  t('All')}
+                <span className='truncate'>
+                  {t('Model')}{' '}
+                  {modelItems.find((item) => item.value === modelName)?.label ??
+                    t('All models')}
+                </span>
               </SelectValue>
             </SelectTrigger>
             <SelectContent>
               <SelectGroup>
-                {keyItems.map((item) => (
+                {modelItems.map((item) => (
                   <SelectItem key={item.value} value={item.value}>
                     {item.label}
                   </SelectItem>
@@ -357,8 +319,7 @@ export function PortalBillingPanel() {
                 const next = createDefaultPortalBillingRange()
                 setStart(next.start)
                 setEnd(next.end)
-                setTokenId(PORTAL_BILLING_ALL_KEYS)
-                setGroup('model')
+                setModelName(PORTAL_BILLING_ALL_MODELS)
               }}
             >
               {t('Clear filters')}
@@ -383,7 +344,7 @@ export function PortalBillingPanel() {
             {
               label: t('Consumption'),
               value: formatQuota(stats.quota),
-              code: currencyCode,
+              code: catalogCurrency,
             },
             {
               label: t('API request count'),
@@ -425,8 +386,6 @@ export function PortalBillingPanel() {
       ) : (
         <PortalBillingChart
           points={points}
-          group={group}
-          onGroupChange={setGroup}
           totalQuota={stats.quota}
           loading={billing.isLoading}
         />

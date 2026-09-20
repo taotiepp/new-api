@@ -93,17 +93,38 @@ describe('portal catalog filters', () => {
       ),
     ).toEqual(['gamma-model'])
     expect(listPortalCatalogVendors(sampleModels)).toEqual([
-      { value: 'Anthropic', name: 'Anthropic', count: 1 },
       { value: 'OpenAI', name: 'OpenAI', icon: 'OpenAI', count: 1 },
+      { value: 'Anthropic', name: 'Anthropic', count: 1 },
       { value: PORTAL_VENDOR_OTHER, name: '', count: 1 },
     ])
+  })
+
+  it('pins OpenAI, Anthropic, and Google ahead of other vendors', () => {
+    const models: PricingModel[] = [
+      { ...sampleModels[0], id: 4, model_name: 'deepseek-chat', vendor_name: 'DeepSeek' },
+      { ...sampleModels[0], id: 5, model_name: 'gemini-flash', vendor_name: 'Google' },
+      { ...sampleModels[0], id: 6, model_name: 'claude-sonnet', vendor_name: 'Claude' },
+      ...sampleModels,
+    ]
+    expect(listPortalCatalogVendors(models).map((vendor) => vendor.value)).toEqual([
+      'OpenAI',
+      'Anthropic',
+      'Claude',
+      'Google',
+      'DeepSeek',
+      PORTAL_VENDOR_OTHER,
+    ])
+    const sorted = sortPortalCatalogModels(models, 'name')
+    expect(
+      groupPortalCatalogModels(sorted).map((group) => group.vendor),
+    ).toEqual(['OpenAI', 'Anthropic', 'Claude', 'Google', 'DeepSeek', ''])
   })
 
   it('sorts models by vendor then name and groups adjacent vendors', () => {
     const sorted = sortPortalCatalogModels(sampleModels, 'name')
     expect(sorted.map((m) => m.model_name)).toEqual([
-      'beta-model',
       'alpha-model',
+      'beta-model',
       'gamma-model',
     ])
     expect(
@@ -112,8 +133,8 @@ describe('portal catalog filters', () => {
         group.models.map((model) => model.model_name),
       ]),
     ).toEqual([
-      ['Anthropic', ['beta-model']],
       ['OpenAI', ['alpha-model']],
+      ['Anthropic', ['beta-model']],
       ['', ['gamma-model']],
     ])
   })

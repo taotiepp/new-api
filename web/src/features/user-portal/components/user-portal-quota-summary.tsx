@@ -18,7 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { useTranslation } from 'react-i18next'
 
-import { formatQuota } from '@/lib/format'
+import { usePricingCurrency } from '@/lib/currency'
 import { useAuthStore } from '@/stores/auth-store'
 
 type UserPortalQuotaSummaryProps = {
@@ -27,23 +27,29 @@ type UserPortalQuotaSummaryProps = {
 
 export function UserPortalQuotaSummary(props: UserPortalQuotaSummaryProps) {
   const { t } = useTranslation()
+  const { formatQuota } = usePricingCurrency()
   const user = useAuthStore((s) => s.auth.user)
 
   if (props.compact) {
     return (
       <span className='block truncate tabular-nums'>
-        <span className='text-[var(--portal-ink)]'>{formatQuota(user?.quota ?? 0)}</span>
-        <span className='text-[var(--portal-ink-muted)]'> · {t('Available balance')}</span>
+        <span className='text-[var(--portal-ink)]'>
+          {formatQuota(user?.quota ?? 0)}
+        </span>
+        <span className='text-[var(--portal-ink-muted)]'>
+          {' '}
+          · {t('Available balance')}
+        </span>
       </span>
     )
   }
 
   return (
     <div className='portal-bezel-inner p-4'>
-      <p className='text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--portal-ink-muted)]'>
+      <p className='text-[10px] font-semibold tracking-[0.14em] text-[var(--portal-ink-muted)] uppercase'>
         {t('Available balance')}
       </p>
-      <p className='mt-1.5 text-lg font-semibold tabular-nums tracking-tight text-[var(--portal-ink)]'>
+      <p className='mt-1.5 text-lg font-semibold tracking-tight text-[var(--portal-ink)] tabular-nums'>
         {formatQuota(user?.quota ?? 0)}
       </p>
       {user?.used_quota !== undefined ? (

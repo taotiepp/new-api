@@ -78,11 +78,15 @@ For commercial licensing, please contact support@quantumnous.com
  * 4. **Billing displays**: Use formatBillingCurrencyFromUSD() to avoid token display
  * 5. **Effective exchange rate**: When quotaDisplayType is 'USD', use rate of 1 regardless of config
  */
+import { useMemo } from 'react'
+
+import { useCatalogPricingCurrencyStore } from '@/stores/catalog-pricing-currency-store'
 import {
   useSystemConfigStore,
   DEFAULT_CURRENCY_CONFIG,
   type CurrencyConfig,
   type CurrencyDisplayType,
+  type PricingDisplayType,
 } from '@/stores/system-config-store'
 
 export interface CurrencyFormatOptions {
@@ -159,9 +163,98 @@ export function parseCurrencyDisplayType(
   return isCurrencyDisplayType(value) ? value : fallback
 }
 
-function getConfig(): CurrencyConfig {
-  const { config } = useSystemConfigStore.getState()
-  const currency = config?.currency ?? DEFAULT_CURRENCY_CONFIG
+export function isPricingDisplayType(
+  value: unknown
+): value is PricingDisplayType {
+  return value === 'USD' || value === 'CNY'
+}
+
+export function parsePricingDisplayType(
+  value: unknown,
+  quotaDisplayType: CurrencyDisplayType = 'USD'
+): PricingDisplayType {
+  if (isPricingDisplayType(value)) return value
+  return quotaDisplayType === 'CNY' ? 'CNY' : 'USD'
+}
+
+export function resolvePricingDisplayType(
+  config: CurrencyConfig = getConfig(),
+  override: PricingDisplayType | null = getCatalogPricingCurrencyOverride()
+): PricingDisplayType {
+  if (isPricingDisplayType(override)) return override
+  return parsePricingDisplayType(
+    config.pricingDisplayType,
+    config.quotaDisplayType
+  )
+}
+
+function getCatalogPricingCurrencyOverride(): PricingDisplayType | null {
+  return useCatalogPricingCurrencyStore.getState().currency
+}
+
+export function useCatalogPricingCurrency(): PricingDisplayType {
+  const override = useCatalogPricingCurrencyStore((state) => state.currency)
+  const config = useSystemConfigStore((state) => state.config.currency)
+  return resolvePricingDisplayType(config, override)
+}
+
+export type PricingCurrencyContext = {
+  currency: PricingDisplayType
+  exchangeRate: number
+  quotaPerUnit: number
+}
+
+/** Pure formatting: currency and conversion factors are explicit inputs. */
+export function formatPricingCurrency(
+  amountUSD: number | null | undefined,
+  context: PricingCurrencyContext,
+  options?: CurrencyFormatOptions
+): string {
+  if (amountUSD == null || Number.isNaN(amountUSD)) return '-'
+  const meta: DisplayMeta = {
+    kind: 'currency',
+    symbol: context.currency === 'CNY' ? '¥' : '$',
+    currencyCode: context.currency,
+    exchangeRate: context.exchangeRate,
+  }
+  return formatCurrencyValue(
+    amountUSD * context.exchangeRate,
+    mergeOptions(options),
+    meta
+  )
+}
+
+/** Subscribe once and return formatters bound to this render's currency. */
+export function usePricingCurrency() {
+  const config = useSystemConfigStore((state) => state.config.currency)
+  const override = useCatalogPricingCurrencyStore((state) => state.currency)
+  return useMemo(() => {
+    const normalized = getConfig(config)
+    const currency = resolvePricingDisplayType(normalized, override)
+    const context: PricingCurrencyContext = {
+      currency,
+      exchangeRate: currency === 'CNY' ? normalized.usdExchangeRate : 1,
+      quotaPerUnit: normalized.quotaPerUnit,
+    }
+    return {
+      ...context,
+      formatCurrency: (
+        amount: number | null | undefined,
+        options?: CurrencyFormatOptions
+      ) => formatPricingCurrency(amount, context, options),
+      formatQuota: (quota: number) =>
+        formatPricingCurrency(quota / context.quotaPerUnit, context, {
+          digitsLarge: 2,
+          digitsSmall: 4,
+          abbreviate: true,
+        }),
+    }
+  }, [config, override])
+}
+
+function getConfig(
+  currency: CurrencyConfig = useSystemConfigStore.getState().config.currency
+): CurrencyConfig {
   return {
     ...DEFAULT_CURRENCY_CONFIG,
     ...currency,
@@ -486,6 +579,33 @@ export function formatBillingCurrencyFromUSD(
 }
 
 /**
+ * Compatibility formatter for non-reactive callers. React consumers use
+ * usePricingCurrency() and calculations accept its explicit formatter.
+ *
+ * Uses the navbar pricing-currency preference when set, otherwise the
+ * admin site default (USD or CNY). Independent of quota display.
+ * Token quota mode still shows a real currency here.
+ */
+export function formatPricingCurrencyFromUSD(
+  amountUSD: number | null | undefined,
+  options?: CurrencyFormatOptions
+): string {
+  if (amountUSD == null || Number.isNaN(amountUSD)) return '-'
+
+  const config = getConfig()
+  const currency = resolvePricingDisplayType(config)
+  return formatPricingCurrency(
+    amountUSD,
+    {
+      currency,
+      exchangeRate: currency === 'CNY' ? config.usdExchangeRate : 1,
+      quotaPerUnit: config.quotaPerUnit,
+    },
+    options
+  )
+}
+
+/**
  * Format raw quota values (token units) to display currency.
  *
  * Converts raw quota/token amounts to USD first, then formats according
@@ -524,6 +644,16 @@ export function formatQuotaWithCurrency(
   return formatCurrencyFromUSD(amountUSD, options)
 }
 
+export function formatQuotaWithPricingCurrency(
+  quota: number | null | undefined,
+  options?: CurrencyFormatOptions
+): string {
+  if (quota == null || Number.isNaN(quota)) return '-'
+
+  const { config } = getCurrencyDisplay()
+  return formatPricingCurrencyFromUSD(quota / config.quotaPerUnit, options)
+}
+
 /**
  * Get the current currency label for UI display.
  *
@@ -559,6 +689,12 @@ export function getCurrencyLabel(): string {
     default:
       return 'USD'
   }
+}
+
+export function getPricingCurrencyLabel(
+  config: CurrencyConfig = getConfig()
+): PricingDisplayType {
+  return resolvePricingDisplayType(config)
 }
 
 /**

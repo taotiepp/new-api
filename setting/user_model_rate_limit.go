@@ -185,13 +185,18 @@ func ResolveSettingsModelLimit(group, model string) ModelRateLimit {
 	userModelRateLimitMutex.RLock()
 	defer userModelRateLimitMutex.RUnlock()
 
+	return userModelRateLimit.ResolveModelLimit(group, model)
+}
+
+// ResolveModelLimit resolves one model against an immutable configuration snapshot.
+func (cfg UserModelRateLimitConfig) ResolveModelLimit(group, model string) ModelRateLimit {
 	merged := ModelRateLimit{}
-	mergeModelRateLimit(&merged, userModelRateLimit.Default)
-	if m, ok := userModelRateLimit.Models[model]; ok {
+	mergeModelRateLimit(&merged, cfg.Default)
+	if m, ok := cfg.Models[model]; ok {
 		mergeModelRateLimit(&merged, m)
 	}
 	if group != "" {
-		if gl, ok := userModelRateLimit.Groups[group]; ok {
+		if gl, ok := cfg.Groups[group]; ok {
 			mergeModelRateLimit(&merged, gl.Default)
 			if m, ok := gl.Models[model]; ok {
 				mergeModelRateLimit(&merged, m)
@@ -222,4 +227,28 @@ func mergeModelRateLimit(dst *ModelRateLimit, src ModelRateLimit) {
 // used to apply per-user table overrides above the settings resolution.
 func MergeUserModelRateLimit(dst *ModelRateLimit, src ModelRateLimit) {
 	mergeModelRateLimit(dst, src)
+}
+
+// UserModelRateLimitSnapshot exposes a read-only view of one configuration.
+// Updates replace the configuration and its maps instead of mutating them.
+type UserModelRateLimitSnapshot struct {
+	Enabled       bool
+	WindowSeconds int
+	config        UserModelRateLimitConfig
+}
+
+func (s UserModelRateLimitSnapshot) ResolveModelLimit(group, model string) ModelRateLimit {
+	return s.config.ResolveModelLimit(group, model)
+}
+
+// SnapshotUserModelRateLimits captures the switch, window and hierarchy under
+// one lock without copying every model for each request.
+func SnapshotUserModelRateLimits() UserModelRateLimitSnapshot {
+	userModelRateLimitMutex.RLock()
+	defer userModelRateLimitMutex.RUnlock()
+	return UserModelRateLimitSnapshot{
+		Enabled:       userModelRateLimit.Enabled,
+		WindowSeconds: max(1, userModelRateLimit.DurationMinutes) * 60,
+		config:        userModelRateLimit,
+	}
 }

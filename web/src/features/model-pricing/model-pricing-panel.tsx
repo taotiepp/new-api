@@ -26,14 +26,13 @@ import { LoadingState } from '@/components/loading-state'
 import { Button } from '@/components/ui/button'
 import { DynamicPricingBreakdown } from '@/features/pricing/components/dynamic-pricing-breakdown'
 import { ModelPriceCell } from '@/features/pricing/components/model-price-cell'
+import { usePricingFormatters } from '@/features/pricing/hooks/use-pricing-formatters'
 import { isDynamicPricingModel } from '@/features/pricing/lib/dynamic-price'
-import { formatPrice } from '@/features/pricing/lib/price'
 import {
   ModelPricingEditorPanel,
   type ModelPricingEditorPanelHandle,
 } from '@/features/system-settings/models/model-pricing-sheet'
 import { handleServerError } from '@/lib/handle-server-error'
-import { useSystemConfigStore } from '@/stores/system-config-store'
 
 import {
   useCanEditModelPricing,
@@ -48,7 +47,7 @@ export function ModelPricingPanel(props: {
   onDirtyChange?: (dirty: boolean) => void
 }) {
   const { t } = useTranslation()
-  useSystemConfigStore((state) => state.config.currency)
+  const { formatPrice } = usePricingFormatters()
   const canEdit = useCanEditModelPricing()
   const query = useModelPricing([props.modelName], Boolean(props.modelName))
   const save = useSaveModelPricing()

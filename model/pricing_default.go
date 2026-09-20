@@ -69,7 +69,10 @@ var defaultVendorIcons = map[string]string{
 	"Azure":      "AzureAI",
 }
 
-// initDefaultVendorMapping 简化的默认供应商映射
+// initDefaultVendorMapping 简化的默认供应商映射.
+// Saved metadata without a vendor keeps the same name-based display vendor
+// used before the row existed, so editing description/tags does not move
+// the model into the catalog's unassigned bucket.
 func initDefaultVendorMapping(metaMap map[string]*Model, vendorMap map[int]*Vendor, enableAbilities []AbilityWithChannel) {
 	patterns := make([]string, 0, len(defaultVendorRules))
 	for pattern := range defaultVendorRules {
@@ -83,29 +86,37 @@ func initDefaultVendorMapping(metaMap map[string]*Model, vendorMap map[int]*Vend
 	})
 	for _, ability := range enableAbilities {
 		modelName := ability.Model
-		if _, exists := metaMap[modelName]; exists {
+		if existing, exists := metaMap[modelName]; exists {
+			if existing.VendorID != 0 {
+				continue
+			}
+			vendorID := matchDisplayVendorID(modelName, patterns, vendorMap)
+			if vendorID == 0 {
+				continue
+			}
+			copied := *existing
+			copied.VendorID = vendorID
+			metaMap[modelName] = &copied
 			continue
 		}
 
-		// 匹配供应商
-		vendorID := 0
-		modelLower := strings.ToLower(modelName)
-		for _, pattern := range patterns {
-			vendorName := defaultVendorRules[pattern]
-			if strings.Contains(modelLower, pattern) {
-				vendorID = getDisplayVendor(vendorName, vendorMap)
-				break
-			}
-		}
-
-		// 创建模型元数据
 		metaMap[modelName] = &Model{
 			ModelName: modelName,
-			VendorID:  vendorID,
+			VendorID:  matchDisplayVendorID(modelName, patterns, vendorMap),
 			Status:    1,
 			NameRule:  NameRuleExact,
 		}
 	}
+}
+
+func matchDisplayVendorID(modelName string, patterns []string, vendorMap map[int]*Vendor) int {
+	modelLower := strings.ToLower(modelName)
+	for _, pattern := range patterns {
+		if strings.Contains(modelLower, pattern) {
+			return getDisplayVendor(defaultVendorRules[pattern], vendorMap)
+		}
+	}
+	return 0
 }
 
 // Default vendor entries are presentation data. Reading pricing must never

@@ -23,6 +23,7 @@ import {
   CalendarClock,
   Code2,
   FileText,
+  Gauge,
   HeartPulse,
   Info,
   Layers,
@@ -62,13 +63,12 @@ import { cn } from '@/lib/utils'
 import { DEFAULT_TOKEN_UNIT } from '../constants'
 import { useBillingTime } from '../hooks/use-billing-time'
 import { usePricingData } from '../hooks/use-pricing-data'
+import { usePricingFormatters } from '../hooks/use-pricing-formatters'
 import type { ParsedTaskTier } from '../lib/billing-expr'
 import { formatBillingCondition } from '../lib/billing-expression/condition-display'
 import {
-  formatTaskUsageUnitPrice,
   getDynamicPriceEntries,
   getDynamicPriceUnitLabelKey,
-  getDynamicPricingSummary,
   getDynamicPricingTiers,
   getTaskUsageQuantityUnitLabelKey,
   isDynamicPricingModel,
@@ -77,7 +77,7 @@ import {
 } from '../lib/dynamic-price'
 import { parseTags } from '../lib/filters'
 import { getAvailableGroups, isTokenBasedModel } from '../lib/model-helpers'
-import { formatFixedPrice, formatGroupPrice } from '../lib/price'
+import { getUserRateLimitDisplay } from '../lib/rate-limit-display'
 import {
   evaluateTaskUsageExamples,
   getTaskEnumFields,
@@ -400,6 +400,10 @@ function ModelBackendQuickStats(props: { model: PricingModel }) {
     })
   }
 
+  for (const limit of getUserRateLimitDisplay(model, t)) {
+    stats.push({ ...limit, icon: Gauge })
+  }
+
   if (inputModalities.length > 0 || outputModalities.length > 0) {
     stats.push({
       key: 'modalities',
@@ -675,6 +679,8 @@ function PriceSection(props: {
   showRechargePrice: boolean
 }) {
   const { t } = useTranslation()
+  const { getDynamicPricingSummary, formatFixedPrice, formatGroupPrice } =
+    usePricingFormatters()
   const isTokenBased = isTokenBasedModel(props.model)
   const tokenUnitLabel = props.tokenUnit === 'K' ? '1K' : '1M'
   const baseGroupKey = '_base'
@@ -988,6 +994,12 @@ function GroupPricingSection(props: {
   showRechargePrice?: boolean
 }) {
   const { t, i18n } = useTranslation()
+  const {
+    formatFixedPrice,
+    formatGroupPrice,
+    formatTaskUsageUnitPrice,
+    formatCurrency,
+  } = usePricingFormatters()
   const showRechargePrice = props.showRechargePrice ?? false
 
   const availableGroups = useMemo(
@@ -1090,6 +1102,7 @@ function GroupPricingSection(props: {
       usdExchangeRate: props.usdExchangeRate,
       groupRatioMultiplier: 1,
       usageSchema: props.model.billing_usage_schema,
+      formatCurrency,
     })
     const formattedPricesByGroup = new Map(
       availableGroups.map((group) => {
@@ -1103,6 +1116,7 @@ function GroupPricingSection(props: {
             usdExchangeRate: props.usdExchangeRate,
             groupRatioMultiplier: ratio,
             usageSchema: props.model.billing_usage_schema,
+            formatCurrency,
           }),
         ] as const
       })

@@ -110,7 +110,7 @@ export function UserPortalModelPlaza() {
       title={t('Model Square')}
       actions={headerActions}
     >
-      <div className='portal-catalog-section space-y-5 pb-4'>
+      <div className='portal-catalog-section space-y-5'>
         <PortalCatalogToolbar
           totalCount={models.length}
           filteredCount={filteredModels.length}

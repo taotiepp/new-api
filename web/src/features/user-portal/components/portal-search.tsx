@@ -23,7 +23,7 @@ import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
-import { PortalBezel } from './portal-bezel'
+import { PortalBezel } from '@/components/layout/portal/portal-bezel'
 
 type PortalSearchProps = {
   value: string
@@ -95,10 +95,11 @@ export function PortalSearch(props: PortalSearchProps) {
   }
 
   return (
-    <PortalBezel
-      className={props.className}
-      innerClassName='flex items-center gap-2 px-3 py-1'
-    >
+      <PortalBezel
+        tone='card'
+        className={props.className}
+        innerClassName='flex items-center gap-2 px-3 py-1'
+      >
       <Search aria-hidden className='text-muted-foreground/60 size-3.5 shrink-0' />
       <input
         ref={inputRef}

@@ -79,6 +79,7 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 
 	var (
 		newAPIError *types.NewAPIError
+		relayInfo   *relaycommon.RelayInfo
 		ws          *websocket.Conn
 	)
 
@@ -94,6 +95,7 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 
 	defer func() {
 		if newAPIError != nil {
+			recordTerminalRelayError(c, newAPIError, relayInfo)
 			logger.LogError(c, fmt.Sprintf("relay error: %s", common.LocalLogPreview(newAPIError.Error())))
 			newAPIError.SetMessage(common.MessageWithRequestId(newAPIError.Error(), requestId))
 			switch relayFormat {
@@ -123,7 +125,7 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		return
 	}
 
-	relayInfo, err := relaycommon.GenRelayInfo(c, relayFormat, request, ws)
+	relayInfo, err = relaycommon.GenRelayInfo(c, relayFormat, request, ws)
 	if err != nil {
 		newAPIError = types.NewError(err, types.ErrorCodeGenRelayInfoFailed)
 		return
@@ -464,29 +466,61 @@ func processChannelError(c *gin.Context, channelError types.ChannelError, err *t
 	}
 
 	if constant.ErrorLogEnabled && types.IsRecordErrorLog(err) {
-		// 保存错误日志到mysql中
-		userId := c.GetInt("id")
-		tokenName := c.GetString("token_name")
-		modelName := c.GetString("original_model")
-		tokenId := c.GetInt("token_id")
-		userGroup := c.GetString("group")
-		other := model.NewLogOther()
-		if c.Request != nil && c.Request.URL != nil {
-			other.SetPublic("request_path", c.Request.URL.Path)
-		}
-		other.SetPublic("error_type", err.GetErrorType())
-		other.SetPublic("error_code", err.GetErrorCode())
-		other.SetPublic("status_code", err.StatusCode)
-		service.AppendRelayLogAdminInfo(c, relayInfo, other)
-		service.AppendTaskPluginContextAuditInfo(c, other)
-		startTime := common.GetContextKeyTime(c, constant.ContextKeyRequestStartTime)
-		if startTime.IsZero() {
-			startTime = time.Now()
-		}
-		useTimeSeconds := int(time.Since(startTime).Seconds())
-		model.RecordErrorLog(c, userId, channelError.ChannelId, modelName, tokenName, err.MaskSensitiveErrorWithStatusCode(), tokenId, useTimeSeconds, common.GetContextKeyBool(c, constant.ContextKeyIsStream), userGroup, other)
+		recordRelayErrorLog(c, err, channelError.ChannelId, relayInfo)
+		c.Set(contextKeyErrorLogRecorded, true)
 	}
 
+}
+
+const contextKeyErrorLogRecorded = "error_log_recorded"
+
+func recordTerminalRelayError(c *gin.Context, err *types.NewAPIError, relayInfo *relaycommon.RelayInfo) {
+	if c == nil || err == nil || c.GetBool(contextKeyErrorLogRecorded) {
+		return
+	}
+	channelId := 0
+	if relayInfo != nil && relayInfo.ChannelId > 0 {
+		channelId = relayInfo.ChannelId
+	} else {
+		channelId = c.GetInt("channel_id")
+	}
+	recordRelayErrorLog(c, err, channelId, relayInfo)
+}
+
+func recordRelayErrorLog(c *gin.Context, err *types.NewAPIError, channelId int, relayInfo *relaycommon.RelayInfo) {
+	if c == nil || err == nil {
+		return
+	}
+	userId := c.GetInt("id")
+	if userId == 0 {
+		return
+	}
+	tokenName := c.GetString("token_name")
+	modelName := c.GetString("original_model")
+	if relayInfo != nil && relayInfo.OriginModelName != "" {
+		modelName = relayInfo.OriginModelName
+	}
+	tokenId := c.GetInt("token_id")
+	userGroup := c.GetString("group")
+	other := model.NewLogOther()
+	if c.Request != nil && c.Request.URL != nil {
+		other.SetPublic("request_path", c.Request.URL.Path)
+	}
+	other.SetPublic("error_type", err.GetErrorType())
+	other.SetPublic("error_code", err.GetErrorCode())
+	other.SetPublic("status_code", err.StatusCode)
+	service.AppendRelayLogAdminInfo(c, relayInfo, other)
+	service.AppendTaskPluginContextAuditInfo(c, other)
+	startTime := common.GetContextKeyTime(c, constant.ContextKeyRequestStartTime)
+	if startTime.IsZero() {
+		startTime = time.Now()
+	}
+	useTimeSeconds := int(time.Since(startTime).Seconds())
+	isStream := common.GetContextKeyBool(c, constant.ContextKeyIsStream)
+	if relayInfo != nil {
+		isStream = relayInfo.IsStream
+	}
+	model.RecordErrorLog(c, userId, channelId, modelName, tokenName, err.MaskSensitiveErrorWithStatusCode(), tokenId, useTimeSeconds, isStream, userGroup, other)
 }
 
 func RelayMidjourney(c *gin.Context) {

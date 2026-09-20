@@ -20,6 +20,7 @@ import { Link } from '@tanstack/react-router'
 import { ArrowLeftIcon } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
+import { PricingCurrencySwitch } from '@/components/pricing-currency-switch'
 import { ProfileDropdown } from '@/components/profile-dropdown'
 import { ThemeSwitch } from '@/components/theme-switch'
 import { Button } from '@/components/ui/button'
@@ -46,9 +47,9 @@ export function UserPortalHeader() {
           <img
             src={logo}
             alt={t('Logo')}
-            className='size-8 rounded-xl object-cover shadow-sm ring-1 ring-black/5'
+            className='size-9 rounded-xl object-cover shadow-sm ring-1 ring-black/5'
           />
-          <span className='hidden max-w-[7rem] truncate text-sm font-semibold tracking-tight text-[var(--portal-ink)] sm:inline'>
+          <span className='hidden max-w-[16rem] truncate text-base font-semibold tracking-tight text-[var(--portal-ink)] sm:inline'>
             {systemName}
           </span>
         </Link>
@@ -58,9 +59,11 @@ export function UserPortalHeader() {
         </nav>
 
         <div className='portal-island-actions'>
-          <div className='portal-quota-chip'>
-            <UserPortalQuotaSummary compact />
-          </div>
+          {user ? (
+            <div className='portal-quota-chip'>
+              <UserPortalQuotaSummary compact />
+            </div>
+          ) : null}
           {isAdmin ? (
             <Button
               nativeButton={false}
@@ -73,8 +76,20 @@ export function UserPortalHeader() {
               <ArrowLeftIcon aria-hidden className='size-4' />
             </Button>
           ) : null}
+          <PricingCurrencySwitch />
           <ThemeSwitch />
-          <ProfileDropdown />
+          {user ? (
+            <ProfileDropdown />
+          ) : (
+            <Button
+              size='sm'
+              variant='secondary'
+              className='h-9 rounded-full px-4 text-sm font-medium'
+              render={<Link to='/sign-in' />}
+            >
+              {t('Sign in')}
+            </Button>
+          )}
         </div>
       </div>
     </div>

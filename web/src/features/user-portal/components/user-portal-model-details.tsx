@@ -33,7 +33,7 @@ import { DEFAULT_TOKEN_UNIT } from '@/features/pricing/constants'
 import type { TokenUnit } from '@/features/pricing/types'
 
 import { usePortalCatalogData } from '../hooks/use-portal-catalog-data'
-import { PortalBezel } from './portal-bezel'
+import { PortalBezel } from '@/components/layout/portal/portal-bezel'
 import { UserPortalPage } from './user-portal-page'
 
 const MODEL_DETAILS_SKELETON_KEYS = ['a', 'b', 'c', 'd'] as const

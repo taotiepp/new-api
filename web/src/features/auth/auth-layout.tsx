@@ -19,7 +19,12 @@ For commercial licensing, please contact support@quantumnous.com
 import { Link } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 
+import { LanguageSwitcher } from '@/components/language-switcher'
+import { PricingCurrencySwitch } from '@/components/pricing-currency-switch'
+import { ThemeSwitch } from '@/components/theme-switch'
 import { Skeleton } from '@/components/ui/skeleton'
+import { PortalBezel } from '@/components/layout/portal/portal-bezel'
+import { PortalPublicShell } from '@/components/layout/portal/portal-public-shell'
 import { useSystemConfig } from '@/hooks/use-system-config'
 
 type AuthLayoutProps = {
@@ -31,33 +36,44 @@ export function AuthLayout({ children }: AuthLayoutProps) {
   const { systemName, logo, loading } = useSystemConfig()
 
   return (
-    <div className='relative grid h-svh max-w-none'>
-      <Link
-        to='/'
-        className='absolute top-4 left-4 z-10 flex items-center gap-2 transition-opacity hover:opacity-80 sm:top-8 sm:left-8'
-      >
-        <div className='relative h-8 w-8'>
-          {loading ? (
-            <Skeleton className='absolute inset-0 rounded-full' />
-          ) : (
-            <img
-              src={logo}
-              alt={t('Logo')}
-              className='h-8 w-8 rounded-full object-cover'
-            />
-          )}
+    <PortalPublicShell
+      header={
+        <div className='portal-top-chrome'>
+          <div className='portal-island'>
+            <Link className='portal-island-brand' to='/'>
+              <div className='relative size-9'>
+                {loading ? (
+                  <Skeleton className='absolute inset-0 rounded-xl' />
+                ) : (
+                  <img
+                    src={logo}
+                    alt={t('Logo')}
+                    className='size-9 rounded-xl object-cover shadow-sm ring-1 ring-black/5'
+                  />
+                )}
+              </div>
+              {loading ? (
+                <Skeleton className='h-4 w-24' />
+              ) : (
+                <span className='hidden max-w-[16rem] truncate text-base font-semibold tracking-tight text-[var(--portal-ink)] sm:inline'>
+                  {systemName}
+                </span>
+              )}
+            </Link>
+            <div className='ml-auto portal-island-actions'>
+              <LanguageSwitcher />
+              <PricingCurrencySwitch />
+              <ThemeSwitch />
+            </div>
+          </div>
         </div>
-        {loading ? (
-          <Skeleton className='h-6 w-24' />
-        ) : (
-          <h1 className='text-xl font-medium'>{systemName}</h1>
-        )}
-      </Link>
-      <div className='container flex items-center pt-16 sm:pt-0'>
-        <div className='mx-auto flex w-full flex-col justify-center space-y-2 px-4 py-8 sm:w-[480px] sm:p-8'>
+      }
+    >
+      <main className='portal-auth-stage'>
+        <PortalBezel className='portal-auth-card' innerClassName='p-6 sm:p-8'>
           {children}
-        </div>
-      </div>
-    </div>
+        </PortalBezel>
+      </main>
+    </PortalPublicShell>
   )
 }

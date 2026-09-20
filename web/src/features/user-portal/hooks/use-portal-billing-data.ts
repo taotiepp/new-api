@@ -18,18 +18,13 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { useQuery } from '@tanstack/react-query'
 
-import {
-  getFlowQuotaDates,
-  getUserQuotaDates,
-} from '@/features/dashboard/api'
-import { getApiKeys } from '@/features/keys/api'
+import { getUserQuotaDates } from '@/features/dashboard/api'
 import { requireServerSuccess } from '@/lib/server-error-message'
 import { computeTimeRange } from '@/lib/time'
 
 import {
   isPortalBillingRangeTooLong,
   type PortalBillingRow,
-  type PortalFlowRow,
 } from '../lib/billing'
 
 export function usePortalBillingData(start: Date, end: Date) {
@@ -53,42 +48,10 @@ export function usePortalBillingData(start: Date, end: Date) {
     },
   })
 
-  const flowQuery = useQuery({
-    queryKey: ['user-portal', 'billing', 'flow', timeRange],
-    enabled: !rangeTooLong,
-    queryFn: async () => {
-      const result = requireServerSuccess(
-        await getFlowQuotaDates(
-          {
-            start_timestamp: timeRange.start_timestamp,
-            end_timestamp: timeRange.end_timestamp,
-          },
-          false,
-        ),
-      )
-      return (result.data ?? []) as PortalFlowRow[]
-    },
-  })
-
-  const keysQuery = useQuery({
-    queryKey: ['user-portal', 'billing', 'api-keys'],
-    queryFn: async () => {
-      const result = requireServerSuccess(
-        await getApiKeys({ p: 1, size: 100 }),
-      )
-      return result.data?.items ?? []
-    },
-    staleTime: 60 * 1000,
-  })
-
   return {
     rangeTooLong,
     quotaRows: quotaQuery.data ?? [],
-    flowRows: flowQuery.data ?? [],
-    apiKeys: keysQuery.data ?? [],
-    isLoading:
-      !rangeTooLong &&
-      (quotaQuery.isLoading || flowQuery.isLoading || keysQuery.isLoading),
-    isError: quotaQuery.isError || flowQuery.isError || keysQuery.isError,
+    isLoading: !rangeTooLong && quotaQuery.isLoading,
+    isError: quotaQuery.isError,
   }
 }

@@ -40,6 +40,11 @@ type Pricing struct {
 	BillingUsageSchema     map[string]jsplugin.UsageFieldSchema `json:"billing_usage_schema,omitempty"`
 	BillingUsageExamples   []jsplugin.UsageExample              `json:"billing_usage_examples,omitempty"`
 	PricingVersion         string                               `json:"pricing_version,omitempty"`
+	// RPM/TPM are counts per RateLimitWindowSeconds, filled per-request for the
+	// user catalog rather than cached globally. Zero and negative counts mean unlimited.
+	RPM                    *int `json:"rpm,omitempty"`
+	TPM                    *int `json:"tpm,omitempty"`
+	RateLimitWindowSeconds int  `json:"rate_limit_window_seconds,omitempty"`
 }
 
 type PricingVendor struct {

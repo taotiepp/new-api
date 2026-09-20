@@ -18,19 +18,16 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { useTranslation } from 'react-i18next'
 
-import { getCurrencyLabel } from '@/lib/currency'
-import { useSystemConfigStore } from '@/stores/system-config-store'
+import { usePricingFormatters } from '@/features/pricing/hooks/use-pricing-formatters'
 
 import { DEFAULT_TOKEN_UNIT } from '../constants'
 import { useBillingTime } from '../hooks/use-billing-time'
 import {
   getDynamicDisplayGroupRatio,
   getDynamicPriceUnitLabelKey,
-  getDynamicPricingSummary,
   isUnconfiguredTaskUsageModel,
 } from '../lib/dynamic-price'
 import { isTokenBasedModel } from '../lib/model-helpers'
-import { formatPrice, formatRequestPrice } from '../lib/price'
 import type { PricingModel, TokenUnit } from '../types'
 
 export type ModelPriceCellOptions = {
@@ -47,9 +44,12 @@ export function ModelPriceCell(props: {
   showExpression?: boolean
 }) {
   const { t } = useTranslation()
-  const currency = useSystemConfigStore((state) => state.config.currency)
-  const currencyLabel =
-    currency.quotaDisplayType === 'TOKENS' ? 'USD' : getCurrencyLabel()
+  const {
+    currency: currencyLabel,
+    formatPrice,
+    formatRequestPrice,
+    getDynamicPricingSummary,
+  } = usePricingFormatters()
   const options = props.options ?? {}
   const tokenUnit = options.tokenUnit ?? DEFAULT_TOKEN_UNIT
   const tokenUnitLabel = tokenUnit === 'K' ? '1K' : '1M'

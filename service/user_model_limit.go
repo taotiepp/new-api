@@ -35,7 +35,7 @@ const errorCodeUserModelRateLimit = types.ErrorCode("rate_limit_exceeded")
 // AdmitUserModelRateLimit performs RPM + TPM admission before the upstream call.
 // It returns a 429 *types.NewAPIError when the request must be rejected, else nil.
 func AdmitUserModelRateLimit(c *gin.Context, relayInfo *relaycommon.RelayInfo, estimateTokens int, maxTokens int) *types.NewAPIError {
-	if !setting.UserModelRateLimitEnabled() || relayInfo == nil || relayInfo.UserId <= 0 {
+	if relayInfo == nil || relayInfo.UserId <= 0 {
 		return nil
 	}
 	limit, hasLimit := resolveUserModelLimit(relayInfo)
@@ -44,18 +44,18 @@ func AdmitUserModelRateLimit(c *gin.Context, relayInfo *relaycommon.RelayInfo, e
 	}
 	userId := relayInfo.UserId
 	modelName := relayInfo.OriginModelName
-	window := int64(setting.UserModelRateLimitWindowSeconds())
+	window := int64(limit.WindowSeconds)
 	ctx := c.Request.Context()
 
-	if limit.RPM > 0 {
-		if !rpmAllow(ctx, umrlRPMKey(userId, modelName), limit.RPM, window) {
+	if limit.Requests > 0 {
+		if !rpmAllow(ctx, umrlRPMKey(userId, modelName), limit.Requests, window) {
 			c.Header("Retry-After", strconv.FormatInt(window, 10))
 			return newRateLimitError(fmt.Sprintf(
-				"requests-per-minute limit reached for model %s (%d per %ds)", modelName, limit.RPM, window))
+				"requests-per-minute limit reached for model %s (%d per %ds)", modelName, limit.Requests, window))
 		}
 	}
 
-	if limit.TPM > 0 {
+	if limit.Tokens > 0 {
 		est := estimateTokens
 		if maxTokens > 0 {
 			est += maxTokens
@@ -63,12 +63,12 @@ func AdmitUserModelRateLimit(c *gin.Context, relayInfo *relaycommon.RelayInfo, e
 		// est<=0 means no usable estimate (e.g. deferred token counting for trusted
 		// wallets). Skip admission and rely on the post-response deduction instead.
 		if est > 0 {
-			capacity, rate := tpmBucketParams(limit.TPM, window)
+			capacity, rate := tpmBucketParams(limit.Tokens, window)
 			reserved, allowed := tpmReserve(ctx, umrlTPMKey(userId, modelName), capacity, rate, int64(est)*window)
 			if !allowed {
 				c.Header("Retry-After", strconv.FormatInt(window, 10))
 				return newRateLimitError(fmt.Sprintf(
-					"tokens-per-minute limit reached for model %s (%d per %ds)", modelName, limit.TPM, window))
+					"tokens-per-minute limit reached for model %s (%d per %ds)", modelName, limit.Tokens, window))
 			}
 			relayInfo.UserModelTPMReserved = reserved
 			relayInfo.UserModelTPMCapacity = capacity
@@ -76,6 +76,58 @@ func AdmitUserModelRateLimit(c *gin.Context, relayInfo *relaycommon.RelayInfo, e
 		}
 	}
 	return nil
+}
+
+// EffectiveUserModelLimit describes counts per window, not necessarily per minute.
+type EffectiveUserModelLimit struct {
+	Enabled       bool
+	Requests      int
+	Tokens        int
+	WindowSeconds int
+	TokenMode     string
+}
+
+// UserModelLimitResolver loads user overrides once and resolves all models
+// against the same settings snapshot. It is scoped to a request, never cached.
+type UserModelLimitResolver struct {
+	config    setting.UserModelRateLimitSnapshot
+	group     string
+	overrides map[string]setting.ModelRateLimit
+}
+
+func NewUserModelLimitResolver(userId int, group string) UserModelLimitResolver {
+	resolver := UserModelLimitResolver{config: setting.SnapshotUserModelRateLimits(), group: group}
+	if userId <= 0 {
+		resolver.config.Enabled = false
+	}
+	if !resolver.config.Enabled {
+		return resolver
+	}
+	resolver.overrides = make(map[string]setting.ModelRateLimit)
+	for _, row := range model.GetUserModelRateLimitsCached(userId) {
+		if row.Enabled {
+			resolver.overrides[row.ModelName] = setting.ModelRateLimit{RPM: row.RPM, TPM: row.TPM, TokenMode: row.TokenMode}
+		}
+	}
+	return resolver
+}
+
+func (r UserModelLimitResolver) Resolve(modelName string) EffectiveUserModelLimit {
+	if !r.config.Enabled {
+		return EffectiveUserModelLimit{WindowSeconds: 60, TokenMode: setting.UserModelTokenModeTotal}
+	}
+	limit := r.config.ResolveModelLimit(r.group, modelName)
+	setting.MergeUserModelRateLimit(&limit, r.overrides[""])
+	if modelName != "" {
+		setting.MergeUserModelRateLimit(&limit, r.overrides[modelName])
+	}
+	return EffectiveUserModelLimit{
+		Enabled:       true,
+		Requests:      limit.RPM,
+		Tokens:        limit.TPM,
+		WindowSeconds: r.config.WindowSeconds,
+		TokenMode:     limit.TokenMode,
+	}
 }
 
 // RecordUserModelTokenUsage applies actual usage against the reserved TPM budget
@@ -86,23 +138,20 @@ func RecordUserModelTokenUsage(c *gin.Context, relayInfo *relaycommon.RelayInfo,
 	}
 
 	var actual int
-	tpm := 0
-	if setting.UserModelRateLimitEnabled() {
-		limit, hasLimit := resolveUserModelLimit(relayInfo)
-		if hasLimit && limit.TPM > 0 {
-			tpm = limit.TPM
-			if limit.TokenMode == setting.UserModelTokenModeInput {
-				actual = promptTokens
-			} else {
-				actual = promptTokens + completionTokens
-			}
+	limit, _ := resolveUserModelLimit(relayInfo)
+	tpm := limit.Tokens
+	if tpm > 0 {
+		if limit.TokenMode == setting.UserModelTokenModeInput {
+			actual = promptTokens
+		} else {
+			actual = promptTokens + completionTokens
 		}
 	}
 	if actual < 0 {
 		actual = 0
 	}
 
-	window := int64(setting.UserModelRateLimitWindowSeconds())
+	window := int64(limit.WindowSeconds)
 	capacity := relayInfo.UserModelTPMCapacity
 	rate := relayInfo.UserModelTPMRate
 	if capacity <= 0 || rate <= 0 {
@@ -150,7 +199,7 @@ func tpmBucketParams(tpm int, window int64) (capacity, rate int64) {
 // resolveUserModelLimit merges the settings hierarchy with per-user table
 // overrides (user default, then user+model — highest priority). The second
 // return value reports whether any positive limit is configured.
-func resolveUserModelLimit(relayInfo *relaycommon.RelayInfo) (setting.ModelRateLimit, bool) {
+func resolveUserModelLimit(relayInfo *relaycommon.RelayInfo) (EffectiveUserModelLimit, bool) {
 	group := relayInfo.TokenGroup
 	if group == "" {
 		group = relayInfo.UserGroup
@@ -158,21 +207,8 @@ func resolveUserModelLimit(relayInfo *relaycommon.RelayInfo) (setting.ModelRateL
 	if group == "" {
 		group = relayInfo.UsingGroup
 	}
-	resolved := setting.ResolveSettingsModelLimit(group, relayInfo.OriginModelName)
-
-	for _, r := range model.GetUserModelRateLimitsCached(relayInfo.UserId) {
-		if !r.Enabled || r.ModelName != "" {
-			continue
-		}
-		setting.MergeUserModelRateLimit(&resolved, setting.ModelRateLimit{RPM: r.RPM, TPM: r.TPM, TokenMode: r.TokenMode})
-	}
-	for _, r := range model.GetUserModelRateLimitsCached(relayInfo.UserId) {
-		if !r.Enabled || r.ModelName != relayInfo.OriginModelName {
-			continue
-		}
-		setting.MergeUserModelRateLimit(&resolved, setting.ModelRateLimit{RPM: r.RPM, TPM: r.TPM, TokenMode: r.TokenMode})
-	}
-	return resolved, resolved.RPM > 0 || resolved.TPM > 0
+	resolved := NewUserModelLimitResolver(relayInfo.UserId, group).Resolve(relayInfo.OriginModelName)
+	return resolved, resolved.Requests > 0 || resolved.Tokens > 0
 }
 
 func newRateLimitError(msg string) *types.NewAPIError {

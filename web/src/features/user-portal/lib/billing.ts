@@ -25,31 +25,25 @@ import {
 } from '@/lib/time'
 
 export const PORTAL_BILLING_MAX_RANGE_SECONDS = 2_592_000
-export const PORTAL_BILLING_ALL_KEYS = 'all'
+export const PORTAL_BILLING_ALL_MODELS = 'all'
+const HOURLY_BUCKET = /^(\d{2}-\d{2}) (\d{2}:00)$/
 export const PORTAL_BILLING_CHART_COLORS = [
+  '#2563eb',
   '#f97316',
-  '#fb923c',
+  '#16a34a',
+  '#db2777',
+  '#7c3aed',
+  '#0891b2',
+  '#ca8a04',
+  '#dc2626',
+  '#4f46e5',
+  '#0d9488',
   '#ea580c',
-  '#c2410c',
-  '#fdba74',
-  '#9a3412',
-  '#f59e0b',
-  '#d97706',
+  '#64748b',
 ]
-
-export type PortalBillingGroup = 'model' | 'api_key'
 
 export type PortalBillingRow = {
   created_at: number
-  model_name?: string
-  token_used?: number
-  count?: number
-  quota?: number
-}
-
-export type PortalFlowRow = {
-  token_id?: number
-  token_name?: string
   model_name?: string
   token_used?: number
   count?: number
@@ -105,14 +99,12 @@ export function createDefaultPortalBillingRange(now = new Date()): {
 export function isDefaultPortalBillingRange(
   start: Date,
   end: Date,
-  tokenId: string,
-  group: PortalBillingGroup,
+  modelName = PORTAL_BILLING_ALL_MODELS,
   now = new Date(),
 ): boolean {
   const defaults = createDefaultPortalBillingRange(now)
   return (
-    group === 'model' &&
-    tokenId === PORTAL_BILLING_ALL_KEYS &&
+    modelName === PORTAL_BILLING_ALL_MODELS &&
     dayjs(start).isSame(defaults.start, 'day') &&
     dayjs(end).isSame(defaults.end, 'day')
   )
@@ -127,12 +119,47 @@ export function formatPortalBillingRangeLabel(start: Date, end: Date): string {
   return `${dayjs(start).format('MM/DD')} - ${dayjs(end).format('MM/DD')}`
 }
 
-export function filterFlowRowsByTokenId(
-  rows: PortalFlowRow[],
-  tokenId: number | null,
-): PortalFlowRow[] {
-  if (tokenId == null) return rows
-  return rows.filter((row) => row.token_id === tokenId)
+export function modelNameForBillingRow(
+  row: { model_name?: string },
+  unknownLabel: string,
+): string {
+  return row.model_name?.trim() || unknownLabel
+}
+
+export function listPortalBillingModels(
+  rows: Array<{ model_name?: string }>,
+  unknownLabel: string,
+): string[] {
+  const names = new Set<string>()
+  for (const row of rows) {
+    names.add(modelNameForBillingRow(row, unknownLabel))
+  }
+  return [...names].sort((a, b) => a.localeCompare(b))
+}
+
+export function filterRowsByModelName<T extends { model_name?: string }>(
+  rows: T[],
+  modelName: string | null,
+  unknownLabel: string,
+): T[] {
+  if (modelName == null) return rows
+  return rows.filter(
+    (row) => modelNameForBillingRow(row, unknownLabel) === modelName,
+  )
+}
+
+export function compactPortalBillingAxisLabel(
+  bucket: string,
+  buckets: string[],
+): string {
+  const dates = new Set<string>()
+  for (const item of buckets) {
+    const match = HOURLY_BUCKET.exec(item)
+    if (!match) return bucket
+    dates.add(match[1])
+  }
+  if (dates.size !== 1) return bucket
+  return HOURLY_BUCKET.exec(bucket)?.[2] ?? bucket
 }
 
 export function buildPortalTimeSeries(
@@ -146,7 +173,7 @@ export function buildPortalTimeSeries(
   const seriesNames = new Set<string>()
 
   for (const row of rows) {
-    const series = row.model_name?.trim() || unknownLabel
+    const series = modelNameForBillingRow(row, unknownLabel)
     seriesNames.add(series)
     const bucket = formatChartTime(row.created_at, granularity)
     const key = `${bucket}\0${series}`
@@ -168,24 +195,6 @@ export function buildPortalTimeSeries(
     }
   }
   return points
-}
-
-export function buildPortalCategorySeries(
-  rows: PortalFlowRow[],
-  nameForRow: (row: PortalFlowRow) => string,
-): PortalBillingBarPoint[] {
-  const totals = new Map<string, number>()
-  for (const row of rows) {
-    const series = nameForRow(row)
-    totals.set(series, (totals.get(series) ?? 0) + (Number(row.quota) || 0))
-  }
-  return [...totals.entries()]
-    .sort((a, b) => b[1] - a[1])
-    .map(([series, quota]) => ({
-      bucket: series,
-      series,
-      quota,
-    }))
 }
 
 export function buildPortalBillingCsv(points: PortalBillingBarPoint[]): string {

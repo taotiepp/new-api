@@ -1,6 +1,9 @@
 package controller
 
-import "github.com/QuantumNous/new-api/model"
+import (
+	"github.com/QuantumNous/new-api/model"
+	"github.com/QuantumNous/new-api/service"
+)
 
 func redactPricingForUserCatalog(items []model.Pricing) []model.Pricing {
 	if len(items) == 0 {
@@ -14,13 +17,26 @@ func redactPricingForUserCatalog(items []model.Pricing) []model.Pricing {
 	return out
 }
 
+func attachCatalogUserRateLimits(items []model.Pricing, userId int, group string) {
+	if userId <= 0 || len(items) == 0 {
+		return
+	}
+	resolver := service.NewUserModelLimitResolver(userId, group)
+	for i := range items {
+		limit := resolver.Resolve(items[i].ModelName)
+		items[i].RPM = &limit.Requests
+		items[i].TPM = &limit.Tokens
+		items[i].RateLimitWindowSeconds = limit.WindowSeconds
+	}
+}
+
 func catalogVendorsForItems(items []model.Pricing, vendors []model.PricingVendor) []model.PricingVendor {
 	if len(items) == 0 || len(vendors) == 0 {
 		return []model.PricingVendor{}
 	}
 	wanted := make(map[int]struct{})
 	for _, item := range items {
-		if item.VendorID > 0 {
+		if item.VendorID != 0 {
 			wanted[item.VendorID] = struct{}{}
 		}
 	}

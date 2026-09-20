@@ -61,6 +61,7 @@ import { Route as PricingModelIdIndexRouteImport } from './routes/pricing/$model
 import { Route as AuthenticatedAppKeysIndexRouteImport } from './routes/_authenticated/app/keys/index'
 import { Route as AuthenticatedAppLogsIndexRouteImport } from './routes/_authenticated/app/logs/index'
 import { Route as AuthenticatedAppPlaygroundIndexRouteImport } from './routes/_authenticated/app/playground/index'
+import { Route as AuthenticatedAppSettingsIndexRouteImport } from './routes/_authenticated/app/settings/index'
 import { Route as AuthenticatedAppUsageIndexRouteImport } from './routes/_authenticated/app/usage/index'
 import { Route as AuthenticatedSystemSettingsAuthIndexRouteImport } from './routes/_authenticated/system-settings/auth/index'
 import { Route as AuthenticatedSystemSettingsAuthSectionRouteImport } from './routes/_authenticated/system-settings/auth/$section'
@@ -358,6 +359,12 @@ const AuthenticatedAppPlaygroundIndexRoute =
     path: '/playground/',
     getParentRoute: () => AuthenticatedAppRouteRoute,
   } as any)
+const AuthenticatedAppSettingsIndexRoute =
+  AuthenticatedAppSettingsIndexRouteImport.update({
+    id: '/settings/',
+    path: '/settings/',
+    getParentRoute: () => AuthenticatedAppRouteRoute,
+  } as any)
 const AuthenticatedAppUsageIndexRoute =
   AuthenticatedAppUsageIndexRouteImport.update({
     id: '/usage/',
@@ -513,6 +520,7 @@ export interface FileRoutesByFullPath {
   '/app/keys/': typeof AuthenticatedAppKeysIndexRoute
   '/app/logs/': typeof AuthenticatedAppLogsIndexRoute
   '/app/playground/': typeof AuthenticatedAppPlaygroundIndexRoute
+  '/app/settings/': typeof AuthenticatedAppSettingsIndexRoute
   '/app/usage/': typeof AuthenticatedAppUsageIndexRoute
   '/system-settings/auth/': typeof AuthenticatedSystemSettingsAuthIndexRoute
   '/system-settings/billing/': typeof AuthenticatedSystemSettingsBillingIndexRoute
@@ -579,6 +587,7 @@ export interface FileRoutesByTo {
   '/app/keys': typeof AuthenticatedAppKeysIndexRoute
   '/app/logs': typeof AuthenticatedAppLogsIndexRoute
   '/app/playground': typeof AuthenticatedAppPlaygroundIndexRoute
+  '/app/settings': typeof AuthenticatedAppSettingsIndexRoute
   '/app/usage': typeof AuthenticatedAppUsageIndexRoute
   '/system-settings/auth': typeof AuthenticatedSystemSettingsAuthIndexRoute
   '/system-settings/billing': typeof AuthenticatedSystemSettingsBillingIndexRoute
@@ -650,6 +659,7 @@ export interface FileRoutesById {
   '/_authenticated/app/keys/': typeof AuthenticatedAppKeysIndexRoute
   '/_authenticated/app/logs/': typeof AuthenticatedAppLogsIndexRoute
   '/_authenticated/app/playground/': typeof AuthenticatedAppPlaygroundIndexRoute
+  '/_authenticated/app/settings/': typeof AuthenticatedAppSettingsIndexRoute
   '/_authenticated/app/usage/': typeof AuthenticatedAppUsageIndexRoute
   '/_authenticated/system-settings/auth/': typeof AuthenticatedSystemSettingsAuthIndexRoute
   '/_authenticated/system-settings/billing/': typeof AuthenticatedSystemSettingsBillingIndexRoute
@@ -720,6 +730,7 @@ export interface FileRouteTypes {
     | '/app/keys/'
     | '/app/logs/'
     | '/app/playground/'
+    | '/app/settings/'
     | '/app/usage/'
     | '/system-settings/auth/'
     | '/system-settings/billing/'
@@ -786,6 +797,7 @@ export interface FileRouteTypes {
     | '/app/keys'
     | '/app/logs'
     | '/app/playground'
+    | '/app/settings'
     | '/app/usage'
     | '/system-settings/auth'
     | '/system-settings/billing'
@@ -856,6 +868,7 @@ export interface FileRouteTypes {
     | '/_authenticated/app/keys/'
     | '/_authenticated/app/logs/'
     | '/_authenticated/app/playground/'
+    | '/_authenticated/app/settings/'
     | '/_authenticated/app/usage/'
     | '/_authenticated/system-settings/auth/'
     | '/_authenticated/system-settings/billing/'
@@ -1252,6 +1265,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAppPlaygroundIndexRouteImport
       parentRoute: typeof AuthenticatedAppRouteRoute
     }
+    '/_authenticated/app/settings/': {
+      id: '/_authenticated/app/settings/'
+      path: '/settings'
+      fullPath: '/app/settings/'
+      preLoaderRoute: typeof AuthenticatedAppSettingsIndexRouteImport
+      parentRoute: typeof AuthenticatedAppRouteRoute
+    }
     '/_authenticated/app/usage/': {
       id: '/_authenticated/app/usage/'
       path: '/usage'
@@ -1398,6 +1418,7 @@ interface AuthenticatedAppRouteRouteChildren {
   AuthenticatedAppKeysIndexRoute: typeof AuthenticatedAppKeysIndexRoute
   AuthenticatedAppLogsIndexRoute: typeof AuthenticatedAppLogsIndexRoute
   AuthenticatedAppPlaygroundIndexRoute: typeof AuthenticatedAppPlaygroundIndexRoute
+  AuthenticatedAppSettingsIndexRoute: typeof AuthenticatedAppSettingsIndexRoute
   AuthenticatedAppUsageIndexRoute: typeof AuthenticatedAppUsageIndexRoute
   AuthenticatedAppModelsModelIdIndexRoute: typeof AuthenticatedAppModelsModelIdIndexRoute
 }
@@ -1407,6 +1428,7 @@ const AuthenticatedAppRouteRouteChildren: AuthenticatedAppRouteRouteChildren = {
   AuthenticatedAppKeysIndexRoute: AuthenticatedAppKeysIndexRoute,
   AuthenticatedAppLogsIndexRoute: AuthenticatedAppLogsIndexRoute,
   AuthenticatedAppPlaygroundIndexRoute: AuthenticatedAppPlaygroundIndexRoute,
+  AuthenticatedAppSettingsIndexRoute: AuthenticatedAppSettingsIndexRoute,
   AuthenticatedAppUsageIndexRoute: AuthenticatedAppUsageIndexRoute,
   AuthenticatedAppModelsModelIdIndexRoute:
     AuthenticatedAppModelsModelIdIndexRoute,

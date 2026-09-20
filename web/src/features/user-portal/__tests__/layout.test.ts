@@ -21,7 +21,7 @@ import { describe, expect, test } from 'vitest'
 import { PORTAL_PAGE_GUTTER, PORTAL_PAGE_WIDTH } from '../lib/layout'
 
 describe('user portal page column', () => {
-  test('locks tab content to the same max-width token as the portal island', () => {
+  test('locks tab content to the same full-bleed width token as the portal island', () => {
     expect(PORTAL_PAGE_WIDTH).toBe('max-w-(--portal-page-width)')
   })
 

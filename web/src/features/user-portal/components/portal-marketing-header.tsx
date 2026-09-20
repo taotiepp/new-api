@@ -16,24 +16,5 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import type { ReactNode } from 'react'
-
-import { cn } from '@/lib/utils'
-
-type PortalBezelProps = {
-  children: ReactNode
-  className?: string
-  innerClassName?: string
-  as?: 'div' | 'section' | 'article'
-}
-
-export function PortalBezel(props: PortalBezelProps) {
-  const Tag = props.as ?? 'div'
-  return (
-    <Tag className={cn('portal-bezel-outer', props.className)}>
-      <div className={cn('portal-bezel-inner', props.innerClassName)}>
-        {props.children}
-      </div>
-    </Tag>
-  )
-}
+// Compatibility entry point; public pages share the active portal navigation.
+export { UserPortalHeader as PortalMarketingHeader } from './user-portal-header'
