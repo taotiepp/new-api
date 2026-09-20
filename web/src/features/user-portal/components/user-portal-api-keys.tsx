@@ -1,3 +1,4 @@
+import { PortalKeysPanel } from './portal-keys-panel'
 /*
 Copyright (C) 2023-2026 QuantumNous
 
@@ -16,37 +17,12 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useTranslation } from 'react-i18next'
-
-import { ApiKeysDialogs } from '@/features/keys/components/api-keys-dialogs'
-import { ApiKeysPrimaryButtons } from '@/features/keys/components/api-keys-primary-buttons'
-import { ApiKeysProvider } from '@/features/keys/components/api-keys-provider'
-import { ApiKeysTable } from '@/features/keys/components/api-keys-table'
-
-import { PortalBezel } from '@/components/layout/portal/portal-bezel'
 import { UserPortalPage } from './user-portal-page'
 
 export function UserPortalApiKeys() {
-  const { t } = useTranslation()
-
   return (
-    <ApiKeysProvider>
-      <UserPortalPage
-        framed={false}
-        fixedHeight
-        eyebrow={t('User Portal')}
-        title={t('API Keys')}
-        description={t('Manage credentials for API access.')}
-        actions={<ApiKeysPrimaryButtons />}
-      >
-        <PortalBezel
-          className='portal-workspace-panel min-h-[min(70vh,720px)]'
-          innerClassName='portal-feature-embed flex min-h-0 flex-1 flex-col overflow-hidden p-0'
-        >
-          <ApiKeysTable variant='portal' />
-        </PortalBezel>
-      </UserPortalPage>
-      <ApiKeysDialogs />
-    </ApiKeysProvider>
+    <UserPortalPage framed={false}>
+      <PortalKeysPanel />
+    </UserPortalPage>
   )
 }

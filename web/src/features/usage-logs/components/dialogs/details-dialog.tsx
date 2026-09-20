@@ -79,6 +79,11 @@ import {
   getReasoningEffortVariant,
   renderAuditContent,
 } from '../../lib/format'
+import {
+  formatAppliedDiscount,
+  getAppliedChannelDiscount,
+  getAppliedUserDiscount,
+} from '../../lib/discount-display'
 import { buildQuotaAuditOperation } from '../../lib/quota-audit-operation'
 import {
   getLogTypeConfig,
@@ -224,14 +229,22 @@ function BillingBreakdown(props: {
     }
   }
 
-  const userGR = other.user_group_ratio
-  const isUserGR = userGR != null && Number.isFinite(userGR) && userGR !== -1
-  const effectiveGR = isUserGR ? userGR : other.group_ratio
-  if (effectiveGR != null && Number.isFinite(effectiveGR)) {
+  const userDiscount = getAppliedUserDiscount(other)
+  if (userDiscount) {
     rows.push({
-      label: isUserGR ? t('User Exclusive Ratio') : t('Group Ratio'),
-      value: `${formatRatio(effectiveGR)}x`,
+      label: t('Customer discount'),
+      value: formatAppliedDiscount(userDiscount, t),
     })
+  } else {
+    const userGR = other.user_group_ratio
+    const isUserGR = userGR != null && Number.isFinite(userGR) && userGR !== -1
+    const effectiveGR = isUserGR ? userGR : other.group_ratio
+    if (effectiveGR != null && Number.isFinite(effectiveGR)) {
+      rows.push({
+        label: isUserGR ? t('User Exclusive Ratio') : t('Group Ratio'),
+        value: `${formatRatio(effectiveGR)}x`,
+      })
+    }
   }
 
   if (!isTieredExpr && isClaude && hasAnyCacheTokens(other)) {
@@ -338,6 +351,11 @@ function BillingBreakdown(props: {
       ? Object.entries(other.usage_facts)
       : []
 
+  const channelDiscount = getAppliedChannelDiscount(other)
+  const channelCostValue = channelDiscount
+    ? `${formatLogQuota(log.cost_quota || 0)} · ${formatAppliedDiscount(channelDiscount, t)}`
+    : formatLogQuota(log.cost_quota || 0)
+
   return (
     <DetailSection label={t('Billing Details')}>
       {rows.map((row) => (
@@ -363,6 +381,20 @@ function BillingBreakdown(props: {
         value={formatLogQuota(log.quota)}
         mono
       />
+      {isAdmin ? (
+        <>
+          <DetailRow
+            label={t('Channel cost')}
+            value={channelCostValue}
+            mono
+          />
+          <DetailRow
+            label={t('Margin')}
+            value={formatLogQuota((log.quota || 0) - (log.cost_quota || 0))}
+            mono
+          />
+        </>
+      ) : null}
     </DetailSection>
   )
 }

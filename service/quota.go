@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
-	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/pkg/billingexpr"
@@ -46,43 +45,45 @@ func hasCustomModelRatio(modelName string, currentRatio float64) bool {
 	return currentRatio != defaultRatio
 }
 
-func calculateAudioQuota(info QuotaInfo) (int, *common.QuotaClamp) {
+func calculateAudioCatalog(info QuotaInfo) decimal.Decimal {
 	if info.UsePrice {
-		modelPrice := decimal.NewFromFloat(info.ModelPrice)
-		quotaPerUnit := decimal.NewFromFloat(common.QuotaPerUnit)
-		groupRatio := decimal.NewFromFloat(info.GroupRatio)
-
-		quota := modelPrice.Mul(quotaPerUnit).Mul(groupRatio)
-		return common.QuotaFromDecimalChecked(quota)
+		return decimal.NewFromFloat(info.ModelPrice).Mul(decimal.NewFromFloat(common.QuotaPerUnit))
 	}
 
 	completionRatio := decimal.NewFromFloat(ratio_setting.GetCompletionRatio(info.ModelName))
 	audioRatio := decimal.NewFromFloat(ratio_setting.GetAudioRatio(info.ModelName))
 	audioCompletionRatio := decimal.NewFromFloat(ratio_setting.GetAudioCompletionRatio(info.ModelName))
-
-	groupRatio := decimal.NewFromFloat(info.GroupRatio)
 	modelRatio := decimal.NewFromFloat(info.ModelRatio)
-	ratio := groupRatio.Mul(modelRatio)
-
-	inputTextTokens := decimal.NewFromInt(int64(info.InputDetails.TextTokens))
-	outputTextTokens := decimal.NewFromInt(int64(info.OutputDetails.TextTokens))
-	inputAudioTokens := decimal.NewFromInt(int64(info.InputDetails.AudioTokens))
-	outputAudioTokens := decimal.NewFromInt(int64(info.OutputDetails.AudioTokens))
 
 	quota := decimal.Zero
-	quota = quota.Add(inputTextTokens)
-	quota = quota.Add(outputTextTokens.Mul(completionRatio))
-	quota = quota.Add(inputAudioTokens.Mul(audioRatio))
-	quota = quota.Add(outputAudioTokens.Mul(audioRatio).Mul(audioCompletionRatio))
+	quota = quota.Add(decimal.NewFromInt(int64(info.InputDetails.TextTokens)))
+	quota = quota.Add(decimal.NewFromInt(int64(info.OutputDetails.TextTokens)).Mul(completionRatio))
+	quota = quota.Add(decimal.NewFromInt(int64(info.InputDetails.AudioTokens)).Mul(audioRatio))
+	quota = quota.Add(decimal.NewFromInt(int64(info.OutputDetails.AudioTokens)).Mul(audioRatio).Mul(audioCompletionRatio))
+	return quota.Mul(modelRatio)
+}
 
-	quota = quota.Mul(ratio)
-
-	// If ratio is not zero and quota is less than or equal to zero, set quota to 1
-	if !ratio.IsZero() && quota.LessThanOrEqual(decimal.Zero) {
+func calculateAudioQuota(info QuotaInfo) (int, *common.QuotaClamp) {
+	catalog := calculateAudioCatalog(info)
+	groupRatio := decimal.NewFromFloat(info.GroupRatio)
+	quota := catalog.Mul(groupRatio)
+	if !groupRatio.IsZero() && quota.LessThanOrEqual(decimal.Zero) {
 		quota = decimal.NewFromInt(1)
 	}
-
 	return common.QuotaFromDecimalChecked(quota)
+}
+
+func settleAudioLedger(relayInfo *relaycommon.RelayInfo, catalog decimal.Decimal) (int, int) {
+	RefreshChannelDiscount(relayInfo)
+	userDiscount := relayInfo.PriceData.UserDiscount
+	if relayInfo.PriceData.UserDiscountSource == "" {
+		userDiscount = relayInfo.PriceData.GroupRatioInfo.GroupRatio
+	}
+	ledger := common.SplitLedgerQuotasDecimal(catalog, userDiscount, relayInfo.PriceData.ChannelDiscount)
+	noteQuotaClamp(relayInfo, ledger.SellClamp)
+	noteQuotaClamp(relayInfo, ledger.CostClamp)
+	relayInfo.PriceData.CostQuota = ledger.Cost
+	return ledger.Sell, ledger.Cost
 }
 
 func PreWssConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, usage *dto.RealtimeUsage) error {
@@ -104,20 +105,10 @@ func PreWssConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, usag
 	textOutTokens := usage.OutputTokenDetails.TextTokens
 	audioInputTokens := usage.InputTokenDetails.AudioTokens
 	audioOutTokens := usage.OutputTokenDetails.AudioTokens
-	groupRatio := ratio_setting.GetGroupRatio(relayInfo.UsingGroup)
-	modelRatio, _, _ := ratio_setting.GetModelRatio(modelName)
-
-	autoGroup, exists := common.GetContextKey(ctx, constant.ContextKeyAutoGroup)
-	if exists {
-		groupRatio = ratio_setting.GetGroupRatio(autoGroup.(string))
-		logger.LogDebug(ctx, "final group ratio: %f", groupRatio)
-		relayInfo.UsingGroup = autoGroup.(string)
-	}
-
-	actualGroupRatio := groupRatio
-	userGroupRatio, ok := ratio_setting.GetGroupGroupRatio(relayInfo.UserGroup, relayInfo.UsingGroup)
-	if ok {
-		actualGroupRatio = userGroupRatio
+	ApplyUserDiscount(ctx, relayInfo, &relayInfo.PriceData)
+	modelRatio := relayInfo.PriceData.ModelRatio
+	if modelRatio == 0 {
+		modelRatio, _, _ = ratio_setting.GetModelRatio(modelName)
 	}
 
 	quotaInfo := QuotaInfo{
@@ -132,7 +123,7 @@ func PreWssConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, usag
 		ModelName:  modelName,
 		UsePrice:   relayInfo.UsePrice,
 		ModelRatio: modelRatio,
-		GroupRatio: actualGroupRatio,
+		GroupRatio: relayInfo.PriceData.GroupRatioInfo.GroupRatio,
 	}
 
 	quota, clamp := calculateAudioQuota(quotaInfo)
@@ -199,10 +190,14 @@ func PostWssConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, mod
 		GroupRatio: groupRatio,
 	}
 
-	quota, clamp := calculateAudioQuota(quotaInfo)
-	noteQuotaClamp(relayInfo, clamp)
+	catalog := calculateAudioCatalog(quotaInfo)
+	quota, costQuota := settleAudioLedger(relayInfo, catalog)
 	if tieredOk {
-		quota = tieredQuota
+		tieredCatalog := decimal.NewFromFloat(tieredRes.ActualQuotaBeforeGroup)
+		if tieredCatalog.IsZero() {
+			tieredCatalog = decimal.NewFromInt(int64(tieredQuota))
+		}
+		quota, costQuota = settleAudioLedger(relayInfo, tieredCatalog)
 	}
 
 	totalTokens := usage.TotalTokens
@@ -219,12 +214,14 @@ func PostWssConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, mod
 		// in this case, must be some error happened
 		// we cannot just return, because we may have to return the pre-consumed quota
 		quota = 0
+		costQuota = 0
 		logContent += "（可能是上游超时）"
 		logger.LogError(ctx, fmt.Sprintf("total tokens is 0, cannot consume quota, userId %d, channelId %d, "+
 			"tokenId %d, model %s， pre-consumed quota %d", relayInfo.UserId, relayInfo.ChannelId, relayInfo.TokenId, modelName, relayInfo.FinalPreConsumedQuota))
 	} else {
 		model.UpdateUserUsedQuotaAndRequestCount(relayInfo.UserId, quota)
 		model.UpdateChannelUsedQuota(relayInfo.ChannelId, quota)
+		model.UpdateChannelUsedCostQuota(relayInfo.ChannelId, costQuota)
 	}
 
 	if err := SettleBilling(ctx, relayInfo, quota); err != nil {
@@ -241,6 +238,7 @@ func PostWssConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, mod
 		InjectTieredBillingInfo(other, relayInfo, tieredResult)
 	}
 	attachQuotaSaturation(ctx, relayInfo, other)
+	AppendDiscountLogInfo(relayInfo, other, costQuota)
 	model.RecordConsumeLog(ctx, relayInfo.UserId, model.RecordConsumeLogParams{
 		ChannelId:        relayInfo.ChannelId,
 		PromptTokens:     usage.InputTokens,
@@ -248,6 +246,7 @@ func PostWssConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, mod
 		ModelName:        logModel,
 		TokenName:        tokenName,
 		Quota:            quota,
+		CostQuota:        costQuota,
 		Content:          logContent,
 		TokenId:          relayInfo.TokenId,
 		UseTimeSeconds:   int(useTimeSeconds),
@@ -332,10 +331,14 @@ func PostAudioConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, u
 		GroupRatio: groupRatio,
 	}
 
-	quota, clamp := calculateAudioQuota(quotaInfo)
-	noteQuotaClamp(relayInfo, clamp)
+	catalog := calculateAudioCatalog(quotaInfo)
+	quota, costQuota := settleAudioLedger(relayInfo, catalog)
 	if tieredOk {
-		quota = tieredQuota
+		tieredCatalog := decimal.NewFromFloat(tieredRes.ActualQuotaBeforeGroup)
+		if tieredCatalog.IsZero() {
+			tieredCatalog = decimal.NewFromInt(int64(tieredQuota))
+		}
+		quota, costQuota = settleAudioLedger(relayInfo, tieredCatalog)
 	}
 
 	totalTokens := usage.TotalTokens
@@ -352,12 +355,14 @@ func PostAudioConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, u
 		// in this case, must be some error happened
 		// we cannot just return, because we may have to return the pre-consumed quota
 		quota = 0
+		costQuota = 0
 		logContent += "（可能是上游超时）"
 		logger.LogError(ctx, fmt.Sprintf("total tokens is 0, cannot consume quota, userId %d, channelId %d, "+
 			"tokenId %d, model %s， pre-consumed quota %d", relayInfo.UserId, relayInfo.ChannelId, relayInfo.TokenId, billingModelName, relayInfo.FinalPreConsumedQuota))
 	} else {
 		model.UpdateUserUsedQuotaAndRequestCount(relayInfo.UserId, quota)
 		model.UpdateChannelUsedQuota(relayInfo.ChannelId, quota)
+		model.UpdateChannelUsedCostQuota(relayInfo.ChannelId, costQuota)
 	}
 
 	if err := SettleBilling(ctx, relayInfo, quota); err != nil {
@@ -374,6 +379,7 @@ func PostAudioConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, u
 		InjectTieredBillingInfo(other, relayInfo, tieredResult)
 	}
 	attachQuotaSaturation(ctx, relayInfo, other)
+	AppendDiscountLogInfo(relayInfo, other, costQuota)
 	model.RecordConsumeLog(ctx, relayInfo.UserId, model.RecordConsumeLogParams{
 		ChannelId:        relayInfo.ChannelId,
 		PromptTokens:     usage.PromptTokens,
@@ -381,6 +387,7 @@ func PostAudioConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, u
 		ModelName:        logModel,
 		TokenName:        tokenName,
 		Quota:            quota,
+		CostQuota:        costQuota,
 		Content:          logContent,
 		TokenId:          relayInfo.TokenId,
 		UseTimeSeconds:   int(useTimeSeconds),

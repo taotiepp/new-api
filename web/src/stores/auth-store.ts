@@ -36,6 +36,10 @@ export interface AuthUser {
   role: number
   status?: number
   group?: string
+  discount?: number | null
+  model_discounts?: string
+  group_discounts?: string
+  group_model_discounts?: string
   quota?: number
   used_quota?: number
   request_count?: number

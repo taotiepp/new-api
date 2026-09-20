@@ -99,6 +99,8 @@ func GenerateTextOtherInfo(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, m
 	other := model.NewLogOther()
 	other.SetPublic("model_ratio", modelRatio)
 	other.SetPublic("group_ratio", groupRatio)
+	other.SetPublic("user_discount", relayInfo.PriceData.UserDiscount)
+	other.SetPublic("user_discount_source", relayInfo.PriceData.UserDiscountSource)
 	other.SetPublic("completion_ratio", completionRatio)
 	other.SetPublic("cache_tokens", cacheTokens)
 	other.SetPublic("cache_ratio", cacheRatio)
@@ -339,4 +341,19 @@ func InjectTieredBillingInfo(other *model.LogOther, relayInfo *relaycommon.Relay
 			other.SetPublic("fixed_price", *snap.EstimatedFixedPrice)
 		}
 	}
+}
+
+func AppendDiscountLogInfo(relayInfo *relaycommon.RelayInfo, other *model.LogOther, costQuota int) {
+	if relayInfo == nil || other == nil {
+		return
+	}
+	other.SetPublic("user_discount", relayInfo.PriceData.UserDiscount)
+	if relayInfo.PriceData.UserDiscountSource != "" {
+		other.SetPublic("user_discount_source", relayInfo.PriceData.UserDiscountSource)
+	}
+	other.SetAdmin("channel_discount", relayInfo.PriceData.ChannelDiscount)
+	if relayInfo.PriceData.ChannelDiscountSource != "" {
+		other.SetAdmin("channel_discount_source", relayInfo.PriceData.ChannelDiscountSource)
+	}
+	other.SetAdmin("cost_quota", costQuota)
 }

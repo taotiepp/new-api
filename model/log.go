@@ -66,6 +66,7 @@ type Log struct {
 	TokenName         string `json:"token_name" gorm:"index;default:''"`
 	ModelName         string `json:"model_name" gorm:"index;index:index_username_model_name,priority:1;default:''"`
 	Quota             int    `json:"quota" gorm:"default:0"`
+	CostQuota         int    `json:"cost_quota,omitempty" gorm:"default:0"`
 	PromptTokens      int    `json:"prompt_tokens" gorm:"default:0"`
 	CompletionTokens  int    `json:"completion_tokens" gorm:"default:0"`
 	UseTime           int    `json:"use_time" gorm:"default:0"`
@@ -116,6 +117,7 @@ func assignDisplayLogIds(logs []*Log, startIdx int) {
 func formatUserLogs(logs []*Log, startIdx int) {
 	for i := range logs {
 		logs[i].ChannelName = ""
+		logs[i].CostQuota = 0
 		logs[i].Other = formatLogOtherJSON(logs[i].Other, logOtherVisibilityUser)
 	}
 	assignDisplayLogIds(logs, startIdx)
@@ -328,6 +330,7 @@ type RecordConsumeLogParams struct {
 	ModelName        string    `json:"model_name"`
 	TokenName        string    `json:"token_name"`
 	Quota            int       `json:"quota"`
+	CostQuota        int       `json:"cost_quota"`
 	Content          string    `json:"content"`
 	TokenId          int       `json:"token_id"`
 	UseTimeSeconds   int       `json:"use_time_seconds"`
@@ -364,6 +367,7 @@ func RecordConsumeLog(c *gin.Context, userId int, params RecordConsumeLogParams)
 		TokenName:        params.TokenName,
 		ModelName:        params.ModelName,
 		Quota:            params.Quota,
+		CostQuota:        params.CostQuota,
 		ChannelId:        params.ChannelId,
 		TokenId:          params.TokenId,
 		UseTime:          params.UseTimeSeconds,
@@ -606,13 +610,20 @@ func GetUserLogs(userId int, logType int, startTimestamp int64, endTimestamp int
 }
 
 type Stat struct {
-	Quota int `json:"quota"`
-	Rpm   int `json:"rpm"`
-	Tpm   int `json:"tpm"`
+	Quota     int `json:"quota"`
+	CostQuota int `json:"cost_quota"`
+	Rpm       int `json:"rpm"`
+	Tpm       int `json:"tpm"`
+}
+
+type ChannelSettlementRow struct {
+	ChannelId int `json:"channel" gorm:"column:channel_id"`
+	Quota     int `json:"quota"`
+	CostQuota int `json:"cost_quota"`
 }
 
 func SumUsedQuota(logType int, startTimestamp int64, endTimestamp int64, modelName string, username string, tokenName string, channel int, group string) (stat Stat, err error) {
-	tx := LOG_DB.Table("logs").Select("COALESCE(sum(quota), 0) quota")
+	tx := LOG_DB.Table("logs").Select("COALESCE(sum(quota), 0) quota, COALESCE(sum(cost_quota), 0) cost_quota")
 
 	// 为rpm和tpm创建单独的查询
 	rpmTpmQuery := LOG_DB.Table("logs").Select("count(*) rpm, COALESCE(sum(prompt_tokens), 0) + COALESCE(sum(completion_tokens), 0) tpm")
@@ -671,6 +682,28 @@ func SumUsedQuota(logType int, startTimestamp int64, endTimestamp int64, modelNa
 	stat.Tpm = rateStat.Tpm
 
 	return stat, nil
+}
+
+func SumChannelSettlement(startTimestamp int64, endTimestamp int64, modelName string, channel int) (rows []ChannelSettlementRow, err error) {
+	tx := LOG_DB.Table("logs").Select("channel_id, COALESCE(sum(quota), 0) quota, COALESCE(sum(cost_quota), 0) cost_quota")
+	if startTimestamp != 0 {
+		tx = tx.Where("created_at >= ?", startTimestamp)
+	}
+	if endTimestamp != 0 {
+		tx = tx.Where("created_at <= ?", endTimestamp)
+	}
+	if tx, err = applyExplicitLogTextFilter(tx, "model_name", modelName); err != nil {
+		return nil, err
+	}
+	if channel != 0 {
+		tx = tx.Where("channel_id = ?", channel)
+	}
+	tx = tx.Where("type = ?", LogTypeConsume).Group("channel_id").Order("channel_id")
+	if err := tx.Scan(&rows).Error; err != nil {
+		common.SysError("failed to query channel settlement: " + err.Error())
+		return nil, errors.New("查询渠道结算失败")
+	}
+	return rows, nil
 }
 
 func SumUsedToken(logType int, startTimestamp int64, endTimestamp int64, modelName string, username string, tokenName string) (token int) {

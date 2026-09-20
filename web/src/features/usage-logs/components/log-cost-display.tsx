@@ -30,11 +30,18 @@ import {
 } from '@/components/ui/tooltip'
 import { formatLogQuota } from '@/lib/format'
 
+import {
+  formatAppliedDiscount,
+  getAppliedChannelDiscount,
+  getAppliedUserDiscount,
+} from '../lib/discount-display'
 import { hasToolSurcharge } from '../lib/format'
 import type { LogOtherData } from '../types'
 
 interface LogCostDisplayProps {
   quota: number
+  costQuota?: number
+  showLedger?: boolean
   other: LogOtherData | null
 }
 
@@ -117,28 +124,74 @@ function SubscriptionBadge(props: { quota: number }) {
   )
 }
 
-export function LogCostDisplay(props: LogCostDisplayProps) {
-  const isSubscription = props.other?.billing_source === 'subscription'
-  const showToolSurcharge = hasToolSurcharge(props.other)
-
-  if (!isSubscription && !showToolSurcharge) {
-    return (
-      <div className='flex flex-col gap-0.5'>
-        <QuotaBadge quota={props.quota} />
-      </div>
-    )
-  }
+function LedgerBreakdown(props: {
+  quota: number
+  costQuota: number
+  other: LogOtherData | null
+}) {
+  const { t } = useTranslation()
+  const margin = props.quota - props.costQuota
+  const marginClass =
+    margin < 0 ? 'text-destructive' : 'text-muted-foreground'
+  const channelDiscount = getAppliedChannelDiscount(props.other)
+  const channelDiscountText = channelDiscount
+    ? formatAppliedDiscount(channelDiscount, t)
+    : null
 
   return (
-    <TooltipProvider>
-      <div className='inline-flex items-center gap-1'>
-        {isSubscription ? (
-          <SubscriptionBadge quota={props.quota} />
-        ) : (
-          <QuotaBadge quota={props.quota} />
-        )}
-        {showToolSurcharge ? <ToolSurchargeMarker /> : null}
-      </div>
-    </TooltipProvider>
+    <div className='text-muted-foreground flex flex-col gap-0.5 text-[11px] leading-tight'>
+      <span>
+        {t('Channel cost')}: {formatLogQuota(props.costQuota)}
+        {channelDiscountText ? ` · ${channelDiscountText}` : ''}
+      </span>
+      <span className={marginClass}>
+        {t('Margin')}: {formatLogQuota(margin)}
+      </span>
+    </div>
+  )
+}
+
+export function LogCostDisplay(props: LogCostDisplayProps) {
+  const { t } = useTranslation()
+  const isSubscription = props.other?.billing_source === 'subscription'
+  const showToolSurcharge = hasToolSurcharge(props.other)
+  const showLedger =
+    props.showLedger === true && typeof props.costQuota === 'number'
+  const userDiscount = getAppliedUserDiscount(props.other)
+  const userDiscountText = userDiscount
+    ? formatAppliedDiscount(userDiscount, t)
+    : null
+  const needsTooltip = isSubscription || showToolSurcharge
+  const badge = isSubscription ? (
+    <SubscriptionBadge quota={props.quota} />
+  ) : (
+    <QuotaBadge quota={props.quota} />
+  )
+
+  return (
+    <div className='flex flex-col gap-0.5'>
+      {needsTooltip ? (
+        <TooltipProvider>
+          <div className='inline-flex items-center gap-1'>
+            {badge}
+            {showToolSurcharge ? <ToolSurchargeMarker /> : null}
+          </div>
+        </TooltipProvider>
+      ) : (
+        badge
+      )}
+      {userDiscountText ? (
+        <span className='text-muted-foreground text-[11px] leading-tight tabular-nums'>
+          {userDiscountText}
+        </span>
+      ) : null}
+      {showLedger ? (
+        <LedgerBreakdown
+          quota={props.quota}
+          costQuota={props.costQuota ?? 0}
+          other={props.other}
+        />
+      ) : null}
+    </div>
   )
 }

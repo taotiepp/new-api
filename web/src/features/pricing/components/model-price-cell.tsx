@@ -18,6 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { useTranslation } from 'react-i18next'
 
+import { useDisplaySellRatio } from '@/features/pricing/hooks/use-display-sell-ratio'
 import { usePricingFormatters } from '@/features/pricing/hooks/use-pricing-formatters'
 
 import { DEFAULT_TOKEN_UNIT } from '../constants'
@@ -51,6 +52,11 @@ export function ModelPriceCell(props: {
     getDynamicPricingSummary,
   } = usePricingFormatters()
   const options = props.options ?? {}
+  const sellRatio = useDisplaySellRatio(
+    props.model.model_name,
+    props.model.group_ratio,
+    options.selectedGroup
+  )
   const tokenUnit = options.tokenUnit ?? DEFAULT_TOKEN_UNIT
   const tokenUnitLabel = tokenUnit === 'K' ? '1K' : '1M'
   const billingTime = useBillingTime(props.model.billing_expr)
@@ -61,7 +67,8 @@ export function ModelPriceCell(props: {
     showCurrencySymbol: false,
     groupRatioMultiplier: getDynamicDisplayGroupRatio(
       props.model,
-      options.selectedGroup
+      options.selectedGroup,
+      sellRatio
     ),
   })
   let metrics: Array<{ label: string; value: string }>
@@ -151,7 +158,8 @@ export function ModelPriceCell(props: {
             options.priceRate,
             options.usdExchangeRate,
             options.selectedGroup,
-            false
+            false,
+            sellRatio
           ),
         },
         {
@@ -164,7 +172,8 @@ export function ModelPriceCell(props: {
             options.priceRate,
             options.usdExchangeRate,
             options.selectedGroup,
-            false
+            false,
+            sellRatio
           ),
         },
       ]
@@ -178,7 +187,8 @@ export function ModelPriceCell(props: {
             options.priceRate,
             options.usdExchangeRate,
             options.selectedGroup,
-            false
+            false,
+            sellRatio
           ),
         },
       ]

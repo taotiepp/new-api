@@ -273,11 +273,18 @@ func RelaySwapFace(c *gin.Context, info *relaycommon.RelayInfo) *dto.MidjourneyR
 		tokenName := c.GetString("token_name")
 		logContent := fmt.Sprintf("模型固定价格 %.2f，分组倍率 %.2f，操作 %s", priceData.ModelPrice, priceData.GroupRatioInfo.GroupRatio, constant.MjActionSwapFace)
 		other := service.GenerateMjOtherInfo(info, priceData)
+		service.RefreshChannelDiscount(info)
+		if info.PriceData.CatalogQuota > 0 {
+			ledger := common.SplitLedgerQuotas(info.PriceData.CatalogQuota, info.PriceData.UserDiscount, info.PriceData.ChannelDiscount)
+			info.PriceData.CostQuota = ledger.Cost
+		}
+		service.AppendDiscountLogInfo(info, other, info.PriceData.CostQuota)
 		model.RecordConsumeLog(c, info.UserId, model.RecordConsumeLogParams{
 			ChannelId: billingChannelId,
 			ModelName: modelName,
 			TokenName: tokenName,
 			Quota:     midjourneyTask.Quota,
+			CostQuota: info.PriceData.CostQuota,
 			Content:   logContent,
 			TokenId:   midjourneyTask.TokenId,
 			Group:     info.UsingGroup,
@@ -285,6 +292,7 @@ func RelaySwapFace(c *gin.Context, info *relaycommon.RelayInfo) *dto.MidjourneyR
 		})
 		model.UpdateUserUsedQuotaAndRequestCount(info.UserId, midjourneyTask.Quota)
 		model.UpdateChannelUsedQuota(billingChannelId, midjourneyTask.Quota)
+		model.UpdateChannelUsedCostQuota(billingChannelId, info.PriceData.CostQuota)
 	}
 	c.Writer.WriteHeader(mjResp.StatusCode)
 	respBody, err := json.Marshal(midjResponse)
@@ -638,11 +646,18 @@ func RelayMidjourneySubmit(c *gin.Context, relayInfo *relaycommon.RelayInfo) *dt
 		tokenName := c.GetString("token_name")
 		logContent := fmt.Sprintf("模型固定价格 %.2f，分组倍率 %.2f，操作 %s，ID %s", priceData.ModelPrice, priceData.GroupRatioInfo.GroupRatio, midjRequest.Action, midjResponse.Result)
 		other := service.GenerateMjOtherInfo(relayInfo, priceData)
+		service.RefreshChannelDiscount(relayInfo)
+		if relayInfo.PriceData.CatalogQuota > 0 {
+			ledger := common.SplitLedgerQuotas(relayInfo.PriceData.CatalogQuota, relayInfo.PriceData.UserDiscount, relayInfo.PriceData.ChannelDiscount)
+			relayInfo.PriceData.CostQuota = ledger.Cost
+		}
+		service.AppendDiscountLogInfo(relayInfo, other, relayInfo.PriceData.CostQuota)
 		model.RecordConsumeLog(c, relayInfo.UserId, model.RecordConsumeLogParams{
 			ChannelId: billingChannelId,
 			ModelName: modelName,
 			TokenName: tokenName,
 			Quota:     midjourneyTask.Quota,
+			CostQuota: relayInfo.PriceData.CostQuota,
 			Content:   logContent,
 			TokenId:   midjourneyTask.TokenId,
 			Group:     relayInfo.UsingGroup,
@@ -650,6 +665,7 @@ func RelayMidjourneySubmit(c *gin.Context, relayInfo *relaycommon.RelayInfo) *dt
 		})
 		model.UpdateUserUsedQuotaAndRequestCount(relayInfo.UserId, midjourneyTask.Quota)
 		model.UpdateChannelUsedQuota(billingChannelId, midjourneyTask.Quota)
+		model.UpdateChannelUsedCostQuota(billingChannelId, relayInfo.PriceData.CostQuota)
 	}
 
 	if midjResponse.Code == 22 { //22-排队中，说明任务已存在

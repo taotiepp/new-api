@@ -287,9 +287,16 @@ func RelayTaskSubmit(c *gin.Context, info *relaycommon.RelayInfo) (*TaskSubmitRe
 			return nil, service.TaskErrorWrapper(runErr, "model_price_error", http.StatusBadRequest)
 		}
 		groupRatioInfo := helper.HandleGroupRatio(c, info)
-		quota, clamp := common.QuotaRoundChecked(cost * common.QuotaPerUnit * groupRatioInfo.GroupRatio)
+		catalog := cost * common.QuotaPerUnit
+		quota, clamp := common.QuotaRoundChecked(catalog * groupRatioInfo.GroupRatio)
 		noteTaskQuotaClamp(info, clamp)
-		priceData = types.PriceData{Quota: quota, QuotaToPreConsume: quota, GroupRatioInfo: groupRatioInfo}
+		priceData = types.PriceData{Quota: quota, QuotaToPreConsume: quota, CatalogQuota: catalog, GroupRatioInfo: groupRatioInfo, UserDiscount: groupRatioInfo.GroupRatio, UserDiscountSource: groupRatioInfo.UserDiscountSource}
+		info.PriceData = priceData
+		service.RefreshChannelDiscount(info)
+		priceData = info.PriceData
+		ledger := common.SplitLedgerQuotas(catalog, priceData.UserDiscount, priceData.ChannelDiscount)
+		priceData.CostQuota = ledger.Cost
+		info.PriceData = priceData
 		info.TieredBillingSnapshot = &billingexpr.BillingSnapshot{BillingMode: billing_setting.BillingModeTieredExpr, ModelName: modelName, ExprString: exprStr, ExprHash: billingexpr.ExprHashString(exprStr), GroupRatio: groupRatioInfo.GroupRatio, EstimatedQuotaBeforeGroup: cost * common.QuotaPerUnit, EstimatedQuotaAfterGroup: quota, EstimatedTier: trace.MatchedTier, QuotaPerUnit: common.QuotaPerUnit, ExprVersion: billingexpr.ExprVersion(exprStr), TaskUsageBilling: true, UsageFacts: facts}
 	} else {
 		priceData, err = helper.ModelPriceHelperPerCall(c, info)

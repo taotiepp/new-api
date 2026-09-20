@@ -18,6 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { useTranslation } from 'react-i18next'
 
+import { useDisplaySellRatio } from '@/features/pricing/hooks/use-display-sell-ratio'
 import { usePricingFormatters } from '@/features/pricing/hooks/use-pricing-formatters'
 
 import { DEFAULT_TOKEN_UNIT } from '../constants'
@@ -48,6 +49,11 @@ export function CachedPriceCell(props: {
   const tokenUnitLabel = tokenUnit === 'K' ? '1K' : '1M'
 
   const model = props.model
+  const sellRatio = useDisplaySellRatio(
+    model.model_name,
+    model.group_ratio,
+    selectedGroup
+  )
   const billingTime = useBillingTime(model.billing_expr)
   const dynamicSummary = getDynamicPricingSummary(model, {
     now: billingTime === undefined ? undefined : new Date(billingTime),
@@ -55,7 +61,11 @@ export function CachedPriceCell(props: {
     showRechargePrice,
     priceRate,
     usdExchangeRate,
-    groupRatioMultiplier: getDynamicDisplayGroupRatio(model, selectedGroup),
+    groupRatioMultiplier: getDynamicDisplayGroupRatio(
+      model,
+      selectedGroup,
+      sellRatio
+    ),
   })
 
   if (dynamicSummary) {
@@ -104,7 +114,9 @@ export function CachedPriceCell(props: {
       showRechargePrice,
       priceRate,
       usdExchangeRate,
-      selectedGroup
+      selectedGroup,
+      true,
+      sellRatio
     )
   )
 

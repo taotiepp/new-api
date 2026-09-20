@@ -73,6 +73,7 @@ import {
 import { getCurrencyDisplay, getCurrencyLabel } from '@/lib/currency'
 import { formatQuota, parseQuotaFromDollars } from '@/lib/format'
 import { handleServerError } from '@/lib/handle-server-error'
+import { GroupDiscountEditor } from '@/components/discount-editor/group-discount-editor'
 import { accountPasswordSchema } from '@/lib/password-policy'
 import { ROLE } from '@/lib/roles'
 import { requireServerSuccess } from '@/lib/server-error-message'
@@ -96,6 +97,8 @@ import {
 import type { User } from '../types'
 import { UserQuotaDialog } from './user-quota-dialog'
 import { useUsers } from './users-provider'
+
+const EMPTY_GROUPS: string[] = []
 
 type UsersMutateDrawerProps = {
   open: boolean
@@ -122,7 +125,7 @@ export function UsersMutateDrawer({
     staleTime: 5 * 60 * 1000,
   })
 
-  const groups = groupsData?.data || []
+  const groups = groupsData?.data ?? EMPTY_GROUPS
 
   // Permission catalog is owned by the backend; fetched once and reused.
   const { data: permissionCatalog = EMPTY_PERMISSION_CATALOG } = useQuery({
@@ -143,7 +146,7 @@ export function UsersMutateDrawer({
       getUser(currentRow.id)
         .then((result) => {
           if (result.success && result.data) {
-            form.reset(transformUserToFormDefaults(result.data))
+            form.reset(transformUserToFormDefaults(result.data, groups))
           } else {
             handleServerError(result, t('Failed to load'))
           }
@@ -153,7 +156,7 @@ export function UsersMutateDrawer({
       // For create, reset to defaults
       form.reset(USER_FORM_DEFAULT_VALUES)
     }
-  }, [open, isUpdate, currentRow, form, t])
+  }, [open, isUpdate, currentRow, form, t, groups])
 
   const { meta: currencyMeta } = getCurrencyDisplay()
   const currencyLabel = getCurrencyLabel()
@@ -417,6 +420,29 @@ export function UsersMutateDrawer({
                         <FormDescription>
                           {formatQuota(parseQuotaFromDollars(field.value || 0))}
                         </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name='group_discount_entries'
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t('Resource group discounts')}</FormLabel>
+                        <FormDescription>
+                          {t(
+                            'Set a discount for each resource group this user can use. Model discounts apply only inside that group.'
+                          )}
+                        </FormDescription>
+                        <FormControl>
+                          <GroupDiscountEditor
+                            groups={groups}
+                            value={field.value ?? []}
+                            onChange={field.onChange}
+                          />
+                        </FormControl>
                         <FormMessage />
                       </FormItem>
                     )}

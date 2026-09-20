@@ -19,6 +19,13 @@ For commercial licensing, please contact support@quantumnous.com
 import { z } from 'zod'
 
 import {
+  modelDiscountsToRows,
+  parseModelDiscounts,
+  serializeModelDiscounts,
+  type ModelDiscountRow,
+} from '@/lib/discount'
+
+import {
   CLAUDE_FIELD_PASSTHROUGH_TYPES,
   CHANNEL_TYPE_NEW_API,
   CHANNEL_TYPE_TASK_PLUGIN,
@@ -207,6 +214,16 @@ export const channelFormSchema = z
     openai_organization: z.string().optional(),
     models: z.string().min(1, ERROR_MESSAGES.REQUIRED_MODELS),
     group: z.array(z.string()).min(1, ERROR_MESSAGES.REQUIRED_GROUP),
+    discount: z.number().min(0).optional(),
+    model_discounts: z
+      .array(
+        z.object({
+          id: z.string().optional(),
+          model: z.string(),
+          discount: z.number().min(0),
+        })
+      )
+      .optional(),
     model_mapping: z
       .string()
       .optional()
@@ -420,6 +437,8 @@ export const CHANNEL_FORM_DEFAULT_VALUES: ChannelFormValues = {
   openai_organization: '',
   models: '',
   group: ['default'],
+  discount: 1,
+  model_discounts: [] as ModelDiscountRow[],
   model_mapping: '',
   priority: 0,
   weight: 0,
@@ -573,6 +592,10 @@ export function transformChannelToFormDefaults(
     openai_organization: channel.openai_organization || '',
     models: channel.models || '',
     group: parseGroups(channel.group || 'default'),
+    discount: channel.discount ?? 1,
+    model_discounts: modelDiscountsToRows(
+      parseModelDiscounts(channel.model_discounts)
+    ),
     model_mapping: channel.model_mapping || '',
     priority: channel.priority || 0,
     weight: channel.weight || 0,
@@ -808,6 +831,8 @@ export function transformFormDataToCreatePayload(formData: ChannelFormValues): {
     openai_organization: formData.openai_organization || null,
     models: formData.models,
     group: formatGroups(formData.group),
+    discount: formData.discount ?? 1,
+    model_discounts: serializeModelDiscounts(formData.model_discounts ?? []),
     model_mapping: formData.model_mapping || null,
     priority: formData.priority || null,
     weight: formData.weight || null,
@@ -856,6 +881,8 @@ export function transformFormDataToUpdatePayload(
     openai_organization: formData.openai_organization || null,
     models: formData.models,
     group: formatGroups(formData.group),
+    discount: formData.discount ?? 1,
+    model_discounts: serializeModelDiscounts(formData.model_discounts ?? []),
     model_mapping: formData.model_mapping || null,
     priority: formData.priority ?? 0,
     weight: formData.weight ?? 0,

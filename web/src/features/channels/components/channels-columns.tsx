@@ -341,6 +341,7 @@ export function BalanceCell({ channel }: { channel: Channel }) {
   const isTagRow = isTagAggregateRow(channel)
   const balance = channel.balance || 0
   const usedQuota = channel.used_quota || 0
+  const usedCostQuota = channel.used_cost_quota || 0
   const [isUpdating, setIsUpdating] = useState(false)
   const [rawBalanceResponse, setRawBalanceResponse] = useState<string | null>(
     null
@@ -392,9 +393,19 @@ export function BalanceCell({ channel }: { channel: Channel }) {
           })
         )
       : remainingFull
+  const usedCostFull = withSuffix(
+    formatQuotaWithCurrency(usedCostQuota, {
+      digitsLarge: 2,
+      digitsSmall: 4,
+      abbreviate: true,
+      showSymbol: layout !== 'card',
+    })
+  )
   const usedLabel = `${t('Used:')} ${usedFull}`
+  const usedCostLabel = `${t('Used cost:')} ${usedCostFull}`
   const remainingLabel = `${t('Remaining:')} ${remainingFull}`
   const maskedUsedLabel = `${t('Used:')} ${SENSITIVE_MASK}`
+  const maskedUsedCostLabel = `${t('Used cost:')} ${SENSITIVE_MASK}`
   const maskedRemainingLabel = `${t('Remaining:')} ${SENSITIVE_MASK}`
 
   // Tag row: only show cumulative used quota
@@ -420,6 +431,7 @@ export function BalanceCell({ channel }: { channel: Channel }) {
           />
           <TooltipContent>
             <p>{sensitiveVisible ? usedLabel : maskedUsedLabel}</p>
+            <p>{sensitiveVisible ? usedCostLabel : maskedUsedCostLabel}</p>
           </TooltipContent>
         </Tooltip>
       </TooltipProvider>
@@ -515,6 +527,28 @@ export function BalanceCell({ channel }: { channel: Channel }) {
           />
           <TooltipContent>
             <p>{sensitiveVisible ? usedLabel : maskedUsedLabel}</p>
+            <p>{sensitiveVisible ? usedCostLabel : maskedUsedCostLabel}</p>
+          </TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <StatusBadge
+                label={
+                  sensitiveVisible
+                    ? `${t('Cost')} ${usedCostFull}`
+                    : maskedUsedCostLabel
+                }
+                variant='neutral'
+                size='sm'
+                copyable={false}
+                showDot={false}
+                className='cursor-help'
+              />
+            }
+          />
+          <TooltipContent>
+            <p>{sensitiveVisible ? usedCostLabel : maskedUsedCostLabel}</p>
           </TooltipContent>
         </Tooltip>
         <Tooltip>

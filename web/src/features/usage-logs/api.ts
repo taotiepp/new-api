@@ -21,6 +21,7 @@ import { api, type ApiRequestConfig } from '@/lib/api'
 import { buildQueryParams } from './lib/query-params'
 import { parseTaskArtifactsResponse } from './lib/task-artifacts'
 import type {
+  ChannelSettlementRow,
   GetLogsParams,
   GetLogsResponse,
   GetLogStatsParams,
@@ -85,6 +86,23 @@ export const getLogStats = (params: GetLogStatsParams = {}) =>
 export const getUserLogStats = (
   params: Omit<GetLogStatsParams, 'username' | 'channel'> = {}
 ) => fetchLogStats('/api/log', params, false)
+
+export async function getChannelSettlement(
+  params: Pick<
+    GetLogStatsParams,
+    'start_timestamp' | 'end_timestamp' | 'model_name' | 'channel'
+  > = {}
+): Promise<{
+  success: boolean
+  message?: string
+  data?: ChannelSettlementRow[]
+}> {
+  const queryParams = buildQueryParams(
+    params as unknown as Record<string, unknown>
+  )
+  const res = await api.get(`/api/log/settlement?${queryParams}`)
+  return res.data
+}
 
 export async function getUserInfo(
   userId: number

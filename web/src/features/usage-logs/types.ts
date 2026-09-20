@@ -145,6 +145,8 @@ export interface LogOtherData {
     // Reject / intercept reason (admin only)
     reject_reason?: string
     task_plugin?: TaskPluginInfo
+    channel_discount?: number
+    channel_discount_source?: string
   }
   root_info?: {
     task_plugin?: TaskPluginRuntimeInfo
@@ -187,6 +189,8 @@ export interface LogOtherData {
   model_price?: number
   group_ratio?: number
   user_group_ratio?: number
+  user_discount?: number
+  user_discount_source?: string
   cache_ratio?: number
   cache_creation_ratio?: number
   cache_creation_ratio_5m?: number
@@ -263,8 +267,15 @@ export interface LogOtherData {
  */
 export interface LogStatistics {
   quota: number
+  cost_quota?: number
   rpm: number
   tpm: number
+}
+
+export interface ChannelSettlementRow {
+  channel: number
+  quota: number
+  cost_quota: number
 }
 
 // ============================================================================

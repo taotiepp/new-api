@@ -68,6 +68,7 @@ import { JsonEditor } from '@/components/json-editor'
 import { MultiSelect } from '@/components/multi-select'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
+import { DiscountEditor } from '@/components/discount-editor'
 import { Button } from '@/components/ui/button'
 import { Combobox } from '@/components/ui/combobox'
 import {
@@ -3714,6 +3715,48 @@ export function ChannelMutateDrawer({
                                         )}
                                       />
                                     )}
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+                          </div>
+
+                          <div className='border-border/60 rounded-lg border p-4'>
+                            <FormField
+                              control={form.control}
+                              name='discount'
+                              render={({ field }) => (
+                                <FormItem className='space-y-3'>
+                                  <div className='space-y-1'>
+                                    <FormLabel>
+                                      {t('Channel cost discount')}
+                                    </FormLabel>
+                                    <FormDescription>
+                                      {t(
+                                        'Inbound cost multiplier used for channel settlement. This does not change customer billing.'
+                                      )}
+                                    </FormDescription>
+                                  </div>
+                                  <FormControl>
+                                    <DiscountEditor
+                                      defaultDiscount={field.value ?? 1}
+                                      onDefaultDiscountChange={(value) =>
+                                        field.onChange(value ?? 1)
+                                      }
+                                      defaultLabel={t('Default discount')}
+                                      defaultDescription={t(
+                                        '1 = list price, 0.8 = 20% off, 0 = free.'
+                                      )}
+                                      modelDiscounts={
+                                        form.watch('model_discounts') ?? []
+                                      }
+                                      onModelDiscountsChange={(rows) =>
+                                        form.setValue('model_discounts', rows, {
+                                          shouldDirty: true,
+                                        })
+                                      }
+                                    />
                                   </FormControl>
                                   <FormMessage />
                                 </FormItem>

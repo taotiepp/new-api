@@ -21,25 +21,28 @@ import (
 )
 
 type Channel struct {
-	Id                 int     `json:"id"`
-	Type               int     `json:"type" gorm:"default:0"`
-	Key                string  `json:"key" gorm:"not null"`
-	OpenAIOrganization *string `json:"openai_organization"`
-	TestModel          *string `json:"test_model"`
-	Status             int     `json:"status" gorm:"default:1"`
-	Name               string  `json:"name" gorm:"index"`
-	Weight             *uint   `json:"weight" gorm:"default:0"`
-	CreatedTime        int64   `json:"created_time" gorm:"bigint"`
-	TestTime           int64   `json:"test_time" gorm:"bigint"`
-	ResponseTime       int     `json:"response_time"` // in milliseconds
-	BaseURL            *string `json:"base_url" gorm:"column:base_url;default:''"`
-	Other              string  `json:"other"`
-	Balance            float64 `json:"balance"` // in USD
-	BalanceUpdatedTime int64   `json:"balance_updated_time" gorm:"bigint"`
-	Models             string  `json:"models"`
-	Group              string  `json:"group" gorm:"type:varchar(64);default:'default'"`
-	UsedQuota          int64   `json:"used_quota" gorm:"bigint;default:0"`
-	ModelMapping       *string `json:"model_mapping" gorm:"type:text"`
+	Id                 int      `json:"id"`
+	Type               int      `json:"type" gorm:"default:0"`
+	Key                string   `json:"key" gorm:"not null"`
+	OpenAIOrganization *string  `json:"openai_organization"`
+	TestModel          *string  `json:"test_model"`
+	Status             int      `json:"status" gorm:"default:1"`
+	Name               string   `json:"name" gorm:"index"`
+	Weight             *uint    `json:"weight" gorm:"default:0"`
+	CreatedTime        int64    `json:"created_time" gorm:"bigint"`
+	TestTime           int64    `json:"test_time" gorm:"bigint"`
+	ResponseTime       int      `json:"response_time"` // in milliseconds
+	BaseURL            *string  `json:"base_url" gorm:"column:base_url;default:''"`
+	Other              string   `json:"other"`
+	Balance            float64  `json:"balance"` // in USD
+	BalanceUpdatedTime int64    `json:"balance_updated_time" gorm:"bigint"`
+	Models             string   `json:"models"`
+	Group              string   `json:"group" gorm:"type:varchar(64);default:'default'"`
+	UsedQuota          int64    `json:"used_quota" gorm:"bigint;default:0"`
+	UsedCostQuota      int64    `json:"used_cost_quota" gorm:"bigint;default:0"`
+	Discount           *float64 `json:"discount"`
+	ModelDiscounts     string   `json:"model_discounts" gorm:"type:text"`
+	ModelMapping       *string  `json:"model_mapping" gorm:"type:text"`
 	//MaxInputTokens     *int    `json:"max_input_tokens" gorm:"default:0"`
 	StatusCodeMapping *string `json:"status_code_mapping" gorm:"type:varchar(1024);default:''"`
 	Priority          *int64  `json:"priority" gorm:"bigint;default:0"`
@@ -544,6 +547,9 @@ func (channel *Channel) GetStatusCodeMapping() string {
 }
 
 func (channel *Channel) Insert() error {
+	if err := validateDiscountFields(channel.Discount, channel.ModelDiscounts); err != nil {
+		return err
+	}
 	var err error
 	err = DB.Create(channel).Error
 	if err != nil {
@@ -592,9 +598,18 @@ func (channel *Channel) Update() error {
 			}
 		}
 	}
+	if err := validateDiscountFields(channel.Discount, channel.ModelDiscounts); err != nil {
+		return err
+	}
 	var err error
 	err = DB.Model(channel).Updates(channel).Error
 	if err != nil {
+		return err
+	}
+	if err = DB.Model(channel).Select("discount", "model_discounts").Updates(map[string]any{
+		"discount":        channel.Discount,
+		"model_discounts": channel.ModelDiscounts,
+	}).Error; err != nil {
 		return err
 	}
 	DB.Model(channel).First(channel, "id = ?", channel.Id)
@@ -891,10 +906,28 @@ func UpdateChannelUsedQuota(id int, quota int) {
 	updateChannelUsedQuota(id, quota)
 }
 
+func UpdateChannelUsedCostQuota(id int, quota int) {
+	if quota == 0 {
+		return
+	}
+	if common.BatchUpdateEnabled {
+		addNewRecord(BatchUpdateTypeChannelUsedCostQuota, id, quota)
+		return
+	}
+	updateChannelUsedCostQuota(id, quota)
+}
+
 func updateChannelUsedQuota(id int, quota int) {
 	err := DB.Model(&Channel{}).Where("id = ?", id).Update("used_quota", gorm.Expr("used_quota + ?", quota)).Error
 	if err != nil {
 		common.SysLog(fmt.Sprintf("failed to update channel used quota: channel_id=%d, delta_quota=%d, error=%v", id, quota, err))
+	}
+}
+
+func updateChannelUsedCostQuota(id int, quota int) {
+	err := DB.Model(&Channel{}).Where("id = ?", id).Update("used_cost_quota", gorm.Expr("used_cost_quota + ?", quota)).Error
+	if err != nil {
+		common.SysLog(fmt.Sprintf("failed to update channel used cost quota: channel_id=%d, delta_quota=%d, error=%v", id, quota, err))
 	}
 }
 

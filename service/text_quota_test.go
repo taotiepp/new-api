@@ -915,7 +915,7 @@ func TestComposeTieredTextQuotaKeepsToolCallSurcharges(t *testing.T) {
 	}
 
 	summary := calculateTextQuotaSummary(ctx, relayInfo, usage)
-	quota := composeTieredTextQuota(relayInfo, summary, 1000, &billingexpr.TieredResult{
+	quota := composeTieredTextQuota(relayInfo, &summary, 1000, &billingexpr.TieredResult{
 		ActualQuotaBeforeGroup: 1000,
 		ActualQuotaAfterGroup:  1000,
 	})
@@ -952,7 +952,7 @@ func TestComposeTieredTextQuotaFallbackKeepsToolCallSurcharges(t *testing.T) {
 	}
 
 	summary := calculateTextQuotaSummary(ctx, relayInfo, usage)
-	quota := composeTieredTextQuota(relayInfo, summary, 1250, nil)
+	quota := composeTieredTextQuota(relayInfo, &summary, 1250, nil)
 
 	require.Equal(t, int64(12500), summary.ToolCallSurchargeQuota.Round(0).IntPart())
 	require.Equal(t, 13750, quota)
@@ -991,7 +991,7 @@ func TestComposeTieredTextQuotaErrorFallbackUsesPreConsumedQuota(t *testing.T) {
 	// falls back to FinalPreConsumedQuota (2000), which differs from
 	// EstimatedQuotaBeforeGroup * GroupRatio (1250).
 	preConsumedFallback := 2000
-	quota := composeTieredTextQuota(relayInfo, summary, preConsumedFallback, nil)
+	quota := composeTieredTextQuota(relayInfo, &summary, preConsumedFallback, nil)
 
 	require.Equal(t, int64(12500), summary.ToolCallSurchargeQuota.Round(0).IntPart())
 	require.Equal(t, 14500, quota)

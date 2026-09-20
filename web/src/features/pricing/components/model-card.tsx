@@ -23,6 +23,7 @@ import { useTranslation } from 'react-i18next'
 import { CopyButton } from '@/components/copy-button'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card'
+import { useDisplaySellRatio } from '@/features/pricing/hooks/use-display-sell-ratio'
 import { usePricingFormatters } from '@/features/pricing/hooks/use-pricing-formatters'
 import { getLobeIcon } from '@/lib/lobe-icon'
 import { cn } from '@/lib/utils'
@@ -58,6 +59,11 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
   const { formatPrice, formatRequestPrice, getDynamicPricingSummary } =
     usePricingFormatters()
   const tokenUnit = props.tokenUnit ?? DEFAULT_TOKEN_UNIT
+  const sellRatio = useDisplaySellRatio(
+    props.model.model_name,
+    props.model.group_ratio,
+    props.selectedGroup
+  )
   const priceRate = props.priceRate ?? 1
   const usdExchangeRate = props.usdExchangeRate ?? 1
   const showRechargePrice = props.showRechargePrice ?? false
@@ -82,7 +88,8 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
     usdExchangeRate,
     groupRatioMultiplier: getDynamicDisplayGroupRatio(
       props.model,
-      props.selectedGroup
+      props.selectedGroup,
+      sellRatio
     ),
   }
   const dynamicSummary = isDynamicPricing
@@ -198,7 +205,9 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
             showRechargePrice,
             priceRate,
             usdExchangeRate,
-            props.selectedGroup
+            props.selectedGroup,
+            true,
+            sellRatio
           )}
           <span className='text-muted-foreground text-xs font-normal'>
             {' '}
@@ -216,7 +225,9 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
             showRechargePrice,
             priceRate,
             usdExchangeRate,
-            props.selectedGroup
+            props.selectedGroup,
+            true,
+            sellRatio
           )}
           <span className='text-muted-foreground text-xs font-normal'>
             {' '}

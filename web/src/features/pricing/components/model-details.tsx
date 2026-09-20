@@ -62,6 +62,7 @@ import { cn } from '@/lib/utils'
 
 import { DEFAULT_TOKEN_UNIT } from '../constants'
 import { useBillingTime } from '../hooks/use-billing-time'
+import { useDisplaySellRatio } from '../hooks/use-display-sell-ratio'
 import { usePricingData } from '../hooks/use-pricing-data'
 import { usePricingFormatters } from '../hooks/use-pricing-formatters'
 import type { ParsedTaskTier } from '../lib/billing-expr'
@@ -679,6 +680,10 @@ function PriceSection(props: {
   showRechargePrice: boolean
 }) {
   const { t } = useTranslation()
+  const sellRatio = useDisplaySellRatio(
+    props.model.model_name,
+    props.model.group_ratio
+  )
   const { getDynamicPricingSummary, formatFixedPrice, formatGroupPrice } =
     usePricingFormatters()
   const isTokenBased = isTokenBasedModel(props.model)
@@ -692,7 +697,7 @@ function PriceSection(props: {
     showRechargePrice: props.showRechargePrice,
     priceRate: props.priceRate,
     usdExchangeRate: props.usdExchangeRate,
-    groupRatioMultiplier: 1,
+    groupRatioMultiplier: sellRatio,
   })
 
   const primaryPriceTypes: { label: string; type: PriceType }[] = [
@@ -851,7 +856,8 @@ function PriceSection(props: {
               props.showRechargePrice,
               props.priceRate,
               props.usdExchangeRate,
-              baseGroupRatioMap
+              baseGroupRatioMap,
+              sellRatio
             )}
           </span>
         </div>
@@ -870,7 +876,8 @@ function PriceSection(props: {
         props.showRechargePrice,
         props.priceRate,
         props.usdExchangeRate,
-        baseGroupRatioMap
+        baseGroupRatioMap,
+        sellRatio
       )}
       <span className='text-muted-foreground/40 ml-1 text-xs font-normal'>
         / {tokenUnitLabel}
@@ -1001,6 +1008,10 @@ function GroupPricingSection(props: {
     formatCurrency,
   } = usePricingFormatters()
   const showRechargePrice = props.showRechargePrice ?? false
+  const sellRatio = useDisplaySellRatio(
+    props.model.model_name,
+    props.model.group_ratio
+  )
 
   const availableGroups = useMemo(
     () => getAvailableGroups(props.model, props.usableGroup || {}),
@@ -1100,13 +1111,12 @@ function GroupPricingSection(props: {
       showRechargePrice,
       priceRate: props.priceRate,
       usdExchangeRate: props.usdExchangeRate,
-      groupRatioMultiplier: 1,
+      groupRatioMultiplier: sellRatio,
       usageSchema: props.model.billing_usage_schema,
       formatCurrency,
     })
     const formattedPricesByGroup = new Map(
       availableGroups.map((group) => {
-        const ratio = props.groupRatio[group] || 1
         return [
           group,
           getDynamicFormattedPricesByTier(dynamicTiers, {
@@ -1114,7 +1124,7 @@ function GroupPricingSection(props: {
             showRechargePrice,
             priceRate: props.priceRate,
             usdExchangeRate: props.usdExchangeRate,
-            groupRatioMultiplier: ratio,
+            groupRatioMultiplier: sellRatio,
             usageSchema: props.model.billing_usage_schema,
             formatCurrency,
           }),
@@ -1128,7 +1138,6 @@ function GroupPricingSection(props: {
         <AutoGroupChain model={props.model} autoGroups={props.autoGroups} />
         <div className='space-y-3'>
           {availableGroups.map((group) => {
-            const ratio = props.groupRatio[group] || 1
             const formattedPricesByTier =
               formattedPricesByGroup.get(group) ??
               new Map<DynamicPricingTier, Map<string, string>>()
@@ -1137,9 +1146,6 @@ function GroupPricingSection(props: {
               <div key={group} className='overflow-hidden rounded-lg border'>
                 <div className='bg-muted/20 flex items-center justify-between gap-3 border-b px-3 py-2'>
                   <GroupBadge group={group} size='sm' />
-                  <span className='text-muted-foreground font-mono text-xs'>
-                    {ratio}x
-                  </span>
                 </div>
                 <StaticDataTable
                   className='rounded-none border-0'
@@ -1249,7 +1255,7 @@ function GroupPricingSection(props: {
                               showRechargePrice,
                               priceRate: props.priceRate,
                               usdExchangeRate: props.usdExchangeRate,
-                              groupRatioMultiplier: ratio,
+                              groupRatioMultiplier: sellRatio,
                             })}`,
                         },
                       ]}
@@ -1293,7 +1299,8 @@ function GroupPricingSection(props: {
       showRechargePrice,
       props.priceRate,
       props.usdExchangeRate,
-      props.groupRatio
+      props.groupRatio,
+      sellRatio
     )
   const renderFixedGroupPrice = (group: string) =>
     formatFixedPrice(
@@ -1302,7 +1309,8 @@ function GroupPricingSection(props: {
       showRechargePrice,
       props.priceRate,
       props.usdExchangeRate,
-      props.groupRatio
+      props.groupRatio,
+      sellRatio
     )
 
   return (
@@ -1322,13 +1330,6 @@ function GroupPricingSection(props: {
             className: thClass,
             cellClassName: 'py-2.5',
             cell: (group) => <GroupBadge group={group} size='sm' />,
-          },
-          {
-            id: 'ratio',
-            header: t('Ratio'),
-            className: thClass,
-            cellClassName: 'text-muted-foreground py-2.5 font-mono',
-            cell: (group) => `${props.groupRatio[group] || 1}x`,
           },
           ...(isTokenBased
             ? [

@@ -46,6 +46,10 @@ export const userSchema = z.object({
   used_quota: z.number(),
   request_count: z.number(),
   group: z.string(),
+  discount: z.number().nullish(),
+  model_discounts: z.string().nullish(),
+  group_discounts: z.string().nullish(),
+  group_model_discounts: z.string().nullish(),
   aff_code: z.string().optional(),
   aff_count: z.number().optional(),
   aff_quota: z.number().optional(),
@@ -125,6 +129,10 @@ export interface UserFormData {
   quota?: number // Only used when updating user
   group?: string // Only used when updating user
   remark?: string // Only used when updating user
+  discount?: number | null
+  model_discounts?: string
+  group_discounts?: string
+  group_model_discounts?: string
   admin_permissions?: AdminPermissionMatrix
 }
 

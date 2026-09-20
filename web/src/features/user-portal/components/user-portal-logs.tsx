@@ -1,3 +1,4 @@
+import { PortalLogsPanel } from './portal-logs-panel'
 /*
 Copyright (C) 2023-2026 QuantumNous
 
@@ -16,33 +17,12 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useTranslation } from 'react-i18next'
-
-import { UsageLogsTable } from '@/features/usage-logs/components/usage-logs-table'
-import { UsageLogsProvider } from '@/features/usage-logs/components/usage-logs-provider'
-
-import { PortalBezel } from '@/components/layout/portal/portal-bezel'
 import { UserPortalPage } from './user-portal-page'
 
 export function UserPortalLogs() {
-  const { t } = useTranslation()
-
   return (
-    <UsageLogsProvider defaultViewScope='self'>
-      <UserPortalPage
-        framed={false}
-        fixedHeight
-        eyebrow={t('User Portal')}
-        title={t('Request Logs')}
-        description={t('Review your API request history.')}
-      >
-        <PortalBezel
-          className='portal-workspace-panel min-h-[min(70vh,720px)]'
-          innerClassName='portal-feature-embed flex min-h-0 flex-1 flex-col overflow-hidden p-0'
-        >
-          <UsageLogsTable logCategory='common' />
-        </PortalBezel>
-      </UserPortalPage>
-    </UsageLogsProvider>
+    <UserPortalPage framed={false}>
+      <PortalLogsPanel />
+    </UserPortalPage>
   )
 }

@@ -100,7 +100,7 @@ afterEach(async () => {
   await i18next.changeLanguage('en')
 })
 
-it('shows one standard task price and a localized group price without duplicate tiers', async () => {
+it('shows one standard task catalog price for each group without a group multiplier', async () => {
   vi.spyOn(api, 'get').mockResolvedValue({ data: { data: { groups: [] } } })
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
@@ -126,8 +126,8 @@ it('shows one standard task price and a localized group price without duplicate 
   expect(screen.queryByText('Tiered price table')).not.toBeInTheDocument()
   expect(screen.queryByText('Dynamic Pricing')).not.toBeInTheDocument()
   expect(screen.queryByText('music')).not.toBeInTheDocument()
-  expect(screen.getByText('$0.22')).toBeVisible()
-  expect(screen.getByText('$0.44')).toBeVisible()
+  expect(screen.getAllByText('$0.22')).toHaveLength(2)
+  expect(screen.queryByText('$0.44')).not.toBeInTheDocument()
   await act(() => i18next.changeLanguage('zhCN'))
   expect(screen.getAllByText('生成歌曲单价', { exact: false })).toHaveLength(2)
   await act(() => i18next.changeLanguage('fr'))

@@ -162,9 +162,10 @@ export function getTaskPricingUnit(
 
 export function getDynamicDisplayGroupRatio(
   model: PricingModel,
-  selectedGroup?: string
+  selectedGroup?: string,
+  sellRatio?: number
 ): number {
-  return getDisplayGroupRatio(model, selectedGroup)
+  return getDisplayGroupRatio(model, selectedGroup, sellRatio)
 }
 
 function applyRechargeRate(

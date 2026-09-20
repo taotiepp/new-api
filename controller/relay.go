@@ -415,6 +415,8 @@ func getChannel(c *gin.Context, info *relaycommon.RelayInfo, retryParam *service
 	}
 
 	info.PriceData.GroupRatioInfo = helper.HandleGroupRatio(c, info)
+	info.PriceData.UserDiscount = info.PriceData.GroupRatioInfo.GroupRatio
+	info.PriceData.UserDiscountSource = info.PriceData.GroupRatioInfo.UserDiscountSource
 
 	newAPIError := middleware.SetupContextForSelectedChannel(c, channel, info.OriginModelName)
 	if newAPIError != nil {
@@ -836,6 +838,10 @@ func executeTaskSubmissionWith(
 		GroupRatio:      relayInfo.PriceData.GroupRatioInfo.GroupRatio,
 		ModelRatio:      relayInfo.PriceData.ModelRatio,
 		OtherRatios:     relayInfo.PriceData.OtherRatios(),
+		CatalogQuota:    relayInfo.PriceData.CatalogQuota,
+		UserDiscount:    relayInfo.PriceData.UserDiscount,
+		ChannelDiscount: relayInfo.PriceData.ChannelDiscount,
+		CostQuota:       relayInfo.PriceData.CostQuota,
 		OriginModelName: relayInfo.OriginModelName,
 		PerCallBilling:  common.StringsContains(constant.TaskPricePatches, relayInfo.OriginModelName) || relayInfo.PriceData.UsePrice,
 		TieredSnapshot:  relayInfo.TieredBillingSnapshot,

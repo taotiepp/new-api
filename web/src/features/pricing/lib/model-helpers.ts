@@ -16,7 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { EXCLUDED_GROUPS, FILTER_ALL, QUOTA_TYPE_VALUES } from '../constants'
+import { EXCLUDED_GROUPS, QUOTA_TYPE_VALUES } from '../constants'
 import type { PricingModel } from '../types'
 
 // ----------------------------------------------------------------------------
@@ -58,40 +58,14 @@ export function getConfiguredGroupRatio(
  * group's price instead.
  */
 export function getDisplayGroupRatio(
-  model: PricingModel,
-  selectedGroup?: string
+  _model: PricingModel,
+  _selectedGroup?: string,
+  sellRatio?: number
 ): number {
-  const modelEnableGroups = Array.isArray(model.enable_groups)
-    ? model.enable_groups
-    : []
-  const groupRatio = model.group_ratio || {}
-
-  if (
-    selectedGroup &&
-    selectedGroup !== FILTER_ALL &&
-    modelEnableGroups.includes(selectedGroup)
-  ) {
-    return getConfiguredGroupRatio(groupRatio, selectedGroup)
+  if (typeof sellRatio === 'number' && Number.isFinite(sellRatio) && sellRatio >= 0) {
+    return sellRatio
   }
-
-  if (modelEnableGroups.length === 0) {
-    return 1
-  }
-
-  let minRatio = Number.POSITIVE_INFINITY
-
-  for (const group of modelEnableGroups) {
-    const ratio = groupRatio[group]
-    if (
-      typeof ratio === 'number' &&
-      Number.isFinite(ratio) &&
-      ratio < minRatio
-    ) {
-      minRatio = ratio
-    }
-  }
-
-  return minRatio === Number.POSITIVE_INFINITY ? 1 : minRatio
+  return 1
 }
 
 /**

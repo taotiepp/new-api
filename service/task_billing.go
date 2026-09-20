@@ -53,6 +53,13 @@ func LogTaskConsumption(c *gin.Context, info *relaycommon.RelayInfo, task *model
 	if info.PriceData.GroupRatioInfo.HasSpecialRatio {
 		other.SetPublic("user_group_ratio", info.PriceData.GroupRatioInfo.GroupSpecialRatio)
 	}
+	RefreshChannelDiscount(info)
+	if info.PriceData.CatalogQuota > 0 {
+		ledger := common.SplitLedgerQuotas(info.PriceData.CatalogQuota, info.PriceData.UserDiscount, info.PriceData.ChannelDiscount)
+		info.PriceData.CostQuota = ledger.Cost
+		noteQuotaClamp(info, ledger.CostClamp)
+	}
+	AppendDiscountLogInfo(info, other, info.PriceData.CostQuota)
 	if info.IsModelMapped {
 		other.SetPublic("is_model_mapped", true)
 		other.SetPublic("upstream_model_name", info.UpstreamModelName)
@@ -72,6 +79,7 @@ func LogTaskConsumption(c *gin.Context, info *relaycommon.RelayInfo, task *model
 		ModelName: info.OriginModelName,
 		TokenName: tokenName,
 		Quota:     info.PriceData.Quota,
+		CostQuota: info.PriceData.CostQuota,
 		Content:   logContent,
 		TokenId:   info.TokenId,
 		Group:     info.UsingGroup,
@@ -79,6 +87,7 @@ func LogTaskConsumption(c *gin.Context, info *relaycommon.RelayInfo, task *model
 	})
 	model.UpdateUserUsedQuotaAndRequestCount(info.UserId, info.PriceData.Quota)
 	model.UpdateChannelUsedQuota(info.ChannelId, info.PriceData.Quota)
+	model.UpdateChannelUsedCostQuota(info.ChannelId, info.PriceData.CostQuota)
 }
 
 // ---------------------------------------------------------------------------
@@ -228,6 +237,9 @@ func RefundTaskQuota(ctx context.Context, task *model.Task, reason string) bool 
 	// 3. 回减预扣时累计的用户和渠道用量，请求次数保持不变
 	model.UpdateUserUsedQuota(task.UserId, -quota)
 	model.UpdateChannelUsedQuota(task.ChannelId, -quota)
+	if bc := task.PrivateData.BillingContext; bc != nil && bc.CostQuota != 0 {
+		model.UpdateChannelUsedCostQuota(task.ChannelId, -bc.CostQuota)
+	}
 
 	// 4. 记录日志
 	other := taskBillingOther(task)
@@ -356,14 +368,22 @@ func RecalculateTaskQuotaByTokens(ctx context.Context, task *model.Task, totalTo
 		return false
 	}
 
-	groupRatio := ratio_setting.GetGroupRatio(group)
-	userGroupRatio, hasUserGroupRatio := ratio_setting.GetGroupGroupRatio(group, group)
-
-	var finalGroupRatio float64
-	if hasUserGroupRatio {
+	finalGroupRatio := ratio_setting.GetGroupRatio(group)
+	if userGroupRatio, ok := ratio_setting.GetGroupGroupRatio(group, group); ok {
 		finalGroupRatio = userGroupRatio
-	} else {
-		finalGroupRatio = groupRatio
+	}
+	channelDiscount := 1.0
+	if bc := task.PrivateData.BillingContext; bc != nil {
+		if bc.UserDiscount != 0 || bc.GroupRatio != 0 {
+			if bc.UserDiscount != 0 {
+				finalGroupRatio = bc.UserDiscount
+			} else {
+				finalGroupRatio = bc.GroupRatio
+			}
+		}
+		if bc.ChannelDiscount != 0 {
+			channelDiscount = bc.ChannelDiscount
+		}
 	}
 
 	// 计算 OtherRatios 乘积（视频折扣、时长等）
@@ -372,8 +392,21 @@ func RecalculateTaskQuotaByTokens(ctx context.Context, task *model.Task, totalTo
 		otherMultiplier = priceData.OtherRatioMultiplier()
 	}
 
-	// 计算实际应扣费额度: totalTokens * modelRatio * groupRatio * otherMultiplier（饱和转换，防止溢出成负数）
-	actualQuota, clamp := common.QuotaFromFloatChecked(float64(totalTokens) * modelRatio * finalGroupRatio * otherMultiplier)
+	catalog := float64(totalTokens) * modelRatio * otherMultiplier
+	actualQuota, clamp := common.QuotaFromFloatChecked(catalog * finalGroupRatio)
+	if bc := task.PrivateData.BillingContext; bc != nil {
+		ledger := common.SplitLedgerQuotas(catalog, finalGroupRatio, channelDiscount)
+		actualQuota = ledger.Sell
+		if ledger.SellClamp != nil {
+			clamp = ledger.SellClamp
+		}
+		costDelta := ledger.Cost - bc.CostQuota
+		if costDelta != 0 {
+			model.UpdateChannelUsedCostQuota(task.ChannelId, costDelta)
+			bc.CostQuota = ledger.Cost
+			bc.CatalogQuota = catalog
+		}
+	}
 
 	reason := fmt.Sprintf("token重算：tokens=%d, modelRatio=%.2f, groupRatio=%.2f, otherMultiplier=%.4f", totalTokens, modelRatio, finalGroupRatio, otherMultiplier)
 	RecalculateTaskQuota(ctx, task, actualQuota, reason, clamp)

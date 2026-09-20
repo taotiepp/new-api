@@ -35,6 +35,19 @@ func TestFormatUserLogsStripsQuotaSaturation(t *testing.T) {
 	require.Contains(t, parsed, "model_price")
 }
 
+func TestFormatUserLogsZerosCostQuota(t *testing.T) {
+	logs := []*Log{{Quota: 120, CostQuota: 80, Other: `{"user_discount":0.8}`}}
+
+	formatUserLogs(logs, 0)
+
+	assert.Equal(t, 0, logs[0].CostQuota)
+	assert.Equal(t, 120, logs[0].Quota)
+	parsed, err := common.StrToMap(logs[0].Other)
+	require.NoError(t, err)
+	assert.Equal(t, 0.8, parsed["user_discount"])
+	assert.NotContains(t, parsed, "admin_info")
+}
+
 func TestTaskPluginLogVisibilityIsRoleSeparated(t *testing.T) {
 	other := common.MapToJsonStr(map[string]any{
 		"model_price": 1.25,

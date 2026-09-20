@@ -256,7 +256,7 @@ export const GroupRatioForm = memo(function GroupRatioForm({
                   </FormControl>
                   <FormDescription>
                     {t(
-                      'JSON map of group → ratio applied when the user selects the group explicitly.'
+                      'JSON map of resource group → default discount. Admins can override this per user.'
                     )}
                   </FormDescription>
                   <FormMessage />

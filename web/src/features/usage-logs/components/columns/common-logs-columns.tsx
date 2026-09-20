@@ -302,7 +302,7 @@ function buildTypeDetailSegments(
           })
         }
       }
-    } else {
+    } else if (other.user_discount == null) {
       const userGroupRatio = other.user_group_ratio
       const groupRatio = other.group_ratio
       const isUserGroup =
@@ -751,7 +751,14 @@ export function useCommonLogsColumns(
 
         const quota = row.getValue('quota') as number
         const other = parseLogOther(log.other)
-        return <LogCostDisplay quota={quota} other={other} />
+        return (
+          <LogCostDisplay
+            quota={quota}
+            costQuota={log.cost_quota}
+            showLedger={isAdmin}
+            other={other}
+          />
+        )
       },
     },
 

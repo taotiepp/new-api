@@ -71,7 +71,7 @@
 [data-user-portal] .home-landing-section-title {
   font-size: 1.25rem;
   font-weight: 600;
-  letter-spacing: -0.03em;
+  letter-spacing: 0;
   color: var(--portal-ink);
 }
 

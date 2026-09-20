@@ -91,6 +91,32 @@ export function CommonLogsStats() {
         value={sensitiveVisible ? formatLogQuota(stats?.quota || 0) : '••••'}
         accent='bg-sky-500/70'
       />
+      {isAdmin ? (
+        <>
+          <StatBadge
+            label={t('Channel cost')}
+            value={
+              sensitiveVisible
+                ? formatLogQuota(stats?.cost_quota || 0)
+                : '••••'
+            }
+            accent='bg-amber-500/70'
+          />
+          <StatBadge
+            label={t('Margin')}
+            value={
+              sensitiveVisible
+                ? formatLogQuota((stats?.quota || 0) - (stats?.cost_quota || 0))
+                : '••••'
+            }
+            accent={
+              (stats?.quota || 0) - (stats?.cost_quota || 0) < 0
+                ? 'bg-destructive/70'
+                : 'bg-emerald-500/70'
+            }
+          />
+        </>
+      ) : null}
       <StatBadge
         label={t('RPM')}
         value={stats?.rpm || 0}

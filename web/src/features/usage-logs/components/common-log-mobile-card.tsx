@@ -32,6 +32,10 @@ import dayjs from '@/lib/dayjs'
 import { formatLogQuota, formatTimestampToDate } from '@/lib/format'
 
 import type { UsageLog } from '../data/schema'
+import {
+  formatAppliedDiscount,
+  getAppliedUserDiscount,
+} from '../lib/discount-display'
 import { formatModelName, parseLogOther } from '../lib/format'
 import {
   getLogTypeConfig,
@@ -40,7 +44,7 @@ import {
 } from '../lib/utils'
 import { ModelBadge } from './model-badge'
 import { StreamTpsCell, TimingMetricsCell } from './timing-metrics-cell'
-import { useUsageLogsContext } from './usage-logs-provider'
+import { useLogsViewScope, useUsageLogsContext } from './usage-logs-provider'
 
 type FieldName =
   | 'model'
@@ -64,6 +68,7 @@ export function CommonLogMobileCard<TData>(props: {
 }) {
   const { t } = useTranslation()
   const context = useUsageLogsContext()
+  const { isAdminView } = useLogsViewScope()
   const [selectedField, setSelectedField] = useState<FieldName | null>(null)
   const log = props.log
   const other = parseLogOther(log.other)
@@ -72,10 +77,18 @@ export function CommonLogMobileCard<TData>(props: {
   const model = formatModelName(log)
   const config = getLogTypeConfig(log.type)
   const group = log.group || other?.group || ''
-  const groupRatio =
-    other?.user_group_ratio != null && other.user_group_ratio !== -1
-      ? other.user_group_ratio
-      : other?.group_ratio
+  const userDiscount = getAppliedUserDiscount(other)
+  let groupRatio: number | undefined
+  if (userDiscount == null) {
+    if (other?.user_group_ratio != null && other.user_group_ratio !== -1) {
+      groupRatio = other.user_group_ratio
+    } else {
+      groupRatio = other?.group_ratio
+    }
+  }
+  const costValue = isAdminView
+    ? `${formatLogQuota(log.quota)} / ${formatLogQuota(log.cost_quota || 0)}`
+    : formatLogQuota(log.quota)
   const fields: Record<FieldName, LogField> = {
     model: {
       label: t('Model'),
@@ -84,7 +97,9 @@ export function CommonLogMobileCard<TData>(props: {
     },
     cost: {
       label: t('Cost'),
-      value: formatLogQuota(log.quota),
+      value: userDiscount
+        ? `${costValue} · ${formatAppliedDiscount(userDiscount, t)}`
+        : costValue,
       visible: displayable && props.cells.has('quota'),
     },
     time: {

@@ -99,6 +99,10 @@ type User struct {
 	UsedQuota            int                        `json:"used_quota" gorm:"type:int;default:0;column:used_quota"` // used quota
 	RequestCount         int                        `json:"request_count" gorm:"type:int;default:0;"`               // request number
 	Group                string                     `json:"group" gorm:"type:varchar(64);default:'default'"`
+	Discount             *float64                   `json:"discount"`
+	ModelDiscounts       string                     `json:"model_discounts" gorm:"type:text"`
+	GroupDiscounts       string                     `json:"group_discounts" gorm:"type:text"`
+	GroupModelDiscounts  string                     `json:"group_model_discounts" gorm:"type:text"`
 	AffCode              string                     `json:"aff_code" gorm:"type:varchar(32);column:aff_code;uniqueIndex"`
 	AffCount             int                        `json:"aff_count" gorm:"type:int;default:0;column:aff_count"`
 	AffQuota             int                        `json:"aff_quota" gorm:"type:int;default:0;column:aff_quota"`           // 邀请剩余额度
@@ -117,16 +121,20 @@ type User struct {
 
 func (user *User) ToBaseUser() *UserBase {
 	cache := &UserBase{
-		Id:          user.Id,
-		Group:       user.Group,
-		Quota:       user.Quota,
-		Status:      user.Status,
-		Role:        user.Role,
-		Username:    user.Username,
-		Setting:     user.Setting,
-		Email:       user.Email,
-		AuthVersion: user.AuthVersion,
-		CacheSchema: userCacheSchemaVersion,
+		Id:                  user.Id,
+		Group:               user.Group,
+		Quota:               user.Quota,
+		Status:              user.Status,
+		Role:                user.Role,
+		Username:            user.Username,
+		Setting:             user.Setting,
+		Email:               user.Email,
+		Discount:            user.Discount,
+		ModelDiscounts:      user.ModelDiscounts,
+		GroupDiscounts:      user.GroupDiscounts,
+		GroupModelDiscounts: user.GroupModelDiscounts,
+		AuthVersion:         user.AuthVersion,
+		CacheSchema:         userCacheSchemaVersion,
 	}
 	return cache
 }
@@ -546,8 +554,10 @@ func GetSelfUserById(id int) (*User, error) {
 	err := DB.Model(&User{}).Select([]string{
 		"id", "username", "display_name", "role", "status", "email",
 		"github_id", "discord_id", "oidc_id", "wechat_id", "telegram_id",
-		"group", "quota", "used_quota", "request_count", "aff_code", "aff_count",
-		"aff_quota", "aff_history", "inviter_id", "linux_do_id", "setting",
+		"group", "discount", "model_discounts", "group_discounts", "group_model_discounts",
+		"quota", "used_quota", "request_count",
+		"aff_code", "aff_count", "aff_quota", "aff_history", "inviter_id", "linux_do_id",
+		"setting",
 		"stripe_customer", "auth_version",
 		"CASE WHEN password <> '' THEN 1 ELSE 0 END AS has_password",
 	}).First(&profile, "id = ?", id).Error
@@ -888,11 +898,18 @@ func (user *User) EditWithTx(tx *gorm.DB, updatePassword bool) error {
 	}
 
 	newUser := *user
+	if err := validateUserDiscountFields(newUser.Discount, newUser.ModelDiscounts, newUser.GroupDiscounts, newUser.GroupModelDiscounts); err != nil {
+		return err
+	}
 	updates := map[string]any{
-		"username":     newUser.Username,
-		"display_name": newUser.DisplayName,
-		"group":        newUser.Group,
-		"remark":       newUser.Remark,
+		"username":              newUser.Username,
+		"display_name":          newUser.DisplayName,
+		"group":                 newUser.Group,
+		"remark":                newUser.Remark,
+		"discount":              newUser.Discount,
+		"model_discounts":       newUser.ModelDiscounts,
+		"group_discounts":       newUser.GroupDiscounts,
+		"group_model_discounts": newUser.GroupModelDiscounts,
 	}
 	if updatePassword {
 		updates["password"] = newUser.Password

@@ -23,11 +23,17 @@ import {
   type AdminPermissionMatrix,
   normalizeAdminPermissions,
 } from '@/lib/admin-permissions'
+import {
+  groupDiscountEntriesFromUser,
+  serializeGroupDiscounts,
+  serializeGroupModelDiscounts,
+  type GroupDiscountEntry,
+} from '@/lib/discount'
 import { quotaUnitsToDollars } from '@/lib/format'
 import { ROLE } from '@/lib/roles'
 
 import { DEFAULT_GROUP } from '../constants'
-import { type UserFormData, type User } from '../types'
+import type { UserFormData, User } from '../types'
 
 // ============================================================================
 // Form Schema
@@ -41,6 +47,21 @@ export const userFormSchema = z.object({
   quota_dollars: z.number().min(0).optional(),
   group: z.string().optional(),
   remark: z.string().optional(),
+  group_discount_entries: z
+    .array(
+      z.object({
+        group: z.string(),
+        discount: z.number().min(0).nullable(),
+        model_discounts: z.array(
+          z.object({
+            id: z.string().optional(),
+            model: z.string(),
+            discount: z.number().min(0),
+          })
+        ),
+      })
+    )
+    .optional(),
   admin_permissions: z
     .record(z.string(), z.record(z.string(), z.boolean()))
     .optional(),
@@ -60,6 +81,7 @@ export const USER_FORM_DEFAULT_VALUES: UserFormValues = {
   quota_dollars: 0,
   group: DEFAULT_GROUP,
   remark: '',
+  group_discount_entries: [] as GroupDiscountEntry[],
   // Filled against the backend catalog at render time; see UsersMutateDrawer.
   admin_permissions: {},
 }
@@ -101,6 +123,14 @@ export function transformFormDataToPayload(
     // For update: quota is adjusted atomically via /api/user/manage, not sent here
     payload.group = data.group
     payload.remark = data.remark || undefined
+    payload.discount = null
+    payload.model_discounts = ''
+    payload.group_discounts = serializeGroupDiscounts(
+      data.group_discount_entries ?? []
+    )
+    payload.group_model_discounts = serializeGroupModelDiscounts(
+      data.group_discount_entries ?? []
+    )
     payload.id = userId
   }
 
@@ -112,7 +142,10 @@ export function transformFormDataToPayload(
  * through as-is (the backend already returns a full matrix); it is filled against
  * the catalog at render time in UsersMutateDrawer.
  */
-export function transformUserToFormDefaults(user: User): UserFormValues {
+export function transformUserToFormDefaults(
+  user: User,
+  groups: string[] = []
+): UserFormValues {
   return {
     username: user.username,
     display_name: user.display_name,
@@ -121,6 +154,7 @@ export function transformUserToFormDefaults(user: User): UserFormValues {
     quota_dollars: quotaUnitsToDollars(user.quota),
     group: user.group || DEFAULT_GROUP,
     remark: user.remark || '',
+    group_discount_entries: groupDiscountEntriesFromUser(user, groups),
     admin_permissions: user.admin_permissions ?? {},
   }
 }
