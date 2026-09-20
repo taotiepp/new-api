@@ -398,3 +398,33 @@ func TestResetUserPasswordByEmailRequiresSingleActiveMatch(t *testing.T) {
 	err = ResetUserPasswordByEmail("missing@example.com", "NewPassword123")
 	require.True(t, errors.Is(err, ErrEmailNotFound))
 }
+
+func TestResetUserPasswordByUsernameHashesAndBumpsAuthVersion(t *testing.T) {
+	setupUserUpdateTestState(t)
+
+	user := User{
+		Username:    "root",
+		Password:    "old-hash",
+		Role:        common.RoleRootUser,
+		Status:      common.UserStatusEnabled,
+		Group:       "default",
+		AffCode:     "root-reset",
+		AuthVersion: 1,
+	}
+	require.NoError(t, DB.Create(&user).Error)
+
+	require.NoError(t, ResetUserPasswordByUsername("root", "NewPassword123"))
+
+	var stored User
+	require.NoError(t, DB.Where("username = ?", "root").First(&stored).Error)
+	assert.True(t, common.ValidatePasswordAndHash("NewPassword123", stored.Password))
+	assert.Equal(t, int64(2), stored.AuthVersion)
+
+	err := ResetUserPasswordByUsername("missing-root", "NewPassword123")
+	require.ErrorIs(t, err, ErrUsernameNotFound)
+
+	err = ResetUserPasswordByUsername("root", "short")
+	require.ErrorIs(t, err, common.ErrAccountPasswordLength)
+	require.NoError(t, DB.Where("username = ?", "root").First(&stored).Error)
+	assert.True(t, common.ValidatePasswordAndHash("NewPassword123", stored.Password))
+}

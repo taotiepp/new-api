@@ -15,6 +15,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/QuantumNous/new-api/cli"
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/controller"
@@ -48,8 +49,13 @@ var buildFS embed.FS
 var indexPage []byte
 
 func main() {
-	if len(os.Args) > 1 && os.Args[1] == "plugin" {
-		os.Exit(jsplugin.RunCLI(os.Args[2:], os.Stdout, os.Stderr))
+	if len(os.Args) > 1 {
+		switch os.Args[1] {
+		case "plugin":
+			os.Exit(jsplugin.RunCLI(os.Args[2:], os.Stdout, os.Stderr))
+		case "reset-password":
+			os.Exit(cli.RunResetPassword(os.Args[2:], os.Stdout, os.Stderr))
+		}
 	}
 	startTime := time.Now()
 	kitutil.SetLogging(common.SysLog, func(message string) {

@@ -1193,6 +1193,22 @@ func IsTelegramIdAlreadyTaken(telegramId string) bool {
 	return DB.Unscoped().Where("telegram_id = ?", telegramId).Find(&User{}).RowsAffected == 1
 }
 
+func GetUserByUsername(username string) (*User, error) {
+	username = strings.TrimSpace(username)
+	if username == "" {
+		return nil, ErrUsernameNotFound
+	}
+	var user User
+	err := DB.Where("username = ?", username).First(&user).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, ErrUsernameNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &user, nil
+}
+
 func ResetUserPasswordByEmail(email string, password string) error {
 	if email == "" || password == "" {
 		return errors.New("邮箱地址或密码为空！")
@@ -1201,6 +1217,21 @@ func ResetUserPasswordByEmail(email string, password string) error {
 	if err != nil {
 		return err
 	}
+	return resetUserPassword(user, password)
+}
+
+func ResetUserPasswordByUsername(username string, password string) error {
+	if strings.TrimSpace(username) == "" || password == "" {
+		return errors.New("用户名或密码为空！")
+	}
+	user, err := GetUserByUsername(username)
+	if err != nil {
+		return err
+	}
+	return resetUserPassword(user, password)
+}
+
+func resetUserPassword(user *User, password string) error {
 	hashedPassword, err := common.HashAccountPassword(password)
 	if err != nil {
 		return err

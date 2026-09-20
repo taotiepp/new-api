@@ -27,6 +27,9 @@ func printHelp() {
 	fmt.Println("Original Project: OneAPI by JustSong - https://github.com/songquanpeng/one-api")
 	fmt.Println("Maintainer: QuantumNous - https://github.com/QuantumNous/new-api")
 	fmt.Println("Usage: newapi [--port <port>] [--log-dir <log directory>] [--version] [--help]")
+	fmt.Println("       newapi plugin lint <plugin.js>")
+	fmt.Println("       newapi plugin test <plugin.js> --fixture <fixture.json>")
+	fmt.Println("       newapi reset-password [--username <name>] [--env-file <path>] [--password-stdin]")
 }
 
 func InitEnv() {
