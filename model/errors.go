@@ -15,6 +15,8 @@ var (
 	ErrEmailNotFound        = errors.New("email not found")
 	ErrEmailAmbiguous       = errors.New("email matches multiple users")
 	ErrUsernameNotFound     = errors.New("username not found")
+	ErrUsernameTaken        = errors.New("username already exists")
+	ErrInvalidAccountRole   = errors.New("role must be user or admin")
 )
 
 // Token auth errors

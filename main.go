@@ -53,6 +53,8 @@ func main() {
 		switch os.Args[1] {
 		case "plugin":
 			os.Exit(jsplugin.RunCLI(os.Args[2:], os.Stdout, os.Stderr))
+		case "user":
+			os.Exit(cli.RunUser(os.Args[2:], os.Stdout, os.Stderr))
 		case "reset-password":
 			os.Exit(cli.RunResetPassword(os.Args[2:], os.Stdout, os.Stderr))
 		}

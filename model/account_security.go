@@ -13,6 +13,7 @@ var (
 	ErrLastLoginMethod        = errors.New("Add another login method before unlinking this account.")
 	ErrAccountBindingChanged  = errors.New("Account bindings have changed. Start this operation again.")
 	ErrCannotDeleteRootUser   = errors.New("The root account cannot be deleted.")
+	ErrCannotChangeRootRole   = errors.New("The root account role cannot be changed.")
 )
 
 // ChangeUserPassword rechecks the authorized session, password state and current

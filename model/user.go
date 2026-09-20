@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/logger"
@@ -1249,6 +1250,71 @@ func resetUserPassword(user *User, password string) error {
 	}
 	_, err = RevokeAllUserSessions(user.Id, "password_reset")
 	return err
+}
+
+func CreateAccount(username, password, displayName string, role int) (*User, error) {
+	username = strings.TrimSpace(username)
+	displayName = strings.TrimSpace(displayName)
+	if username == "" {
+		return nil, errors.New("用户名或密码为空！")
+	}
+	if utf8.RuneCountInString(username) > UserNameMaxLength {
+		return nil, fmt.Errorf("username must be at most %d characters", UserNameMaxLength)
+	}
+	if err := common.ValidateNewAccountPassword(password); err != nil {
+		return nil, err
+	}
+	if !isAssignableAccountRole(role) {
+		return nil, ErrInvalidAccountRole
+	}
+	exists, err := CheckUserExistOrDeleted(username, "")
+	if err != nil {
+		return nil, err
+	}
+	if exists {
+		return nil, ErrUsernameTaken
+	}
+	if displayName == "" {
+		displayName = username
+	}
+	user := &User{
+		Username:    username,
+		Password:    password,
+		DisplayName: displayName,
+		Role:        role,
+		Status:      common.UserStatusEnabled,
+		AuthVersion: 1,
+	}
+	if err := user.Insert(0); err != nil {
+		return nil, err
+	}
+	return GetUserByUsername(username)
+}
+
+func SetUserRoleByUsername(username string, role int) (previousRole int, user *User, err error) {
+	if !isAssignableAccountRole(role) {
+		return 0, nil, ErrInvalidAccountRole
+	}
+	user, err = GetUserByUsername(username)
+	if err != nil {
+		return 0, nil, err
+	}
+	if user.Role == common.RoleRootUser {
+		return 0, nil, ErrCannotChangeRootRole
+	}
+	previousRole = user.Role
+	if user.Role == role {
+		return previousRole, user, nil
+	}
+	user.Role = role
+	if err := user.Update(false); err != nil {
+		return 0, nil, err
+	}
+	return previousRole, user, nil
+}
+
+func isAssignableAccountRole(role int) bool {
+	return role == common.RoleCommonUser || role == common.RoleAdminUser
 }
 
 func IsAdmin(userId int) bool {

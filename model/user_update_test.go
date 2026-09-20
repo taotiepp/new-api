@@ -428,3 +428,46 @@ func TestResetUserPasswordByUsernameHashesAndBumpsAuthVersion(t *testing.T) {
 	require.NoError(t, DB.Where("username = ?", "root").First(&stored).Error)
 	assert.True(t, common.ValidatePasswordAndHash("NewPassword123", stored.Password))
 }
+
+func TestCreateAccountAndSetUserRole(t *testing.T) {
+	setupUserUpdateTestState(t)
+
+	user, err := CreateAccount("cli-user", "NewPassword123", "", common.RoleCommonUser)
+	require.NoError(t, err)
+	require.NotNil(t, user)
+	assert.Equal(t, "cli-user", user.Username)
+	assert.Equal(t, "cli-user", user.DisplayName)
+	assert.Equal(t, common.RoleCommonUser, user.Role)
+	assert.Equal(t, common.UserStatusEnabled, user.Status)
+	assert.True(t, common.ValidatePasswordAndHash("NewPassword123", user.Password))
+
+	_, err = CreateAccount("cli-user", "NewPassword123", "", common.RoleCommonUser)
+	require.ErrorIs(t, err, ErrUsernameTaken)
+
+	_, err = CreateAccount("root-clone", "NewPassword123", "", common.RoleRootUser)
+	require.ErrorIs(t, err, ErrInvalidAccountRole)
+
+	previous, updated, err := SetUserRoleByUsername("cli-user", common.RoleAdminUser)
+	require.NoError(t, err)
+	assert.Equal(t, common.RoleCommonUser, previous)
+	assert.Equal(t, common.RoleAdminUser, updated.Role)
+	assert.Greater(t, updated.AuthVersion, user.AuthVersion)
+
+	previous, updated, err = SetUserRoleByUsername("cli-user", common.RoleAdminUser)
+	require.NoError(t, err)
+	assert.Equal(t, common.RoleAdminUser, previous)
+	assert.Equal(t, common.RoleAdminUser, updated.Role)
+
+	root := User{
+		Username:    "root-role",
+		Password:    "old-hash",
+		Role:        common.RoleRootUser,
+		Status:      common.UserStatusEnabled,
+		Group:       "default",
+		AffCode:     "root-role",
+		AuthVersion: 1,
+	}
+	require.NoError(t, DB.Create(&root).Error)
+	_, _, err = SetUserRoleByUsername("root-role", common.RoleAdminUser)
+	require.ErrorIs(t, err, ErrCannotChangeRootRole)
+}

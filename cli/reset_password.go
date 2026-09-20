@@ -36,10 +36,18 @@ type resetPasswordRuntime struct {
 	closeDB       func() error
 	resetPassword func(username, password string) error
 	afterReset    func(username string, stderr io.Writer) error
+	passwordEnv   string
 	lookupEnv     func(key string) (string, bool)
 	stdin         io.Reader
 	isTerminal    func() bool
 	readPassword  func(prompt string) (string, error)
+}
+
+func passwordEnvName(runtime resetPasswordRuntime) string {
+	if runtime.passwordEnv != "" {
+		return runtime.passwordEnv
+	}
+	return resetPasswordEnvName
 }
 
 func RunResetPassword(args []string, stdout, stderr io.Writer) int {
@@ -155,9 +163,10 @@ func parseResetPasswordArgs(args []string, stderr io.Writer) (resetPasswordOptio
 }
 
 func resolveResetPassword(options resetPasswordOptions, runtime resetPasswordRuntime) (string, error) {
+	envName := passwordEnvName(runtime)
 	envPassword, envSet := "", false
 	if runtime.lookupEnv != nil {
-		envPassword, envSet = runtime.lookupEnv(resetPasswordEnvName)
+		envPassword, envSet = runtime.lookupEnv(envName)
 	}
 	sources := 0
 	if options.password != "" {
@@ -170,7 +179,7 @@ func resolveResetPassword(options resetPasswordOptions, runtime resetPasswordRun
 		sources++
 	}
 	if sources > 1 {
-		return "", errors.New("provide the new password via only one of --password, --password-stdin, or NEW_API_RESET_PASSWORD")
+		return "", fmt.Errorf("provide the new password via only one of --password, --password-stdin, or %s", envName)
 	}
 	switch {
 	case options.password != "":
@@ -182,7 +191,7 @@ func resolveResetPassword(options resetPasswordOptions, runtime resetPasswordRun
 	case runtime.isTerminal != nil && runtime.isTerminal():
 		return readPasswordInteractively(runtime)
 	default:
-		return "", errors.New("new password is required; use --password-stdin, NEW_API_RESET_PASSWORD, --password, or a terminal prompt")
+		return "", fmt.Errorf("new password is required; use --password-stdin, %s, --password, or a terminal prompt", envName)
 	}
 }
 
@@ -238,11 +247,15 @@ func loadEnvFile(path string) error {
 }
 
 func initResetPasswordResources() error {
+	return initUserCLIResources()
+}
+
+func initUserCLIResources() error {
 	if sqlitePath := os.Getenv("SQLITE_PATH"); sqlitePath != "" {
 		common.SQLitePath = sqlitePath
 	}
 	common.DebugEnabled = os.Getenv("DEBUG") == "true"
-	// Skip AutoMigrate: this command only updates an existing account.
+	// Skip AutoMigrate: these commands operate on an existing database.
 	common.IsMasterNode = false
 	if err := model.InitDB(); err != nil {
 		return err

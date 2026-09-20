@@ -29,6 +29,9 @@ func printHelp() {
 	fmt.Println("Usage: newapi [--port <port>] [--log-dir <log directory>] [--version] [--help]")
 	fmt.Println("       newapi plugin lint <plugin.js>")
 	fmt.Println("       newapi plugin test <plugin.js> --fixture <fixture.json>")
+	fmt.Println("       newapi user create --username <name> --role user|admin")
+	fmt.Println("       newapi user set-role --username <name> --role user|admin")
+	fmt.Println("       newapi user set-password [--username <name>] [--password-stdin]")
 	fmt.Println("       newapi reset-password [--username <name>] [--env-file <path>] [--password-stdin]")
 }
 
