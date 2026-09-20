@@ -10,7 +10,7 @@ build
 *.db-journal
 *.db-shm
 *.db-wal
-logs
+/logs/
 web/dist
 web/node_modules
 .env
