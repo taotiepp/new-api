@@ -12,27 +12,79 @@ import (
 )
 
 func GetUserUsableGroups(userGroup string) map[string]string {
+	return ResolveUserUsableGroups(userGroup, "")
+}
+
+func ParseUserUsableGroups(raw string) ([]string, bool) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" || raw == "null" {
+		return nil, false
+	}
+	var parsed []string
+	if err := common.Unmarshal([]byte(raw), &parsed); err != nil {
+		common.SysLog("failed to parse user usable groups: " + err.Error())
+		return nil, false
+	}
+	out := make([]string, 0, len(parsed))
+	seen := make(map[string]struct{}, len(parsed))
+	for _, name := range parsed {
+		name = strings.TrimSpace(name)
+		if name == "" || name == "auto" {
+			continue
+		}
+		if _, ok := seen[name]; ok {
+			continue
+		}
+		seen[name] = struct{}{}
+		out = append(out, name)
+	}
+	return out, true
+}
+
+func ResolveUserUsableGroups(userGroup, raw string) map[string]string {
+	names, custom := ParseUserUsableGroups(raw)
+	if !custom {
+		return inheritedUserUsableGroups(userGroup)
+	}
+	out := make(map[string]string, len(names)+1)
+	descs := setting.GetUserUsableGroupsCopy()
+	for _, name := range names {
+		desc := descs[name]
+		if desc == "" {
+			desc = name
+		}
+		out[name] = desc
+	}
+	if userGroup != "" {
+		if _, ok := out[userGroup]; !ok {
+			desc := descs[userGroup]
+			if desc == "" {
+				desc = "用户分组"
+			}
+			out[userGroup] = desc
+		}
+	}
+	if desc, ok := descs["auto"]; ok {
+		out["auto"] = desc
+	}
+	return out
+}
+
+func inheritedUserUsableGroups(userGroup string) map[string]string {
 	groupsCopy := setting.GetUserUsableGroupsCopy()
 	if userGroup != "" {
 		specialSettings, b := ratio_setting.GetGroupRatioSetting().GroupSpecialUsableGroup.Get(userGroup)
 		if b {
-			// 处理特殊可用分组
 			for specialGroup, desc := range specialSettings {
 				if after, ok := strings.CutPrefix(specialGroup, "-:"); ok {
-					// 移除分组
-					groupToRemove := after
-					delete(groupsCopy, groupToRemove)
+					delete(groupsCopy, after)
 				} else if after, ok := strings.CutPrefix(specialGroup, "+:"); ok {
-					// 添加分组
-					groupToAdd := after
-					groupsCopy[groupToAdd] = desc
+					groupsCopy[after] = desc
 				} else {
-					// 直接添加分组
 					groupsCopy[specialGroup] = desc
 				}
 			}
 		}
-		// 如果userGroup不在UserUsableGroups中，返回UserUsableGroups + userGroup
 		if _, ok := groupsCopy[userGroup]; !ok {
 			groupsCopy[userGroup] = "用户分组"
 		}
@@ -41,23 +93,42 @@ func GetUserUsableGroups(userGroup string) map[string]string {
 }
 
 func GroupInUserUsableGroups(userGroup, groupName string) bool {
-	_, ok := GetUserUsableGroups(userGroup)[groupName]
+	return GroupAllowed(userGroup, "", groupName)
+}
+
+func GroupAllowed(userGroup, raw, groupName string) bool {
+	_, ok := ResolveUserUsableGroups(userGroup, raw)[groupName]
 	return ok
 }
 
 func IsUserSelectableGroup(userGroup, groupName string) bool {
+	return IsUserSelectableGroupFor(userGroup, "", groupName)
+}
+
+func IsUserSelectableGroupFor(userGroup, raw, groupName string) bool {
 	if groupName == "" || groupName == "auto" {
 		return false
 	}
-	return GroupInUserUsableGroups(userGroup, groupName) && ratio_setting.ContainsGroupRatio(groupName)
+	return GroupAllowed(userGroup, raw, groupName) && ratio_setting.ContainsGroupRatio(groupName)
+}
+
+func usableGroupsRawFromContext(c *gin.Context) string {
+	if c == nil {
+		return ""
+	}
+	return common.GetContextKeyString(c, constant.ContextKeyUserUsableGroups)
 }
 
 // GetUserAutoGroup 根据用户分组获取自动分组设置
 func GetUserAutoGroup(userGroup string) []string {
+	return GetUserAutoGroupFor(userGroup, "")
+}
+
+func GetUserAutoGroupFor(userGroup, raw string) []string {
 	autoGroups := make([]string, 0)
 	seen := make(map[string]struct{})
 	for _, group := range setting.GetAutoGroups() {
-		if !IsUserSelectableGroup(userGroup, group) {
+		if !IsUserSelectableGroupFor(userGroup, raw, group) {
 			continue
 		}
 		if _, ok := seen[group]; ok {
@@ -72,11 +143,15 @@ func GetUserAutoGroup(userGroup string) []string {
 // FilterUserTokenAutoGroups applies current permissions before the current
 // per-token limit. It intentionally does not fall back to the global Auto list.
 func FilterUserTokenAutoGroups(userGroup string, groups []string) []string {
+	return FilterUserTokenAutoGroupsFor(userGroup, "", groups)
+}
+
+func FilterUserTokenAutoGroupsFor(userGroup, raw string, groups []string) []string {
 	maxCount := setting.GetMaxTokenAutoGroups()
 	filtered := make([]string, 0, min(len(groups), maxCount))
 	seen := make(map[string]struct{})
 	for _, group := range groups {
-		if !IsUserSelectableGroup(userGroup, group) {
+		if !IsUserSelectableGroupFor(userGroup, raw, group) {
 			continue
 		}
 		if _, ok := seen[group]; ok {
@@ -95,15 +170,16 @@ func FilterUserTokenAutoGroups(userGroup string, groups []string) []string {
 // The absence of the context value means that the token inherits the complete
 // global Auto list; a present (even empty) value is an explicit token snapshot.
 func GetRequestAutoGroups(c *gin.Context, userGroup string) []string {
+	raw := usableGroupsRawFromContext(c)
 	value, ok := common.GetContextKey(c, constant.ContextKeyTokenAutoGroups)
 	if !ok {
-		return GetUserAutoGroup(userGroup)
+		return GetUserAutoGroupFor(userGroup, raw)
 	}
 	groups, ok := value.([]string)
 	if !ok {
 		return []string{}
 	}
-	return FilterUserTokenAutoGroups(userGroup, groups)
+	return FilterUserTokenAutoGroupsFor(userGroup, raw, groups)
 }
 
 // GetGroupsEnabledModels 按 groups 顺序获取各分组启用的模型并去重

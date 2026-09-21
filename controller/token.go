@@ -77,14 +77,39 @@ func buildMaskedTokenResponses(tokens []*model.Token) []*tokenResponse {
 	return maskedTokens
 }
 
+func rejectIfTokenGroupDenied(c *gin.Context, group string) bool {
+	if group == "" || group == "auto" {
+		return false
+	}
+	userGroup, usableGroupsRaw, err := getTokenRequestUsableGroups(c)
+	if err != nil {
+		common.ApiError(c, err)
+		return true
+	}
+	if !service.IsUserSelectableGroupFor(userGroup, usableGroupsRaw, group) {
+		common.ApiErrorI18n(c, i18n.MsgTokenAutoGroupsInvalid, map[string]any{"Group": group})
+		return true
+	}
+	return false
+}
+
 func getTokenRequestUserGroup(c *gin.Context) (string, error) {
+	userGroup, _, err := getTokenRequestUsableGroups(c)
+	return userGroup, err
+}
+
+func getTokenRequestUsableGroups(c *gin.Context) (string, string, error) {
+	if user, err := model.GetUserCache(c.GetInt("id")); err == nil && user != nil {
+		return user.Group, user.UsableGroups, nil
+	}
 	if userGroup := common.GetContextKeyString(c, constant.ContextKeyUserGroup); userGroup != "" {
-		return userGroup, nil
+		return userGroup, common.GetContextKeyString(c, constant.ContextKeyUserUsableGroups), nil
 	}
 	if userGroup := c.GetString("group"); userGroup != "" {
-		return userGroup, nil
+		return userGroup, common.GetContextKeyString(c, constant.ContextKeyUserUsableGroups), nil
 	}
-	return model.GetUserGroup(c.GetInt("id"), false)
+	userGroup, err := model.GetUserGroup(c.GetInt("id"), false)
+	return userGroup, "", err
 }
 
 func setTokenAutoGroups(c *gin.Context, token *model.Token, groups []string) bool {
@@ -102,7 +127,7 @@ func setTokenAutoGroups(c *gin.Context, token *model.Token, groups []string) boo
 		return false
 	}
 
-	userGroup, err := getTokenRequestUserGroup(c)
+	userGroup, usableGroupsRaw, err := getTokenRequestUsableGroups(c)
 	if err != nil {
 		common.ApiError(c, err)
 		return false
@@ -114,7 +139,7 @@ func setTokenAutoGroups(c *gin.Context, token *model.Token, groups []string) boo
 			return false
 		}
 		seen[group] = struct{}{}
-		if !service.IsUserSelectableGroup(userGroup, group) {
+		if !service.IsUserSelectableGroupFor(userGroup, usableGroupsRaw, group) {
 			common.ApiErrorI18n(c, i18n.MsgTokenAutoGroupsInvalid, map[string]any{"Group": group})
 			return false
 		}
@@ -174,13 +199,13 @@ func GetToken(c *gin.Context) {
 }
 
 func GetTokenAutoGroups(c *gin.Context) {
-	userGroup, err := getTokenRequestUserGroup(c)
+	userGroup, usableGroupsRaw, err := getTokenRequestUsableGroups(c)
 	if err != nil {
 		common.ApiError(c, err)
 		return
 	}
 	common.ApiSuccess(c, gin.H{
-		"groups":    service.GetUserAutoGroup(userGroup),
+		"groups":    service.GetUserAutoGroupFor(userGroup, usableGroupsRaw),
 		"max_count": setting.GetMaxTokenAutoGroups(),
 	})
 }
@@ -320,6 +345,9 @@ func AddToken(c *gin.Context) {
 			return
 		}
 	} else {
+		if rejectIfTokenGroupDenied(c, token.Group) {
+			return
+		}
 		token.CrossGroupRetry = false
 		_ = token.SetAutoGroups(nil)
 	}
@@ -440,6 +468,9 @@ func UpdateToken(c *gin.Context) {
 		cleanToken.Group = token.Group
 		cleanToken.CrossGroupRetry = token.CrossGroupRetry
 		if token.Group != "auto" {
+			if rejectIfTokenGroupDenied(c, token.Group) {
+				return
+			}
 			cleanToken.CrossGroupRetry = false
 			_ = cleanToken.SetAutoGroups(nil)
 		} else if request.AutoGroups.Set {

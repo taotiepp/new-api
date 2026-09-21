@@ -70,3 +70,20 @@ func validateDiscountMap(rawJSON, field string) error {
 	}
 	return nil
 }
+
+func validateUsableGroups(rawJSON string) error {
+	raw := strings.TrimSpace(rawJSON)
+	if raw == "" || raw == "null" {
+		return nil
+	}
+	var parsed []string
+	if err := common.Unmarshal([]byte(raw), &parsed); err != nil {
+		return errors.New("usable_groups must be a JSON array of group names")
+	}
+	for _, name := range parsed {
+		if strings.TrimSpace(name) == "" {
+			return errors.New("usable_groups entries must be non-empty")
+		}
+	}
+	return nil
+}

@@ -46,6 +46,8 @@ export const userFormSchema = z.object({
   role: z.number().optional(),
   quota_dollars: z.number().min(0).optional(),
   group: z.string().optional(),
+  custom_usable_groups: z.boolean().optional(),
+  usable_groups: z.array(z.string()).optional(),
   remark: z.string().optional(),
   group_discount_entries: z
     .array(
@@ -80,6 +82,8 @@ export const USER_FORM_DEFAULT_VALUES: UserFormValues = {
   role: 1, // Default to common user
   quota_dollars: 0,
   group: DEFAULT_GROUP,
+  custom_usable_groups: false,
+  usable_groups: [] as string[],
   remark: '',
   group_discount_entries: [] as GroupDiscountEntry[],
   // Filled against the backend catalog at render time; see UsersMutateDrawer.
@@ -122,6 +126,11 @@ export function transformFormDataToPayload(
   } else {
     // For update: quota is adjusted atomically via /api/user/manage, not sent here
     payload.group = data.group
+    payload.usable_groups = serializeUsableGroups(
+      data.custom_usable_groups,
+      data.group,
+      data.usable_groups
+    )
     payload.remark = data.remark || undefined
     payload.discount = null
     payload.model_discounts = ''
@@ -153,8 +162,61 @@ export function transformUserToFormDefaults(
     role: user.role,
     quota_dollars: quotaUnitsToDollars(user.quota),
     group: user.group || DEFAULT_GROUP,
+    custom_usable_groups: parseUsableGroups(user.usable_groups) != null,
+    usable_groups: parseUsableGroups(user.usable_groups) ?? [],
     remark: user.remark || '',
     group_discount_entries: groupDiscountEntriesFromUser(user, groups),
     admin_permissions: user.admin_permissions ?? {},
+  }
+}
+
+function serializeUsableGroups(
+  custom: boolean | undefined,
+  assignedGroup: string | undefined,
+  groups: string[] | undefined
+): string {
+  if (!custom) {
+    return ''
+  }
+  const names = new Set<string>()
+  const assigned = assignedGroup?.trim()
+  if (assigned && assigned !== 'auto') {
+    names.add(assigned)
+  }
+  for (const group of groups ?? []) {
+    const name = group.trim()
+    if (name !== '' && name !== 'auto') {
+      names.add(name)
+    }
+  }
+  return JSON.stringify([...names].sort())
+}
+
+function parseUsableGroups(raw?: string | null): string[] | null {
+  const trimmed = raw?.trim()
+  if (!trimmed || trimmed === 'null') {
+    return null
+  }
+  try {
+    const parsed: unknown = JSON.parse(trimmed)
+    if (!Array.isArray(parsed)) {
+      return null
+    }
+    const names: string[] = []
+    const seen = new Set<string>()
+    for (const item of parsed) {
+      if (typeof item !== 'string') {
+        continue
+      }
+      const name = item.trim()
+      if (name === '' || name === 'auto' || seen.has(name)) {
+        continue
+      }
+      seen.add(name)
+      names.push(name)
+    }
+    return names
+  } catch {
+    return null
   }
 }

@@ -103,6 +103,7 @@ type User struct {
 	ModelDiscounts       string                     `json:"model_discounts" gorm:"type:text"`
 	GroupDiscounts       string                     `json:"group_discounts" gorm:"type:text"`
 	GroupModelDiscounts  string                     `json:"group_model_discounts" gorm:"type:text"`
+	UsableGroups         string                     `json:"usable_groups" gorm:"type:text"`
 	AffCode              string                     `json:"aff_code" gorm:"type:varchar(32);column:aff_code;uniqueIndex"`
 	AffCount             int                        `json:"aff_count" gorm:"type:int;default:0;column:aff_count"`
 	AffQuota             int                        `json:"aff_quota" gorm:"type:int;default:0;column:aff_quota"`           // 邀请剩余额度
@@ -133,6 +134,7 @@ func (user *User) ToBaseUser() *UserBase {
 		ModelDiscounts:      user.ModelDiscounts,
 		GroupDiscounts:      user.GroupDiscounts,
 		GroupModelDiscounts: user.GroupModelDiscounts,
+		UsableGroups:        user.UsableGroups,
 		AuthVersion:         user.AuthVersion,
 		CacheSchema:         userCacheSchemaVersion,
 	}
@@ -555,6 +557,7 @@ func GetSelfUserById(id int) (*User, error) {
 		"id", "username", "display_name", "role", "status", "email",
 		"github_id", "discord_id", "oidc_id", "wechat_id", "telegram_id",
 		"group", "discount", "model_discounts", "group_discounts", "group_model_discounts",
+		"usable_groups",
 		"quota", "used_quota", "request_count",
 		"aff_code", "aff_count", "aff_quota", "aff_history", "inviter_id", "linux_do_id",
 		"setting",
@@ -901,6 +904,9 @@ func (user *User) EditWithTx(tx *gorm.DB, updatePassword bool) error {
 	if err := validateUserDiscountFields(newUser.Discount, newUser.ModelDiscounts, newUser.GroupDiscounts, newUser.GroupModelDiscounts); err != nil {
 		return err
 	}
+	if err := validateUsableGroups(newUser.UsableGroups); err != nil {
+		return err
+	}
 	updates := map[string]any{
 		"username":              newUser.Username,
 		"display_name":          newUser.DisplayName,
@@ -910,6 +916,7 @@ func (user *User) EditWithTx(tx *gorm.DB, updatePassword bool) error {
 		"model_discounts":       newUser.ModelDiscounts,
 		"group_discounts":       newUser.GroupDiscounts,
 		"group_model_discounts": newUser.GroupModelDiscounts,
+		"usable_groups":         newUser.UsableGroups,
 	}
 	if updatePassword {
 		updates["password"] = newUser.Password

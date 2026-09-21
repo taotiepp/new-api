@@ -60,6 +60,43 @@ func TestGetRequestAutoGroupsFiltersBeforeApplyingCurrentLimit(t *testing.T) {
 	assert.Equal(t, []string{"vip"}, GetRequestAutoGroups(ctx, "default"))
 }
 
+func TestParseUserUsableGroups(t *testing.T) {
+	names, custom := ParseUserUsableGroups("")
+	assert.Nil(t, names)
+	assert.False(t, custom)
+
+	names, custom = ParseUserUsableGroups(`["vip","vip","auto","", "svip"]`)
+	assert.True(t, custom)
+	assert.Equal(t, []string{"vip", "svip"}, names)
+
+	names, custom = ParseUserUsableGroups("{")
+	assert.Nil(t, names)
+	assert.False(t, custom)
+}
+
+func TestResolveUserUsableGroupsCustomAllowlist(t *testing.T) {
+	configureRequestAutoGroupsTest(t)
+	require.NoError(t, setting.UpdateUserUsableGroupsByJSONString(`{"default":"Default","vip":"VIP","svip":"SVIP","auto":"Auto"}`))
+
+	resolved := ResolveUserUsableGroups("vip", `["svip"]`)
+	assert.Equal(t, "VIP", resolved["vip"])
+	assert.Equal(t, "SVIP", resolved["svip"])
+	assert.Equal(t, "Auto", resolved["auto"])
+	_, hasDefault := resolved["default"]
+	assert.False(t, hasDefault)
+
+	assert.True(t, GroupAllowed("vip", `["svip"]`, "vip"))
+	assert.True(t, GroupAllowed("vip", `["svip"]`, "svip"))
+	assert.False(t, GroupAllowed("vip", `["svip"]`, "default"))
+	assert.True(t, IsUserSelectableGroupFor("vip", `["svip"]`, "svip"))
+	assert.False(t, IsUserSelectableGroupFor("vip", `["svip"]`, "default"))
+	assert.False(t, IsUserSelectableGroupFor("vip", `["svip"]`, "auto"))
+
+	inherited := ResolveUserUsableGroups("vip", "")
+	assert.Equal(t, "Default", inherited["default"])
+	assert.Equal(t, "VIP", inherited["vip"])
+}
+
 func TestGetRequestAutoGroupsDoesNotFallBackAfterPermissionChange(t *testing.T) {
 	configureRequestAutoGroupsTest(t)
 	ctx := newRequestAutoGroupsContext()

@@ -30,6 +30,7 @@ import {
   sideDrawerFooterClassName,
   sideDrawerFormClassName,
   sideDrawerHeaderClassName,
+  sideDrawerSwitchItemClassName,
 } from '@/components/drawer-layout'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -62,6 +63,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet'
+import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import {
   ADMIN_PERMISSION_ACTIONS,
@@ -86,7 +88,12 @@ import {
   getGroups,
   getPermissionCatalog,
 } from '../api'
-import { BINDING_FIELDS, ERROR_MESSAGES, SUCCESS_MESSAGES } from '../constants'
+import {
+  BINDING_FIELDS,
+  DEFAULT_GROUP,
+  ERROR_MESSAGES,
+  SUCCESS_MESSAGES,
+} from '../constants'
 import {
   userFormSchema,
   type UserFormValues,
@@ -164,8 +171,27 @@ export function UsersMutateDrawer({
 
   const currentQuotaRaw = form.watch('quota_dollars') || 0
   const selectedRole = form.watch('role')
+  const assignedGroup = form.watch('group') || DEFAULT_GROUP
+  const customUsableGroups = !!form.watch('custom_usable_groups')
+  const selectedUsableGroups = form.watch('usable_groups') ?? []
   const canEditAdminPermissions = currentUser?.role === ROLE.SUPER_ADMIN
   const targetIsAdmin = (selectedRole ?? currentRow?.role ?? 0) >= ROLE.ADMIN
+  const usableGroupOptions = [
+    ...new Set(
+      [...groups, ...selectedUsableGroups, assignedGroup].filter(
+        (group) => group.trim() !== '' && group !== 'auto'
+      )
+    ),
+  ].sort()
+  const discountGroups = customUsableGroups
+    ? [
+        ...new Set(
+          [assignedGroup, ...selectedUsableGroups].filter(
+            (group) => group.trim() !== '' && group !== 'auto'
+          )
+        ),
+      ]
+    : groups
 
   const onSubmit = async (data: UserFormValues) => {
     if (!isUpdate || data.password) {
@@ -375,7 +401,24 @@ export function UsersMutateDrawer({
                               value: group,
                               label: group,
                             }))}
-                            onValueChange={field.onChange}
+                            onValueChange={(value) => {
+                              field.onChange(value)
+                              if (
+                                !form.getValues('custom_usable_groups') ||
+                                !value
+                              ) {
+                                return
+                              }
+                              const current =
+                                form.getValues('usable_groups') ?? []
+                              if (!current.includes(value)) {
+                                form.setValue(
+                                  'usable_groups',
+                                  [...current, value],
+                                  { shouldDirty: true }
+                                )
+                              }
+                            }}
                             value={field.value}
                             className='w-full'
                             placeholder={t('Select a group')}
@@ -385,6 +428,99 @@ export function UsersMutateDrawer({
                       </FormItem>
                     )}
                   />
+
+                  <FormField
+                    control={form.control}
+                    name='custom_usable_groups'
+                    render={({ field }) => (
+                      <FormItem className={sideDrawerSwitchItemClassName()}>
+                        <div className='flex flex-col gap-0.5'>
+                          <FormLabel className='text-sm'>
+                            {t('Custom usable resource groups')}
+                          </FormLabel>
+                          <FormDescription className='text-xs'>
+                            {t(
+                              'When enabled, this user can only use the checked resource groups. The assigned group is always allowed.'
+                            )}
+                          </FormDescription>
+                        </div>
+                        <FormControl>
+                          <Switch
+                            checked={!!field.value}
+                            onCheckedChange={(checked) => {
+                              field.onChange(checked)
+                              form.setValue(
+                                'usable_groups',
+                                checked && assignedGroup ? [assignedGroup] : [],
+                                { shouldDirty: true }
+                              )
+                            }}
+                          />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+
+                  {customUsableGroups && (
+                    <FormField
+                      control={form.control}
+                      name='usable_groups'
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>{t('Usable resource groups')}</FormLabel>
+                          <div className='space-y-2 rounded-md border p-3'>
+                            {usableGroupOptions.map((group) => {
+                              const assigned = group === assignedGroup
+                              const checked =
+                                assigned ||
+                                (field.value ?? []).includes(group)
+                              return (
+                                <label
+                                  key={group}
+                                  className='flex items-start gap-3'
+                                >
+                                  <Checkbox
+                                    checked={checked}
+                                    disabled={assigned}
+                                    onCheckedChange={(nextChecked) => {
+                                      if (assigned) {
+                                        return
+                                      }
+                                      const current = field.value ?? []
+                                      if (nextChecked === true) {
+                                        field.onChange(
+                                          current.includes(group)
+                                            ? current
+                                            : [...current, group]
+                                        )
+                                        return
+                                      }
+                                      field.onChange(
+                                        current.filter((name) => name !== group)
+                                      )
+                                    }}
+                                  />
+                                  <span className='flex flex-col gap-1'>
+                                    <span className='text-sm font-medium'>
+                                      {group}
+                                    </span>
+                                    {assigned ? (
+                                      <span className='text-muted-foreground text-xs'>
+                                        {t(
+                                          "This is the user's assigned group and cannot be removed."
+                                        )}
+                                      </span>
+                                    ) : null}
+                                  </span>
+                                </label>
+                              )
+                            })}
+                          </div>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  )}
 
                   <FormField
                     control={form.control}
@@ -438,7 +574,7 @@ export function UsersMutateDrawer({
                         </FormDescription>
                         <FormControl>
                           <GroupDiscountEditor
-                            groups={groups}
+                            groups={discountGroups}
                             value={field.value ?? []}
                             onChange={field.onChange}
                           />

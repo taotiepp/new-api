@@ -51,6 +51,45 @@ describe('user form discount payload', () => {
     ])
   })
 
+  test('inherits usable resource groups when custom mode is off', () => {
+    const defaults = transformUserToFormDefaults(user, ['vip', 'default'])
+    expect(defaults.custom_usable_groups).toBe(false)
+    expect(defaults.usable_groups).toEqual([])
+
+    const payload = transformFormDataToPayload(
+      {
+        username: 'alice',
+        display_name: 'Alice',
+        group: 'vip',
+        custom_usable_groups: false,
+        usable_groups: ['svip'],
+      },
+      9
+    )
+    expect(payload.usable_groups).toBe('')
+  })
+
+  test('saves a custom usable resource group allowlist and always includes the assigned group', () => {
+    const defaults = transformUserToFormDefaults(
+      { ...user, usable_groups: '["svip","svip","auto",""]' },
+      ['vip', 'default', 'svip']
+    )
+    expect(defaults.custom_usable_groups).toBe(true)
+    expect(defaults.usable_groups).toEqual(['svip'])
+
+    const payload = transformFormDataToPayload(
+      {
+        username: 'alice',
+        display_name: 'Alice',
+        group: 'vip',
+        custom_usable_groups: true,
+        usable_groups: ['svip', ' auto ', 'svip'],
+      },
+      9
+    )
+    expect(payload.usable_groups).toBe('["svip","vip"]')
+  })
+
   test('saves group-scoped discounts and clears the global fields', () => {
     const payload = transformFormDataToPayload(
       {

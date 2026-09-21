@@ -50,6 +50,7 @@ export const userSchema = z.object({
   model_discounts: z.string().nullish(),
   group_discounts: z.string().nullish(),
   group_model_discounts: z.string().nullish(),
+  usable_groups: z.string().nullish(),
   aff_code: z.string().optional(),
   aff_count: z.number().optional(),
   aff_quota: z.number().optional(),
@@ -133,6 +134,7 @@ export interface UserFormData {
   model_discounts?: string
   group_discounts?: string
   group_model_discounts?: string
+  usable_groups?: string
   admin_permissions?: AdminPermissionMatrix
 }
 

@@ -232,3 +232,22 @@ func TestGetTokenAutoGroupsReturnsFullFilteredGlobalOrderAndLimit(t *testing.T) 
 	assert.Equal(t, []string{"vip", "default"}, data.Groups)
 	assert.Equal(t, 1, data.MaxCount)
 }
+
+func TestAddTokenRejectsGroupOutsideUserAllowlist(t *testing.T) {
+	configureTokenAutoGroupsTest(t, "5", `["default","vip"]`)
+	user := setupTokenAutoGroupsControllerTest(t)
+	require.NoError(t, model.DB.Model(user).Update("usable_groups", `["default"]`).Error)
+
+	request := baseAutoTokenRequest("denied-group")
+	request["group"] = "vip"
+	request["cross_group_retry"] = false
+
+	ctx, recorder := newTokenAutoGroupsAuthenticatedContext(t, http.MethodPost, "/api/token/", request, user.Id)
+	AddToken(ctx)
+
+	response := decodeAPIResponse(t, recorder)
+	assert.False(t, response.Success)
+	var count int64
+	require.NoError(t, model.DB.Model(&model.Token{}).Count(&count).Error)
+	assert.Zero(t, count)
+}
