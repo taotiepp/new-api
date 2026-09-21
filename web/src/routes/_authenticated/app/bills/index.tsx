@@ -16,26 +16,10 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import z from 'zod'
+import { createFileRoute } from '@tanstack/react-router'
 
-export const appPricingSearchSchema = z.object({
-  search: z.string().optional(),
-  sort: z.string().optional(),
-  vendor: z.string().optional(),
-  group: z.string().optional(),
-  quotaType: z.string().optional(),
-  endpointType: z.string().optional(),
-  tag: z.string().optional(),
-  tokenUnit: z.enum(['M', 'K']).optional(),
-  view: z.enum(['card', 'table']).optional().catch(undefined),
-  rechargePrice: z.boolean().optional(),
-})
+import { UserPortalBills } from '@/features/user-portal/components/user-portal-bills'
 
-export const appPlaygroundSearchSchema = z.object({
-  model: z.string().optional(),
-})
-
-export const appUsageSearchSchema = z.object({
-  startTime: z.number().optional(),
-  endTime: z.number().optional(),
+export const Route = createFileRoute('/_authenticated/app/bills/')({
+  component: UserPortalBills,
 })

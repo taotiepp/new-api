@@ -34,8 +34,7 @@ export function SignIn() {
     <AuthLayout>
       <div className='w-full space-y-8'>
         <div className='space-y-3'>
-          <p className='portal-eyebrow'>{t('User Portal')}</p>
-          <h2 className='mt-3 text-start text-2xl font-semibold tracking-tight text-[var(--portal-ink)] sm:text-[2rem]'>
+          <h2 className='text-start text-2xl font-semibold tracking-tight text-[var(--portal-ink)] sm:text-[2rem]'>
             {t('Sign in')}
           </h2>
           {!status?.self_use_mode_enabled &&

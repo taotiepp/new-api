@@ -49,7 +49,7 @@ export function UserPortalHeader() {
             alt={t('Logo')}
             className='size-9 rounded-xl object-cover shadow-sm ring-1 ring-black/5'
           />
-          <span className='hidden max-w-[16rem] truncate text-base font-semibold tracking-tight text-[var(--portal-ink)] sm:inline'>
+          <span className='hidden min-w-0 truncate text-base font-semibold tracking-tight text-[var(--portal-ink)] sm:inline'>
             {systemName}
           </span>
         </Link>

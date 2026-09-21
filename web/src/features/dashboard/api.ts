@@ -51,6 +51,34 @@ export async function getUserQuotaDates(
   return res.data
 }
 
+export async function getUserBills(params: {
+  period: string
+  months?: number
+}) {
+  const res = await api.get<{
+    success: boolean
+    data: {
+      period: string
+      quota: number
+      count: number
+      token_used: number
+      items: Array<{
+        model_name: string
+        quota: number
+        count: number
+        token_used: number
+      }>
+      trend: Array<{
+        period: string
+        quota: number
+        count: number
+        token_used: number
+      }>
+    }
+  }>('/api/bills/self', { params })
+  return res.data
+}
+
 // ----------------------------------------------------------------------------
 // System Monitoring
 // ----------------------------------------------------------------------------

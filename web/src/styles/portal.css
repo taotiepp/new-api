@@ -56,6 +56,8 @@ For commercial licensing, please contact support@quantumnous.com
   --portal-z-dock: 40;
   --portal-page-width: 100%;
   --portal-page-gutter: 1.25rem;
+  --portal-console-inset: 1.25rem;
+  --portal-console-nav-width: calc(var(--portal-console-inset) + 9.25rem);
   font-family:
     ui-sans-serif, system-ui, 'PingFang SC', 'Hiragino Sans GB', 'Noto Sans SC',
     'Microsoft YaHei UI', 'Microsoft YaHei', sans-serif;
@@ -373,6 +375,18 @@ For commercial licensing, please contact support@quantumnous.com
 }
 
 @media (width >= 1024px) {
+  [data-user-portal][data-portal-console] .portal-top-chrome {
+    padding-inline: 0 var(--portal-page-gutter);
+  }
+
+  [data-user-portal][data-portal-console] .portal-island-brand {
+    flex-shrink: 0;
+    padding-left: var(--portal-console-inset);
+    padding-right: 1.25rem;
+  }
+}
+
+@media (width >= 1024px) {
   [data-user-portal][data-portal-console] .portal-content {
     padding-bottom: 0;
   }
@@ -402,13 +416,13 @@ For commercial licensing, please contact support@quantumnous.com
 @media (width >= 1024px) {
   [data-user-portal] .portal-console-nav {
     display: flex;
-    width: calc(8em + 3.5rem);
+    width: var(--portal-console-nav-width);
     flex-shrink: 0;
     flex-direction: column;
     gap: 0.25rem;
     overflow: auto;
     margin: 0;
-    padding: 1.25rem 0.5rem 1.5rem 0.75rem;
+    padding: 1.25rem 0.75rem 1.5rem var(--portal-console-inset);
     font-size: 0.875rem;
   }
 }
@@ -478,7 +492,7 @@ For commercial licensing, please contact support@quantumnous.com
 
 @media (width >= 1024px) {
   [data-user-portal] .portal-console-stage {
-    padding: 0 var(--portal-page-gutter) 1.25rem 0.5rem;
+    padding: 0 var(--portal-page-gutter) 1.25rem 0.75rem;
   }
 }
 
@@ -750,4 +764,31 @@ For commercial licensing, please contact support@quantumnous.com
   font-size: 0.75rem;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
+}
+
+@media print {
+  body * {
+    visibility: hidden !important;
+  }
+
+  .portal-invoice-sheet,
+  .portal-invoice-sheet * {
+    visibility: visible !important;
+  }
+
+  .portal-invoice-sheet {
+    position: absolute !important;
+    inset: 0 !important;
+    width: 210mm !important;
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 16mm !important;
+    background: #fff !important;
+    color: #111 !important;
+    box-shadow: none !important;
+  }
+
+  .portal-invoice-actions {
+    display: none !important;
+  }
 }

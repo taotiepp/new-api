@@ -36,6 +36,9 @@ type PortalBillingChartProps = {
   points: PortalBillingBarPoint[]
   totalQuota: number
   loading: boolean
+  title?: string
+  description?: string
+  showEmptyBars?: boolean
 }
 
 export function PortalBillingChart(props: PortalBillingChartProps) {
@@ -75,10 +78,10 @@ export function PortalBillingChart(props: PortalBillingChartProps) {
         {
           orient: 'bottom' as const,
           trim: true,
-          sampling: true,
+          sampling: axisBuckets.length > 6,
           tick: { visible: false },
           label: {
-            autoHide: true,
+            autoHide: axisBuckets.length > 6,
             autoHideSeparation: 4,
             autoLimit: true,
             flush: true,
@@ -124,7 +127,7 @@ export function PortalBillingChart(props: PortalBillingChartProps) {
   )
   if (props.loading) {
     chartBody = <Skeleton className='h-64 w-full rounded-xl' />
-  } else if (!hasQuota) {
+  } else if (!hasQuota && !props.showEmptyBars) {
     chartBody = (
       <EmptyState
         title={t('No data available')}
@@ -136,12 +139,17 @@ export function PortalBillingChart(props: PortalBillingChartProps) {
   return (
     <section className='rounded-2xl bg-[var(--portal-surface-muted)] p-4 sm:p-5'>
       <div className='mb-4 flex flex-wrap items-center justify-between gap-3'>
-        <p className='text-sm font-medium text-[var(--portal-ink)]'>
-          {t('Consumption')}
-          <span className='ml-2 text-[var(--portal-ink-muted)] tabular-nums'>
-            {formatQuota(props.totalQuota)}
-          </span>
-        </p>
+        <div className='flex flex-col gap-1'>
+          <p className='text-sm font-medium text-[var(--portal-ink)]'>
+            {props.title ?? t('Consumption')}
+            <span className='ml-2 text-[var(--portal-ink-muted)] tabular-nums'>
+              {formatQuota(props.totalQuota)}
+            </span>
+          </p>
+          {props.description ? (
+            <p className='text-muted-foreground text-xs'>{props.description}</p>
+          ) : null}
+        </div>
       </div>
       {chartBody}
     </section>

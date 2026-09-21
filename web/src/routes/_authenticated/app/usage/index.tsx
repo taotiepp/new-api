@@ -19,7 +19,23 @@ For commercial licensing, please contact support@quantumnous.com
 import { createFileRoute } from '@tanstack/react-router'
 
 import { UserPortalUsage } from '@/features/user-portal/components/user-portal-usage'
+import { appUsageSearchSchema } from '@/features/user-portal/lib/search-schemas'
 
 export const Route = createFileRoute('/_authenticated/app/usage/')({
-  component: UserPortalUsage,
+  validateSearch: appUsageSearchSchema,
+  component: UserPortalUsagePage,
 })
+
+function UserPortalUsagePage() {
+  const search = Route.useSearch()
+  return (
+    <UserPortalUsage
+      initialStart={
+        search.startTime != null ? new Date(search.startTime * 1000) : undefined
+      }
+      initialEnd={
+        search.endTime != null ? new Date(search.endTime * 1000) : undefined
+      }
+    />
+  )
+}

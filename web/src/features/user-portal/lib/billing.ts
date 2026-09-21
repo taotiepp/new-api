@@ -25,6 +25,9 @@ import {
 } from '@/lib/time'
 
 export const PORTAL_BILLING_MAX_RANGE_SECONDS = 2_592_000
+export const PORTAL_BILL_MAX_RANGE_SECONDS = 32 * 24 * 60 * 60
+export const PORTAL_BILL_TREND_MONTHS = 6
+export const PORTAL_BILL_MODEL_LIMIT = 8
 export const PORTAL_BILLING_ALL_MODELS = 'all'
 const HOURLY_BUCKET = /^(\d{2}-\d{2}) (\d{2}:00)$/
 export const PORTAL_BILLING_CHART_COLORS = [
@@ -85,8 +88,101 @@ export function granularityForBillingRange(
   return 'week'
 }
 
-export function isPortalBillingRangeTooLong(start: Date, end: Date): boolean {
-  return (end.getTime() - start.getTime()) / 1000 > PORTAL_BILLING_MAX_RANGE_SECONDS
+export function isPortalBillingRangeTooLong(
+  start: Date,
+  end: Date,
+  maxSeconds = PORTAL_BILLING_MAX_RANGE_SECONDS,
+): boolean {
+  return (end.getTime() - start.getTime()) / 1000 > maxSeconds
+}
+
+export type PortalBillMonth = {
+  value: string
+  date: Date
+}
+
+export type PortalModelShare = {
+  model: string
+  quota: number
+  count: number
+  tokens: number
+  ratio: number
+}
+
+export function createPortalBillMonthRange(
+  month = new Date(),
+  now = new Date(),
+): { start: Date; end: Date } {
+  const start = getStartOfDay(dayjs(month).startOf('month').toDate())
+  if (dayjs(month).isSame(now, 'month')) {
+    return { start, end: getEndOfDay(now) }
+  }
+  return {
+    start,
+    end: getEndOfDay(dayjs(month).endOf('month').toDate()),
+  }
+}
+
+export function listPortalBillMonths(
+  now = new Date(),
+  count = 12,
+): PortalBillMonth[] {
+  const months: PortalBillMonth[] = []
+  for (let offset = 0; offset < count; offset++) {
+    const date = dayjs(now).subtract(offset, 'month').startOf('month').toDate()
+    months.push({
+      value: dayjs(date).format('YYYY-MM'),
+      date,
+    })
+  }
+  return months
+}
+
+export function summarizePortalBillingByModel(
+  rows: PortalBillingRow[],
+  unknownLabel: string,
+  othersLabel: string,
+  limit = Number.POSITIVE_INFINITY,
+): PortalModelShare[] {
+  const totals = new Map<string, PortalBillingStats>()
+  let quotaTotal = 0
+  for (const row of rows) {
+    const model = modelNameForBillingRow(row, unknownLabel)
+    const current = totals.get(model) ?? { quota: 0, count: 0, tokens: 0 }
+    current.quota += Number(row.quota) || 0
+    current.count += Number(row.count) || 0
+    current.tokens += Number(row.token_used) || 0
+    totals.set(model, current)
+    quotaTotal += Number(row.quota) || 0
+  }
+
+  const ranked = [...totals.entries()]
+    .map(([model, stats]) => ({
+      model,
+      quota: stats.quota,
+      count: stats.count,
+      tokens: stats.tokens,
+      ratio: quotaTotal > 0 ? stats.quota / quotaTotal : 0,
+    }))
+    .sort((a, b) => b.quota - a.quota)
+
+  if (ranked.length <= limit) {
+    return ranked
+  }
+
+  const head = ranked.slice(0, limit)
+  const tail = ranked.slice(limit)
+  const other = tail.reduce(
+    (acc, item) => ({
+      model: othersLabel,
+      quota: acc.quota + item.quota,
+      count: acc.count + item.count,
+      tokens: acc.tokens + item.tokens,
+      ratio: acc.ratio + item.ratio,
+    }),
+    { model: othersLabel, quota: 0, count: 0, tokens: 0, ratio: 0 },
+  )
+  return [...head, other]
 }
 
 export function createDefaultPortalBillingRange(now = new Date()): {
@@ -162,6 +258,27 @@ export function compactPortalBillingAxisLabel(
   return HOURLY_BUCKET.exec(bucket)?.[2] ?? bucket
 }
 
+export function buildPortalCostTrend(
+  months: Array<{ period: string; quota: number }>,
+  series: string,
+  now = new Date(),
+  count = PORTAL_BILL_TREND_MONTHS,
+): PortalBillingBarPoint[] {
+  const byPeriod = new Map(
+    months.map((month) => [month.period, Number(month.quota) || 0]),
+  )
+  const points: PortalBillingBarPoint[] = []
+  for (let offset = count - 1; offset >= 0; offset--) {
+    const period = dayjs(now).subtract(offset, 'month').format('YYYY-MM')
+    points.push({
+      bucket: period,
+      series,
+      quota: byPeriod.get(period) ?? 0,
+    })
+  }
+  return points
+}
+
 export function buildPortalTimeSeries(
   rows: PortalBillingRow[],
   start: Date,
@@ -197,18 +314,113 @@ export function buildPortalTimeSeries(
   return points
 }
 
+export function buildPortalInvoiceNumber(
+  period: string,
+  userId: number,
+): string {
+  const safePeriod = period.replaceAll(/[^0-9-]/g, '')
+  const id = String(Math.max(0, Math.trunc(userId))).padStart(4, '0')
+  return `INV-${safePeriod}-${id}`
+}
+
+export function buildPortalInvoiceDate(period: string, now = new Date()): string {
+  const month = dayjs(period)
+  if (!month.isValid()) return dayjs(now).format('YYYY-MM-DD')
+  if (dayjs(now).isSame(month, 'month')) return dayjs(now).format('YYYY-MM-DD')
+  return month.endOf('month').format('YYYY-MM-DD')
+}
+
+export type PortalBillStatementItem = {
+  model_name: string
+  quota: number
+  count: number
+  token_used: number
+}
+
+export type PortalBillStatementLabels = {
+  title: string
+  disclaimer: string
+  period: string
+  status: string
+  currency: string
+  model: string
+  tokens: string
+  requests: string
+  quota: string
+  total: string
+}
+
+export function buildPortalBillStatementCsv(input: {
+  period: string
+  status: string
+  currency: string
+  items: PortalBillStatementItem[]
+  labels: PortalBillStatementLabels
+}): string {
+  const labels = input.labels
+  const header = [
+    labels.period,
+    labels.model,
+    labels.tokens,
+    labels.requests,
+    labels.quota,
+  ]
+    .map(csvCell)
+    .join(',')
+  const lines = input.items.map((item) =>
+    [
+      input.period,
+      item.model_name,
+      String(Number(item.token_used) || 0),
+      String(Number(item.count) || 0),
+      String(Number(item.quota) || 0),
+    ]
+      .map(csvCell)
+      .join(','),
+  )
+  const totals = input.items.reduce(
+    (acc, item) => ({
+      quota: acc.quota + (Number(item.quota) || 0),
+      count: acc.count + (Number(item.count) || 0),
+      tokens: acc.tokens + (Number(item.token_used) || 0),
+    }),
+    { quota: 0, count: 0, tokens: 0 },
+  )
+  lines.push(
+    [
+      input.period,
+      labels.total,
+      String(totals.tokens),
+      String(totals.count),
+      String(totals.quota),
+    ]
+      .map(csvCell)
+      .join(','),
+  )
+  return [
+    `# ${labels.title}`,
+    `# ${labels.disclaimer}`,
+    `# ${labels.period},${csvCell(input.period)}`,
+    `# ${labels.status},${csvCell(input.status)}`,
+    `# ${labels.currency},${csvCell(input.currency)}`,
+    header,
+    ...lines,
+  ].join('\n')
+}
+
 export function buildPortalBillingCsv(points: PortalBillingBarPoint[]): string {
   const header = 'bucket,series,quota'
   const lines = points.map((point) => {
-    const bucket = /[",\n]/.test(point.bucket)
-      ? `"${point.bucket.replaceAll('"', '""')}"`
-      : point.bucket
-    const series = /[",\n]/.test(point.series)
-      ? `"${point.series.replaceAll('"', '""')}"`
-      : point.series
-    return `${bucket},${series},${point.quota}`
+    return `${csvCell(point.bucket)},${csvCell(point.series)},${point.quota}`
   })
   return [header, ...lines].join('\n')
+}
+
+function csvCell(value: string): string {
+  if (/[",\n]/.test(value)) {
+    return `"${value.replaceAll('"', '""')}"`
+  }
+  return value
 }
 
 function listBillingBuckets(

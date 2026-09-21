@@ -16,26 +16,13 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import z from 'zod'
+import { PortalBillPanel } from './portal-bill-panel'
+import { UserPortalPage } from './user-portal-page'
 
-export const appPricingSearchSchema = z.object({
-  search: z.string().optional(),
-  sort: z.string().optional(),
-  vendor: z.string().optional(),
-  group: z.string().optional(),
-  quotaType: z.string().optional(),
-  endpointType: z.string().optional(),
-  tag: z.string().optional(),
-  tokenUnit: z.enum(['M', 'K']).optional(),
-  view: z.enum(['card', 'table']).optional().catch(undefined),
-  rechargePrice: z.boolean().optional(),
-})
-
-export const appPlaygroundSearchSchema = z.object({
-  model: z.string().optional(),
-})
-
-export const appUsageSearchSchema = z.object({
-  startTime: z.number().optional(),
-  endTime: z.number().optional(),
-})
+export function UserPortalBills() {
+  return (
+    <UserPortalPage framed={false}>
+      <PortalBillPanel />
+    </UserPortalPage>
+  )
+}

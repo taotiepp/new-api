@@ -69,6 +69,14 @@ describe('portal console navigation', () => {
       'href',
       '/app/usage',
     )
+    expect(screen.getByRole('link', { name: 'Request Logs' })).toHaveAttribute(
+      'href',
+      '/app/logs',
+    )
+    expect(screen.getByRole('link', { name: 'Bill Management' })).toHaveAttribute(
+      'href',
+      '/app/bills',
+    )
     expect(screen.getByRole('link', { name: 'System Settings' })).toHaveAttribute(
       'href',
       '/app/settings',

@@ -29,7 +29,6 @@ export function UserPortalPlayground() {
   return (
     <UserPortalPage
       fixedHeight
-      eyebrow={t('User Portal')}
       title={t('Experience Center')}
       description={t('Chat with models in a focused workspace.')}
     >

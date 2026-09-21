@@ -38,17 +38,19 @@ describe('user portal navigation', () => {
     ])
   })
 
-  test('puts key, usage, logs, and settings items in the console sidebar', () => {
+  test('puts key, usage, logs, bills, and settings items in the console sidebar', () => {
     expect(USER_PORTAL_CONSOLE_NAV_ITEMS.map((item) => item.href)).toEqual([
       '/app/keys',
       '/app/usage',
       '/app/logs',
+      '/app/bills',
       '/app/settings',
     ])
   })
 
   test('treats console feature routes as console paths and plaza routes as plaza', () => {
     expect(isUserPortalConsolePath('/app/keys')).toBe(true)
+    expect(isUserPortalConsolePath('/app/bills')).toBe(true)
     expect(isUserPortalConsolePath('/app/settings')).toBe(true)
     expect(isUserPortalConsolePath('/app')).toBe(false)
     expect(isUserPortalConsolePath('/app/playground')).toBe(false)

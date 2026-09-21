@@ -37,7 +37,11 @@ export function Logo({ className, ...props }: SVGProps<SVGSVGElement>) {
       {...props}
     >
       <title>New API</title>
-      <path d='M15 6v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3V6a3 3 0 1 0-3 3h12a3 3 0 1 0-3-3' />
+      <path d='M12 6.2 6.1 16.6' />
+      <path d='M12 6.2 17.9 16.6' />
+      <circle cx='12' cy='5.4' r='2.35' fill='currentColor' stroke='none' />
+      <circle cx='5.4' cy='17.3' r='2.35' fill='currentColor' stroke='none' />
+      <circle cx='18.6' cy='17.3' r='2.35' fill='currentColor' stroke='none' />
     </svg>
   )
 }

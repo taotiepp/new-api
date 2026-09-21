@@ -23,6 +23,7 @@ import {
   KeyRound,
   LayoutDashboard,
   LayoutGrid,
+  Receipt,
   Settings,
   Sparkles,
   type LucideIcon,
@@ -84,6 +85,12 @@ export const USER_PORTAL_CONSOLE_NAV_ITEMS: UserPortalNavItem[] = [
     titleKey: 'Request Logs',
     href: '/app/logs',
     icon: FileText,
+    match: 'prefix',
+  },
+  {
+    titleKey: 'Bill Management',
+    href: '/app/bills',
+    icon: Receipt,
     match: 'prefix',
   },
   {

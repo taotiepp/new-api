@@ -93,7 +93,6 @@ export function UserPortalModelPlaza() {
   if (isLoading) {
     return (
       <UserPortalPage
-        eyebrow={t('User Portal')}
         title={t('Model Square')}
         actions={headerActions}
       >
@@ -106,7 +105,6 @@ export function UserPortalModelPlaza() {
 
   return (
     <UserPortalPage
-      eyebrow={t('User Portal')}
       title={t('Model Square')}
       actions={headerActions}
     >

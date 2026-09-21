@@ -18,17 +18,27 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { useQuery } from '@tanstack/react-query'
 
-import { getUserQuotaDates } from '@/features/dashboard/api'
+import { getUserBills, getUserQuotaDates } from '@/features/dashboard/api'
 import { requireServerSuccess } from '@/lib/server-error-message'
 import { computeTimeRange } from '@/lib/time'
 
 import {
+  PORTAL_BILL_TREND_MONTHS,
+  PORTAL_BILLING_MAX_RANGE_SECONDS,
   isPortalBillingRangeTooLong,
   type PortalBillingRow,
 } from '../lib/billing'
 
-export function usePortalBillingData(start: Date, end: Date) {
-  const rangeTooLong = isPortalBillingRangeTooLong(start, end)
+export function usePortalBillingData(
+  start: Date,
+  end: Date,
+  maxRangeSeconds = PORTAL_BILLING_MAX_RANGE_SECONDS,
+) {
+  const rangeTooLong = isPortalBillingRangeTooLong(
+    start,
+    end,
+    maxRangeSeconds,
+  )
   const timeRange = computeTimeRange(1, start, end)
 
   const quotaQuery = useQuery({
@@ -54,4 +64,15 @@ export function usePortalBillingData(start: Date, end: Date) {
     isLoading: !rangeTooLong && quotaQuery.isLoading,
     isError: quotaQuery.isError,
   }
+}
+
+export function usePortalBills(period: string) {
+  return useQuery({
+    queryKey: ['user-portal', 'bills', period, PORTAL_BILL_TREND_MONTHS],
+    enabled: period.length > 0,
+    queryFn: async () =>
+      requireServerSuccess(
+        await getUserBills({ period, months: PORTAL_BILL_TREND_MONTHS }),
+      ).data,
+  })
 }

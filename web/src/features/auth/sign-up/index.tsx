@@ -33,8 +33,7 @@ export function SignUp() {
     <AuthLayout>
       <div className='w-full space-y-8'>
         <div className='space-y-3'>
-          <p className='portal-eyebrow'>{t('User Portal')}</p>
-          <h2 className='mt-3 text-start text-2xl font-semibold tracking-tight text-[var(--portal-ink)] sm:text-[2rem]'>
+          <h2 className='text-start text-2xl font-semibold tracking-tight text-[var(--portal-ink)] sm:text-[2rem]'>
             {t('Create an account')}
           </h2>
           <p className='portal-hero-subtitle mx-0 mt-2 text-start text-sm'>

@@ -53,6 +53,7 @@ import { useAuthStore } from '@/stores/auth-store'
 
 import { usePortalBillingData } from '../hooks/use-portal-billing-data'
 import {
+  PORTAL_BILL_MAX_RANGE_SECONDS,
   PORTAL_BILLING_ALL_MODELS,
   buildPortalBillingCsv,
   buildPortalTimeSeries,
@@ -66,6 +67,11 @@ import {
 } from '../lib/billing'
 import { PortalBillingChart } from './portal-billing-chart'
 
+type PortalBillingPanelProps = {
+  initialStart?: Date
+  initialEnd?: Date
+}
+
 const RANGE_PRESETS = [
   { labelKey: 'Today', days: 1 },
   { labelKey: '7 Days', days: 7 },
@@ -73,17 +79,40 @@ const RANGE_PRESETS = [
   { labelKey: '29 Days', days: 29 },
 ] as const
 
-export function PortalBillingPanel() {
+export function PortalBillingPanel(props: PortalBillingPanelProps) {
   const { t } = useTranslation()
   const { currency: catalogCurrency, formatQuota } = usePricingCurrency()
   const user = useAuthStore((state) => state.auth.user)
-  const defaults = createDefaultPortalBillingRange()
-  const [start, setStart] = useState(defaults.start)
-  const [end, setEnd] = useState(defaults.end)
+  const seededRange =
+    props.initialStart &&
+    props.initialEnd &&
+    !isPortalBillingRangeTooLong(
+      props.initialStart,
+      props.initialEnd,
+      PORTAL_BILL_MAX_RANGE_SECONDS,
+    )
+      ? {
+          start: getStartOfDay(props.initialStart),
+          end: getEndOfDay(props.initialEnd),
+        }
+      : createDefaultPortalBillingRange()
+  const [start, setStart] = useState(seededRange.start)
+  const [end, setEnd] = useState(seededRange.end)
+  const seededFromBill =
+    props.initialStart != null &&
+    props.initialEnd != null &&
+    start.getTime() === seededRange.start.getTime() &&
+    end.getTime() === seededRange.end.getTime()
   const [modelName, setModelName] = useState(PORTAL_BILLING_ALL_MODELS)
   const [rangeOpen, setRangeOpen] = useState(false)
 
-  const billing = usePortalBillingData(start, end)
+  const billing = usePortalBillingData(
+    start,
+    end,
+    seededFromBill
+      ? PORTAL_BILL_MAX_RANGE_SECONDS
+      : undefined,
+  )
   const unknownModel = t('Unknown model')
   const selectedModelName =
     modelName === PORTAL_BILLING_ALL_MODELS ? null : modelName
@@ -154,38 +183,46 @@ export function PortalBillingPanel() {
 
   return (
     <div className='flex w-full flex-col gap-6'>
-      <header className='flex flex-col gap-2'>
-        <h1 className='text-2xl font-semibold tracking-tight text-[var(--portal-ink)]'>
-          {t('Usage information')}
-        </h1>
-        <p className='text-muted-foreground flex items-center gap-1.5 text-sm'>
+      <header className='flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between'>
+        <div className='flex flex-col gap-2'>
+          <h1 className='text-2xl font-semibold tracking-tight text-[var(--portal-ink)]'>
+            {t('Usage information')}
+          </h1>
+          <p className='text-muted-foreground flex items-center gap-1.5 text-sm'>
           {t(
             'Dates are shown in {{timezone}}. Usage data may be delayed by a few minutes.',
             { timezone }
           )}
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <button
-                  type='button'
-                  className='text-muted-foreground inline-flex'
-                  aria-label={t(
-                    'Dates are shown in {{timezone}}. Usage data may be delayed by a few minutes.',
-                    { timezone }
-                  )}
-                >
-                  <CircleHelp className='size-3.5' />
-                </button>
-              }
-            />
-            <TooltipContent>
-              {t(
-                'Dates are shown in {{timezone}}. Usage data may be delayed by a few minutes.',
-                { timezone }
-              )}
-            </TooltipContent>
-          </Tooltip>
-        </p>
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <button
+                    type='button'
+                    className='text-muted-foreground inline-flex'
+                    aria-label={t(
+                      'Dates are shown in {{timezone}}. Usage data may be delayed by a few minutes.',
+                      { timezone }
+                    )}
+                  >
+                    <CircleHelp className='size-3.5' />
+                  </button>
+                }
+              />
+              <TooltipContent>
+                {t(
+                  'Dates are shown in {{timezone}}. Usage data may be delayed by a few minutes.',
+                  { timezone }
+                )}
+              </TooltipContent>
+            </Tooltip>
+          </p>
+        </div>
+        <Link
+          to='/app/bills'
+          className='text-muted-foreground hover:text-foreground text-sm underline-offset-2 hover:underline'
+        >
+          {t('Bill Management')}
+        </Link>
       </header>
 
       <div className='grid gap-3 sm:grid-cols-2'>

@@ -16,13 +16,21 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { UserPortalPage } from './user-portal-page'
 import { PortalBillingPanel } from './portal-billing-panel'
+import { UserPortalPage } from './user-portal-page'
 
-export function UserPortalUsage() {
+type UserPortalUsageProps = {
+  initialStart?: Date
+  initialEnd?: Date
+}
+
+export function UserPortalUsage(props: UserPortalUsageProps) {
   return (
     <UserPortalPage framed={false}>
-      <PortalBillingPanel />
+      <PortalBillingPanel
+        initialStart={props.initialStart}
+        initialEnd={props.initialEnd}
+      />
     </UserPortalPage>
   )
 }
