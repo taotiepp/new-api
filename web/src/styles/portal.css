@@ -765,30 +765,3 @@ For commercial licensing, please contact support@quantumnous.com
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
-
-@media print {
-  body * {
-    visibility: hidden !important;
-  }
-
-  .portal-invoice-sheet,
-  .portal-invoice-sheet * {
-    visibility: visible !important;
-  }
-
-  .portal-invoice-sheet {
-    position: absolute !important;
-    inset: 0 !important;
-    width: 210mm !important;
-    max-width: none !important;
-    margin: 0 !important;
-    padding: 16mm !important;
-    background: #fff !important;
-    color: #111 !important;
-    box-shadow: none !important;
-  }
-
-  .portal-invoice-actions {
-    display: none !important;
-  }
-}

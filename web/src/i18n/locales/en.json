@@ -4279,6 +4279,7 @@
     "Pricing Type": "Pricing Type",
     "Primary Model": "Primary Model",
     "Print": "Print",
+    "Print or save this invoice as PDF.": "Print or save this invoice as PDF.",
     "Print this commercial invoice or save it as PDF. This is not a mainland China VAT fapiao.": "Print this commercial invoice or save it as PDF. This is not a mainland China VAT fapiao.",
     "Prioritize reusing the last successful channel based on keys extracted from request context (sticky routing)": "Prioritize reusing the last successful channel based on keys extracted from request context (sticky routing)",
     "Priority": "Priority",
