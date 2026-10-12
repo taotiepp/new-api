@@ -155,7 +155,12 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		contains, words := service.CheckSensitiveText(meta.CombineText)
 		if contains {
 			logger.LogWarn(c, fmt.Sprintf("user sensitive words detected: %s", strings.Join(words, ", ")))
-			newAPIError = types.NewError(err, types.ErrorCodeSensitiveWordsDetected)
+			newAPIError = types.NewError(
+				errors.New("sensitive words detected"),
+				types.ErrorCodeSensitiveWordsDetected,
+				types.ErrOptionWithStatusCode(http.StatusBadRequest),
+				types.ErrOptionWithSkipRetry(),
+			)
 			return
 		}
 	}
@@ -481,8 +486,8 @@ func recordTerminalRelayError(c *gin.Context, err *types.NewAPIError, relayInfo 
 		return
 	}
 	channelId := 0
-	if relayInfo != nil && relayInfo.ChannelId > 0 {
-		channelId = relayInfo.ChannelId
+	if id := relayInfo.GetChannelID(); id > 0 {
+		channelId = id
 	} else {
 		channelId = c.GetInt("channel_id")
 	}

@@ -10,6 +10,7 @@ import (
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/model"
+	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/relaykit/types"
 
 	"github.com/gin-gonic/gin"
@@ -211,4 +212,59 @@ func TestRecordTerminalRelayErrorSkipsWhenAttemptAlreadyLogged(t *testing.T) {
 	var count int64
 	require.NoError(t, database.Model(&model.Log{}).Count(&count).Error)
 	assert.Equal(t, int64(1), count)
+}
+
+func TestRecordTerminalRelayErrorAllowsRelayInfoWithoutChannelMeta(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	previousDB, previousLogDB := model.DB, model.LOG_DB
+	previousRedisEnabled := common.RedisEnabled
+	previousMainDatabaseType := common.MainDatabaseType()
+	previousLogDatabaseType := common.LogDatabaseType()
+	previousErrorLogEnabled := constant.ErrorLogEnabled
+
+	database, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	require.NoError(t, err)
+	sqlDB, err := database.DB()
+	require.NoError(t, err)
+	sqlDB.SetMaxOpenConns(1)
+	require.NoError(t, database.AutoMigrate(&model.User{}, &model.Log{}))
+	model.DB, model.LOG_DB = database, database
+	common.RedisEnabled = false
+	common.SetDatabaseTypes(common.DatabaseTypeSQLite, common.DatabaseTypeSQLite)
+	constant.ErrorLogEnabled = false
+	t.Cleanup(func() {
+		model.DB, model.LOG_DB = previousDB, previousLogDB
+		common.RedisEnabled = previousRedisEnabled
+		common.SetDatabaseTypes(previousMainDatabaseType, previousLogDatabaseType)
+		constant.ErrorLogEnabled = previousErrorLogEnabled
+		require.NoError(t, sqlDB.Close())
+	})
+
+	require.NoError(t, database.Create(&model.User{Id: 10, Username: "sensitive-user", Group: "default"}).Error)
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	ctx.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", nil)
+	ctx.Set("id", 10)
+	ctx.Set("username", "sensitive-user")
+	ctx.Set("token_name", "sensitive-token")
+	ctx.Set("token_id", 41)
+	ctx.Set("original_model", "gpt-test")
+	ctx.Set("group", "default")
+	ctx.Set("channel_id", 202)
+	common.SetContextKey(ctx, constant.ContextKeyRequestStartTime, time.Now().Add(-time.Second))
+
+	apiErr := types.NewErrorWithStatusCode(
+		errors.New("sensitive words detected"),
+		types.ErrorCodeSensitiveWordsDetected,
+		http.StatusBadRequest,
+		types.ErrOptionWithSkipRetry(),
+	)
+	require.NotPanics(t, func() {
+		recordTerminalRelayError(ctx, apiErr, &relaycommon.RelayInfo{})
+	})
+
+	var stored model.Log
+	require.NoError(t, database.First(&stored).Error)
+	assert.Equal(t, 202, stored.ChannelId)
+	assert.Contains(t, stored.Content, "sensitive words detected")
 }
