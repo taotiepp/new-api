@@ -114,19 +114,26 @@ function createJsonStringField(
   })
 }
 
+const pricingObjectField = (t: Translate) =>
+  createJsonStringField(t, {
+    predicate: (parsed) =>
+      parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed),
+    predicateMessage: 'Pricing must be a JSON object',
+  })
+
 const createModelSchema = (t: Translate) =>
   z.object({
-    ModelPrice: createJsonStringField(t),
-    ModelRatio: createJsonStringField(t),
-    CacheRatio: createJsonStringField(t),
-    CreateCacheRatio: createJsonStringField(t),
-    CompletionRatio: createJsonStringField(t),
-    ImageRatio: createJsonStringField(t),
-    AudioRatio: createJsonStringField(t),
-    AudioCompletionRatio: createJsonStringField(t),
+    ModelPrice: pricingObjectField(t),
+    ModelRatio: pricingObjectField(t),
+    CacheRatio: pricingObjectField(t),
+    CreateCacheRatio: pricingObjectField(t),
+    CompletionRatio: pricingObjectField(t),
+    ImageRatio: pricingObjectField(t),
+    AudioRatio: pricingObjectField(t),
+    AudioCompletionRatio: pricingObjectField(t),
     ExposeRatioEnabled: z.boolean(),
-    BillingMode: createJsonStringField(t),
-    BillingExpr: createJsonStringField(t),
+    BillingMode: pricingObjectField(t),
+    BillingExpr: pricingObjectField(t),
   })
 
 const createGroupSchema = (t: Translate) =>

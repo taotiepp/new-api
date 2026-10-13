@@ -136,6 +136,29 @@ type OptionUpdateRequest struct {
 	Value any    `json:"value"`
 }
 
+func optionUpdateValue(value any) (string, error) {
+	switch typed := value.(type) {
+	case nil:
+		return "", fmt.Errorf("invalid option value")
+	case string:
+		return typed, nil
+	case bool:
+		return common.Interface2String(typed), nil
+	case float64:
+		return common.Interface2String(typed), nil
+	case int:
+		return common.Interface2String(typed), nil
+	case map[string]any, []any:
+		encoded, err := common.Marshal(typed)
+		if err != nil {
+			return "", err
+		}
+		return string(encoded), nil
+	default:
+		return "", fmt.Errorf("invalid option value")
+	}
+}
+
 func UpdateOption(c *gin.Context) {
 	var option OptionUpdateRequest
 	err := common.DecodeJson(c.Request.Body, &option)
@@ -146,15 +169,18 @@ func UpdateOption(c *gin.Context) {
 		})
 		return
 	}
-	switch option.Value.(type) {
-	case bool:
-		option.Value = common.Interface2String(option.Value.(bool))
-	case float64:
-		option.Value = common.Interface2String(option.Value.(float64))
-	case int:
-		option.Value = common.Interface2String(option.Value.(int))
-	default:
-		option.Value = fmt.Sprintf("%v", option.Value)
+	value, err := optionUpdateValue(option.Value)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": "无效的参数",
+		})
+		return
+	}
+	option.Value = value
+	if err = model.ValidatePricingOptionJSON(option.Key, value); err != nil {
+		common.ApiErrorMsg(c, err.Error())
+		return
 	}
 	switch option.Key {
 	case "QuotaForInviter", "QuotaForInvitee":
