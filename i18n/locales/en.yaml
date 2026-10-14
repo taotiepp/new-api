@@ -218,6 +218,10 @@ setting.feishu_webhook_empty: "Feishu bot webhook URL cannot be empty"
 setting.feishu_webhook_invalid: "Invalid Feishu bot webhook URL"
 setting.url_must_http: "URL must start with http:// or https://"
 setting.saved: "Settings updated"
+setting.notify_test_sent: "Test notification sent"
+setting.notify_test_title: "Test notification"
+setting.notify_test_content: "This is a test notification. Username: {{.Username}}, user ID: {{.UserId}}"
+setting.notify_email_missing: "No email address is available for this notification"
 
 # Deployment messages (io.net)
 deployment.not_enabled: "io.net model deployment is not enabled or API key is missing"

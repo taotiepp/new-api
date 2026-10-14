@@ -30,7 +30,7 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { handleServerError } from '@/lib/handle-server-error'
 import { ROLE } from '@/lib/roles'
 
-import { updateUserSettings } from '../../api'
+import { testUserNotification, updateUserSettings } from '../../api'
 import { NOTIFICATION_METHODS } from '../../constants'
 import { normalizeUserSettings } from '../../lib/user-settings'
 import type { UserProfile, NotifyType } from '../../types'
@@ -56,6 +56,7 @@ export function NotificationTab({ profile, onUpdate }: NotificationTabProps) {
   const { t } = useTranslation()
   const isAdmin = (profile?.role ?? 0) >= ROLE.ADMIN
   const [loading, setLoading] = useState(false)
+  const [testing, setTesting] = useState(false)
   const [settings, setSettings] = useState(() => normalizeUserSettings())
 
   // Update form field helper
@@ -91,6 +92,22 @@ export function NotificationTab({ profile, onUpdate }: NotificationTabProps) {
       handleServerError(error, t('Failed to update settings'))
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleTest = async () => {
+    try {
+      setTesting(true)
+      const response = await testUserNotification(settings)
+      if (response.success) {
+        toast.success(t('Test notification sent'))
+      } else {
+        handleServerError(response, t('Failed to send test notification'))
+      }
+    } catch (error) {
+      handleServerError(error, t('Failed to send test notification'))
+    } finally {
+      setTesting(false)
     }
   }
 
@@ -413,8 +430,25 @@ export function NotificationTab({ profile, onUpdate }: NotificationTabProps) {
       </div>
 
       {/* Save Button */}
-      <div className='flex justify-end'>
-        <Button onClick={handleSave} disabled={loading}>
+      <div className='flex justify-end gap-2'>
+        <Button
+          type='button'
+          variant='outline'
+          onClick={() => {
+            void handleTest()
+          }}
+          disabled={loading || testing}
+        >
+          {testing && <Loader2 className='mr-2 h-4 w-4 animate-spin' />}
+          {testing ? t('Sending...') : t('Send test message')}
+        </Button>
+        <Button
+          type='button'
+          onClick={() => {
+            void handleSave()
+          }}
+          disabled={loading || testing}
+        >
           {loading && <Loader2 className='mr-2 h-4 w-4 animate-spin' />}
           {loading ? t('Saving...') : t('Save Settings')}
         </Button>

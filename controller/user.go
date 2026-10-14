@@ -3,6 +3,7 @@ package controller
 import (
 	"errors"
 	"fmt"
+	"html"
 	"net/http"
 	"net/url"
 	"slices"
@@ -1288,13 +1289,66 @@ type UpdateUserSettingRequest struct {
 }
 
 func UpdateUserSetting(c *gin.Context) {
+	user, settings, ok := notificationSettingsFromRequest(c)
+	if !ok {
+		return
+	}
+	if err := model.UpdateUserSetting(user.Id, settings); err != nil {
+		common.ApiErrorI18n(c, i18n.MsgUpdateFailed)
+		return
+	}
+	common.ApiSuccessI18n(c, i18n.MsgSettingSaved, nil)
+}
+
+func TestUserNotification(c *gin.Context) {
+	user, settings, ok := notificationSettingsFromRequest(c)
+	if !ok {
+		return
+	}
+	username := user.Username
+	if settings.NotifyType == "" || settings.NotifyType == dto.NotifyTypeEmail {
+		username = html.EscapeString(user.Username)
+	}
+	err := service.SendTestNotification(
+		user.Id,
+		user.Email,
+		settings,
+		i18n.T(c, i18n.MsgSettingNotifyTestTitle),
+		i18n.T(c, i18n.MsgSettingNotifyTestContent, map[string]any{
+			"Username": username,
+			"UserId":   user.Id,
+		}),
+	)
+	if errors.Is(err, service.ErrNotificationEmailMissing) {
+		common.ApiErrorI18n(c, i18n.MsgSettingNotifyEmailMissing)
+		return
+	}
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccessI18n(c, i18n.MsgSettingNotifyTestSent, nil)
+}
+
+func notificationSettingsFromRequest(c *gin.Context) (*model.User, dto.UserSetting, bool) {
 	var req UpdateUserSettingRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
-		return
+		return nil, dto.UserSetting{}, false
+	}
+	if !userSettingRequestValid(c, req) {
+		return nil, dto.UserSetting{}, false
 	}
 
-	// 验证预警类型
+	user, err := model.GetUserById(c.GetInt("id"), true)
+	if err != nil {
+		common.ApiError(c, err)
+		return nil, dto.UserSetting{}, false
+	}
+	return user, userSettingFromRequest(user, req), true
+}
+
+func userSettingRequestValid(c *gin.Context, req UpdateUserSettingRequest) bool {
 	if !slices.Contains([]string{
 		dto.NotifyTypeEmail,
 		dto.NotifyTypeWebhook,
@@ -1303,105 +1357,83 @@ func UpdateUserSetting(c *gin.Context) {
 		dto.NotifyTypeFeishu,
 	}, req.QuotaWarningType) {
 		common.ApiErrorI18n(c, i18n.MsgSettingInvalidType)
-		return
+		return false
 	}
-
-	// 验证预警阈值
 	if req.QuotaWarningThreshold <= 0 {
 		common.ApiErrorI18n(c, i18n.MsgQuotaThresholdGtZero)
-		return
+		return false
 	}
-
-	// 如果是webhook类型,验证webhook地址
 	if req.QuotaWarningType == dto.NotifyTypeWebhook {
 		if req.WebhookUrl == "" {
 			common.ApiErrorI18n(c, i18n.MsgSettingWebhookEmpty)
-			return
+			return false
 		}
-		// 验证URL格式
 		if _, err := url.ParseRequestURI(req.WebhookUrl); err != nil {
 			common.ApiErrorI18n(c, i18n.MsgSettingWebhookInvalid)
-			return
+			return false
 		}
 	}
-
-	// 如果是邮件类型，验证邮箱地址
 	if req.QuotaWarningType == dto.NotifyTypeEmail && req.NotificationEmail != "" {
-		// 验证邮箱格式
 		if !strings.Contains(req.NotificationEmail, "@") {
 			common.ApiErrorI18n(c, i18n.MsgSettingEmailInvalid)
-			return
+			return false
 		}
 	}
-
-	// 如果是Bark类型，验证Bark URL
 	if req.QuotaWarningType == dto.NotifyTypeBark {
 		if req.BarkUrl == "" {
 			common.ApiErrorI18n(c, i18n.MsgSettingBarkUrlEmpty)
-			return
+			return false
 		}
-		// 验证URL格式
 		if _, err := url.ParseRequestURI(req.BarkUrl); err != nil {
 			common.ApiErrorI18n(c, i18n.MsgSettingBarkUrlInvalid)
-			return
+			return false
 		}
-		// 检查是否是HTTP或HTTPS
 		if !strings.HasPrefix(req.BarkUrl, "https://") && !strings.HasPrefix(req.BarkUrl, "http://") {
 			common.ApiErrorI18n(c, i18n.MsgSettingUrlMustHttp)
-			return
+			return false
 		}
 	}
-
-	// 如果是Gotify类型，验证Gotify URL和Token
 	if req.QuotaWarningType == dto.NotifyTypeGotify {
 		if req.GotifyUrl == "" {
 			common.ApiErrorI18n(c, i18n.MsgSettingGotifyUrlEmpty)
-			return
+			return false
 		}
 		if req.GotifyToken == "" {
 			common.ApiErrorI18n(c, i18n.MsgSettingGotifyTokenEmpty)
-			return
+			return false
 		}
-		// 验证URL格式
 		if _, err := url.ParseRequestURI(req.GotifyUrl); err != nil {
 			common.ApiErrorI18n(c, i18n.MsgSettingGotifyUrlInvalid)
-			return
+			return false
 		}
-		// 检查是否是HTTP或HTTPS
 		if !strings.HasPrefix(req.GotifyUrl, "https://") && !strings.HasPrefix(req.GotifyUrl, "http://") {
 			common.ApiErrorI18n(c, i18n.MsgSettingUrlMustHttp)
-			return
+			return false
 		}
 	}
-
 	if req.QuotaWarningType == dto.NotifyTypeFeishu {
 		if req.FeishuWebhookUrl == "" {
 			common.ApiErrorI18n(c, i18n.MsgSettingFeishuWebhookEmpty)
-			return
+			return false
 		}
 		if _, err := url.ParseRequestURI(req.FeishuWebhookUrl); err != nil {
 			common.ApiErrorI18n(c, i18n.MsgSettingFeishuWebhookInvalid)
-			return
+			return false
 		}
 		if !strings.HasPrefix(req.FeishuWebhookUrl, "https://") && !strings.HasPrefix(req.FeishuWebhookUrl, "http://") {
 			common.ApiErrorI18n(c, i18n.MsgSettingUrlMustHttp)
-			return
+			return false
 		}
 	}
+	return true
+}
 
-	userId := c.GetInt("id")
-	user, err := model.GetUserById(userId, true)
-	if err != nil {
-		common.ApiError(c, err)
-		return
-	}
+func userSettingFromRequest(user *model.User, req UpdateUserSettingRequest) dto.UserSetting {
 	existingSettings := user.GetSetting()
 	upstreamModelUpdateNotifyEnabled := existingSettings.UpstreamModelUpdateNotifyEnabled
 	if user.Role >= common.RoleAdminUser && req.UpstreamModelUpdateNotifyEnabled != nil {
 		upstreamModelUpdateNotifyEnabled = *req.UpstreamModelUpdateNotifyEnabled
 	}
-
-	// 构建设置
 	settings := dto.UserSetting{
 		NotifyType:                       req.QuotaWarningType,
 		QuotaWarningThreshold:            req.QuotaWarningThreshold,
@@ -1409,49 +1441,32 @@ func UpdateUserSetting(c *gin.Context) {
 		AcceptUnsetRatioModel:            req.AcceptUnsetModelRatioModel,
 		RecordIpLog:                      req.RecordIpLog,
 	}
-
-	// 如果是webhook类型,添加webhook相关设置
 	if req.QuotaWarningType == dto.NotifyTypeWebhook {
 		settings.WebhookUrl = req.WebhookUrl
 		if req.WebhookSecret != "" {
 			settings.WebhookSecret = req.WebhookSecret
 		}
 	}
-
-	// 如果提供了通知邮箱，添加到设置中
 	if req.QuotaWarningType == dto.NotifyTypeEmail && req.NotificationEmail != "" {
 		settings.NotificationEmail = req.NotificationEmail
 	}
-
-	// 如果是Bark类型，添加Bark URL到设置中
 	if req.QuotaWarningType == dto.NotifyTypeBark {
 		settings.BarkUrl = req.BarkUrl
 	}
-
-	// 如果是Gotify类型，添加Gotify配置到设置中
 	if req.QuotaWarningType == dto.NotifyTypeGotify {
 		settings.GotifyUrl = req.GotifyUrl
 		settings.GotifyToken = req.GotifyToken
-		// Gotify优先级范围0-10，超出范围则使用默认值5
 		if req.GotifyPriority < 0 || req.GotifyPriority > 10 {
 			settings.GotifyPriority = 5
 		} else {
 			settings.GotifyPriority = req.GotifyPriority
 		}
 	}
-
 	if req.QuotaWarningType == dto.NotifyTypeFeishu {
 		settings.FeishuWebhookUrl = req.FeishuWebhookUrl
 		if req.FeishuWebhookSecret != "" {
 			settings.FeishuWebhookSecret = req.FeishuWebhookSecret
 		}
 	}
-
-	// 更新用户设置
-	if err := model.UpdateUserSetting(user.Id, settings); err != nil {
-		common.ApiErrorI18n(c, i18n.MsgUpdateFailed)
-		return
-	}
-
-	common.ApiSuccessI18n(c, i18n.MsgSettingSaved, nil)
+	return settings
 }

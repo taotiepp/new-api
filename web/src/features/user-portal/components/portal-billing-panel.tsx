@@ -235,7 +235,7 @@ export function PortalBillingPanel(props: PortalBillingPanelProps) {
               {warningOff ? (
                 <p className='mt-1 text-xs text-amber-700 dark:text-amber-400'>
                   {t('Balance alert is off')}{' '}
-                  <Link to='/profile' className='underline underline-offset-2'>
+                  <Link to='/app/settings' className='underline underline-offset-2'>
                     {t('Go to settings')}
                   </Link>
                 </p>

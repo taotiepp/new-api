@@ -256,6 +256,10 @@ const (
 	MsgSettingFeishuWebhookInvalid = "setting.feishu_webhook_invalid"
 	MsgSettingUrlMustHttp          = "setting.url_must_http"
 	MsgSettingSaved                = "setting.saved"
+	MsgSettingNotifyTestSent       = "setting.notify_test_sent"
+	MsgSettingNotifyTestTitle      = "setting.notify_test_title"
+	MsgSettingNotifyTestContent    = "setting.notify_test_content"
+	MsgSettingNotifyEmailMissing   = "setting.notify_email_missing"
 )
 
 // Deployment related messages (io.net)

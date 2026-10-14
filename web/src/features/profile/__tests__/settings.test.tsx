@@ -234,4 +234,24 @@ describe('user settings saves across profile and security', () => {
       feishu_webhook_secret: 'bot-secret',
     })
   })
+
+  it('sends a test notification from the current form without saving', async () => {
+    const onUpdate = vi.fn()
+    const post = vi
+      .spyOn(api, 'post')
+      .mockResolvedValue({ data: { success: true } })
+    render(
+      <NotificationTab
+        profile={{ ...profile, setting: JSON.stringify(settings) }}
+        onUpdate={onUpdate}
+      />
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Send test message' }))
+
+    await waitFor(() =>
+      expect(post).toHaveBeenCalledWith('/api/user/setting/test', settings)
+    )
+    expect(onUpdate).not.toHaveBeenCalled()
+  })
 })

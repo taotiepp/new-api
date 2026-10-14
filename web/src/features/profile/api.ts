@@ -88,6 +88,13 @@ export async function updateUserSettings(
   return res.data
 }
 
+export async function testUserNotification(
+  data: UpdateUserSettingsRequest
+): Promise<ApiResponse> {
+  const res = await api.post('/api/user/setting/test', data)
+  return res.data
+}
+
 /**
  * Update interface language preference
  */

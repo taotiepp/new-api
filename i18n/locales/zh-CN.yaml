@@ -219,6 +219,10 @@ setting.feishu_webhook_empty: "飞书机器人 Webhook 地址不能为空"
 setting.feishu_webhook_invalid: "无效的飞书机器人 Webhook 地址"
 setting.url_must_http: "URL必须以http://或https://开头"
 setting.saved: "设置已更新"
+setting.notify_test_sent: "测试通知已发送"
+setting.notify_test_title: "测试通知"
+setting.notify_test_content: "这是一条测试通知。用户名：{{.Username}}，用户ID：{{.UserId}}"
+setting.notify_email_missing: "没有可用于发送通知的邮箱地址"
 
 # Deployment messages (io.net)
 deployment.not_enabled: "io.net 模型部署功能未启用或 API 密钥缺失"

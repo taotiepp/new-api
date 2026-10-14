@@ -5,6 +5,7 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -67,6 +68,36 @@ func NotifyUser(userId int, userEmail string, userSetting dto.UserSetting, data 
 	}
 	if !canSend {
 		return fmt.Errorf("notification limit exceeded for user %d with type %s", userId, notifyType)
+	}
+
+	return deliverUserNotification(userId, userEmail, userSetting, data)
+}
+
+// ErrNotificationEmailMissing means a test notification has no mailbox to use.
+var ErrNotificationEmailMissing = errors.New("notification email is not configured")
+
+// SendTestNotification delivers the current form settings without consuming the quota-warning send limit.
+func SendTestNotification(userId int, userEmail string, userSetting dto.UserSetting, title string, content string) error {
+	notifyType := userSetting.NotifyType
+	if notifyType == "" {
+		notifyType = dto.NotifyTypeEmail
+	}
+	if notifyType == dto.NotifyTypeEmail {
+		emailToUse := userSetting.NotificationEmail
+		if emailToUse == "" {
+			emailToUse = userEmail
+		}
+		if emailToUse == "" {
+			return ErrNotificationEmailMissing
+		}
+	}
+	return deliverUserNotification(userId, userEmail, userSetting, dto.NewNotify(dto.NotifyTypeNotifyTest, title, content, nil))
+}
+
+func deliverUserNotification(userId int, userEmail string, userSetting dto.UserSetting, data dto.Notify) error {
+	notifyType := userSetting.NotifyType
+	if notifyType == "" {
+		notifyType = dto.NotifyTypeEmail
 	}
 
 	switch notifyType {

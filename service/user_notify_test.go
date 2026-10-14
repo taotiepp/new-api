@@ -1,9 +1,11 @@
 package service
 
 import (
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/QuantumNous/new-api/common"
@@ -12,6 +14,48 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func TestQuotaWarningContentNamesTheUserAndOmitsTopUpLink(t *testing.T) {
+	cases := []struct {
+		notifyType string
+		want       string
+	}{
+		{
+			notifyType: dto.NotifyTypeEmail,
+			want:       "您的额度即将用尽，用户名：alice，用户ID：7，当前剩余额度为 $1.00，为了不影响您的使用，请及时充值。",
+		},
+		{
+			notifyType: "",
+			want:       "您的额度即将用尽，用户名：alice，用户ID：7，当前剩余额度为 $1.00，为了不影响您的使用，请及时充值。",
+		},
+		{
+			notifyType: dto.NotifyTypeWebhook,
+			want:       "您的额度即将用尽，用户名：alice，用户ID：7，当前剩余额度为 $1.00，为了不影响您的使用，请及时充值。",
+		},
+		{
+			notifyType: dto.NotifyTypeBark,
+			want:       "您的额度即将用尽，用户名：alice，用户ID：7，剩余额度：$1.00，请及时充值",
+		},
+		{
+			notifyType: dto.NotifyTypeGotify,
+			want:       "您的额度即将用尽，用户名：alice，用户ID：7，当前剩余额度为 $1.00，请及时充值。",
+		},
+		{
+			notifyType: dto.NotifyTypeFeishu,
+			want:       "用户名：alice，用户ID：7，当前剩余额度为 $1.00，请及时充值。",
+		},
+	}
+	for _, tc := range cases {
+		content, values := quotaWarningContent(tc.notifyType, "您的额度即将用尽", "alice", 7, "$1.00")
+		rendered := content
+		for _, value := range values {
+			rendered = strings.Replace(rendered, dto.ContentValueParam, fmt.Sprintf("%v", value), 1)
+		}
+		assert.Equal(t, tc.want, rendered)
+		assert.NotContains(t, rendered, "充值链接")
+		assert.NotContains(t, rendered, "http")
+	}
+}
 
 func TestFeishuBotSignMatchesCustomBotAlgorithm(t *testing.T) {
 	assert.Equal(t, "3/MaVZ8JLIy4TUG+7KSFJqvUkTKd+HWY8g+56DZWq8s=", feishuBotSign("1599360473", "demo-secret"))
