@@ -60,6 +60,19 @@ func IsModelPricingOption(key string) bool {
 	return slices.Contains(modelPricingOptionKeys, key)
 }
 
+// ValidatePricingOptionJSON rejects values that cannot be loaded back as a
+// pricing map. JSON null and non-JSON text such as "<nil>" must not be stored.
+func ValidatePricingOptionJSON(key, raw string) error {
+	if !IsModelPricingOption(key) {
+		return nil
+	}
+	var entries map[string]any
+	if err := common.UnmarshalJsonStr(raw, &entries); err != nil || entries == nil {
+		return fmt.Errorf("%s must be a JSON object", key)
+	}
+	return nil
+}
+
 func ModelPricingVersion(values PricingValues) string {
 	encoded, _ := common.Marshal(values)
 	return fmt.Sprintf("%x", sha256.Sum256(encoded))
@@ -315,12 +328,12 @@ func UpdateModelPricingOptions(updates map[string]string) error {
 			if !IsModelPricingOption(key) {
 				return fmt.Errorf("unsupported pricing field: %s", key)
 			}
+			if err := ValidatePricingOptionJSON(key, raw); err != nil {
+				return err
+			}
 			var entries map[string]any
 			if err := common.UnmarshalJsonStr(raw, &entries); err != nil {
 				return err
-			}
-			if entries == nil {
-				return fmt.Errorf("%s must be a JSON object", key)
 			}
 			for name := range values[key] {
 				names[name] = true

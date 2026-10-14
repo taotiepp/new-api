@@ -10,12 +10,38 @@ import (
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/pkg/jsplugin"
 	"github.com/QuantumNous/new-api/setting/config"
+	"github.com/QuantumNous/new-api/setting/ratio_setting"
 	"github.com/gin-gonic/gin"
 	"github.com/glebarez/sqlite"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 )
+
+func TestUpdateOptionRejectsCorruptPricingJSON(t *testing.T) {
+	previous := ratio_setting.AudioCompletionRatio2JSONString()
+	require.NoError(t, ratio_setting.UpdateAudioCompletionRatioByJSONString(`{"keep-model":1}`))
+	t.Cleanup(func() {
+		require.NoError(t, ratio_setting.UpdateAudioCompletionRatioByJSONString(previous))
+	})
+
+	for _, body := range []string{
+		`{"key":"AudioCompletionRatio","value":null}`,
+		`{"key":"AudioCompletionRatio","value":"<nil>"}`,
+		`{"key":"AudioCompletionRatio","value":"null"}`,
+		`{"key":"AudioCompletionRatio","value":"[]"}`,
+	} {
+		recorder := httptest.NewRecorder()
+		context, _ := gin.CreateTestContext(recorder)
+		context.Request = httptest.NewRequest(http.MethodPut, "/api/option/", strings.NewReader(body))
+
+		UpdateOption(context)
+
+		assert.Contains(t, recorder.Body.String(), `"success":false`)
+		_, kept := ratio_setting.GetAudioCompletionRatioCopy()["keep-model"]
+		assert.True(t, kept)
+	}
+}
 
 func TestUpdateOptionRejectsInvalidTaskBillingExpressions(t *testing.T) {
 	const pluginKey = "billing-save-probe"
