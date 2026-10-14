@@ -81,6 +81,7 @@ export interface SearchApiKeysParams {
   token?: string
   p?: number
   size?: number
+  user_id?: number
 }
 
 export interface ApiKeyFormData {

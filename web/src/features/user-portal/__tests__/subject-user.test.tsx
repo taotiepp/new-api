@@ -35,6 +35,7 @@ const getUserLogs = vi.hoisted(() => vi.fn())
 const getUserLogStats = vi.hoisted(() => vi.fn())
 const getUserModels = vi.hoisted(() => vi.fn())
 const searchUsers = vi.hoisted(() => vi.fn())
+const searchApiKeys = vi.hoisted(() => vi.fn())
 
 vi.mock('@tanstack/react-router', () => ({
   Link: (props: { to: string; children: ReactNode; className?: string }) => (
@@ -69,6 +70,10 @@ vi.mock('@/lib/api', async (importOriginal) => {
 
 vi.mock('@/features/users/api', () => ({
   searchUsers,
+}))
+
+vi.mock('@/features/keys/api', () => ({
+  searchApiKeys,
 }))
 
 const i18n = createInstance()
@@ -128,6 +133,15 @@ describe('portal subject user', () => {
         page_size: 8,
       },
     })
+    searchApiKeys.mockResolvedValue({
+      success: true,
+      data: {
+        items: [{ id: 9, name: 'bob-production' }],
+        total: 1,
+        page: 1,
+        page_size: 8,
+      },
+    })
 
     const user = userEvent.setup()
     renderPanel(<PortalLogsPanel />)
@@ -146,6 +160,21 @@ describe('portal subject user', () => {
       )
       expect(getUserLogStats).toHaveBeenCalledWith(
         expect.objectContaining({ user_id: 2 })
+      )
+    })
+
+    await user.click(screen.getByRole('combobox', { name: 'API Key' }))
+    await user.type(screen.getByPlaceholderText('Search...'), 'bob')
+    await user.click(
+      await screen.findByRole('option', { name: 'bob-production' })
+    )
+
+    await waitFor(() => {
+      expect(searchApiKeys).toHaveBeenCalledWith(
+        expect.objectContaining({ keyword: '%bob%', user_id: 2 })
+      )
+      expect(getUserLogs).toHaveBeenCalledWith(
+        expect.objectContaining({ token_name: 'bob-production', user_id: 2 })
       )
     })
   })

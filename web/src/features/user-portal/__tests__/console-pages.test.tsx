@@ -34,6 +34,7 @@ import { PortalKeysPanel } from '../components/portal-keys-panel'
 import { PortalLogsPanel } from '../components/portal-logs-panel'
 
 const getApiKeys = vi.hoisted(() => vi.fn())
+const searchApiKeys = vi.hoisted(() => vi.fn())
 const getTokenAutoGroups = vi.hoisted(() => vi.fn())
 const getUserGroups = vi.hoisted(() => vi.fn())
 const getUserModels = vi.hoisted(() => vi.fn())
@@ -42,7 +43,7 @@ const getUserLogStats = vi.hoisted(() => vi.fn())
 
 vi.mock('@/features/keys/api', () => ({
   getApiKeys,
-  searchApiKeys: vi.fn(),
+  searchApiKeys,
   createApiKey: vi.fn(),
   deleteApiKey: vi.fn(),
   updateApiKeyStatus: vi.fn(),
@@ -360,6 +361,71 @@ describe('portal console pages', () => {
           ),
         })
       )
+    })
+  })
+
+  test('filters request logs by an exact key name chosen from search', async () => {
+    getUserModels.mockResolvedValue({ success: true, data: [] })
+    getUserLogs.mockResolvedValue({
+      success: true,
+      data: { items: [], total: 0, page: 1, page_size: 20 },
+    })
+    getUserLogStats.mockResolvedValue({
+      success: true,
+      data: { quota: 0, rpm: 0, tpm: 0 },
+    })
+    searchApiKeys.mockResolvedValue({
+      success: true,
+      data: {
+        items: [
+          { id: 1, name: 'production' },
+          { id: 2, name: 'production-extra' },
+        ],
+        total: 2,
+        page: 1,
+        page_size: 8,
+      },
+    })
+
+    const user = userEvent.setup()
+    renderPanel(<PortalLogsPanel />)
+
+    await user.click(await screen.findByRole('combobox', { name: 'API Key' }))
+    await user.type(screen.getByPlaceholderText('Search...'), 'prod%')
+
+    await waitFor(() => {
+      expect(searchApiKeys).toHaveBeenCalledWith(
+        expect.objectContaining({ keyword: '%prod%' })
+      )
+    })
+    expect(searchApiKeys.mock.calls.at(-1)?.[0]).not.toEqual(
+      expect.objectContaining({ user_id: expect.any(Number) })
+    )
+
+    await user.click(await screen.findByRole('option', { name: 'production' }))
+
+    await waitFor(() => {
+      expect(getUserLogs).toHaveBeenCalledWith(
+        expect.objectContaining({ token_name: 'production' })
+      )
+      expect(getUserLogStats).toHaveBeenCalledWith(
+        expect.objectContaining({ token_name: 'production' })
+      )
+    })
+    const tokenNames = getUserLogs.mock.calls
+      .map((call) => call[0]?.token_name)
+      .filter((name) => name != null)
+    expect(tokenNames).toEqual(['production'])
+
+    const callsBeforeRefresh = getUserLogs.mock.calls.length
+    const refresh = screen.getByRole('button', { name: 'Refresh' })
+    await waitFor(() => {
+      expect(refresh).toBeEnabled()
+    })
+    await user.click(refresh)
+
+    await waitFor(() => {
+      expect(getUserLogs.mock.calls.length).toBeGreaterThan(callsBeforeRefresh)
     })
   })
 })

@@ -465,6 +465,36 @@ func TestGetAllTokensMasksKeyInResponse(t *testing.T) {
 	}
 }
 
+func TestSearchTokensAdminCanSearchAnotherUsersKeyName(t *testing.T) {
+	db := setupTokenControllerTestDB(t)
+	require.NoError(t, db.AutoMigrate(&model.User{}))
+	require.NoError(t, db.Create(&model.User{Id: 1, Username: "alice", Role: common.RoleAdminUser, AffCode: "alice-token-search"}).Error)
+	require.NoError(t, db.Create(&model.User{Id: 2, Username: "bob", Role: common.RoleCommonUser, AffCode: "bob-token-search"}).Error)
+	seedToken(t, db, 1, "alice-production", "alicekey12345678")
+	seedToken(t, db, 2, "production", "bobkey12345678901")
+	seedToken(t, db, 2, "other", "bobother123456789")
+
+	ctx, recorder := newAuthenticatedContext(t, http.MethodGet, "/api/token/search?keyword=%25prod%25&user_id=2&p=1&size=10", nil, 1)
+	ctx.Set("role", common.RoleAdminUser)
+	ctx.Set("username", "alice")
+	SearchTokens(ctx)
+
+	response := decodeAPIResponse(t, recorder)
+	require.True(t, response.Success, response.Message)
+	var page tokenPageResponse
+	require.NoError(t, common.Unmarshal(response.Data, &page))
+	require.Len(t, page.Items, 1)
+	require.Equal(t, "production", page.Items[0].Name)
+
+	deniedCtx, deniedRecorder := newAuthenticatedContext(t, http.MethodGet, "/api/token/search?keyword=%25prod%25&user_id=2&p=1&size=10", nil, 1)
+	deniedCtx.Set("role", common.RoleCommonUser)
+	deniedCtx.Set("username", "alice")
+	SearchTokens(deniedCtx)
+	denied := decodeAPIResponse(t, deniedRecorder)
+	require.False(t, denied.Success)
+	require.Equal(t, "access denied", denied.Message)
+}
+
 func TestSearchTokensMasksKeyInResponse(t *testing.T) {
 	db := setupTokenControllerTestDB(t)
 	token := seedToken(t, db, 1, "searchable-token", "ijkl1234mnop5678")

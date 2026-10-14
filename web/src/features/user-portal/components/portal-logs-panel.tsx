@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { useQuery } from '@tanstack/react-query'
-import { ChevronsUpDown } from 'lucide-react'
+import { ChevronsUpDown, RefreshCw } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -46,10 +46,12 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
+import { searchApiKeys } from '@/features/keys/api'
 import { getUserLogs, getUserLogStats } from '@/features/usage-logs/api'
 import { CompactDateTimeRangePicker } from '@/features/usage-logs/components/compact-date-time-range-picker'
 import { LOG_TYPE_ENUM, LOG_TYPES } from '@/features/usage-logs/constants'
 import type { UsageLog } from '@/features/usage-logs/data/schema'
+import { useDebounce } from '@/hooks/use-debounce'
 import { getUserModels } from '@/lib/api'
 import { usePricingCurrency } from '@/lib/currency'
 import { formatNumber } from '@/lib/format'
@@ -76,6 +78,7 @@ export function PortalLogsPanel() {
   const [end, setEnd] = useState(defaults.end)
   const [logType, setLogType] = useState(ALL_LOG_TYPES)
   const [modelName, setModelName] = useState('')
+  const [keyName, setKeyName] = useState('')
   const [page, setPage] = useState(1)
   const [selected, setSelected] = useState<UsageLog | null>(null)
   const subjectUser = usePortalSubjectUser()
@@ -102,6 +105,7 @@ export function PortalLogsPanel() {
     end.getTime(),
     logType,
     modelValue ?? '',
+    keyName,
     page,
   ] as const
 
@@ -115,6 +119,7 @@ export function PortalLogsPanel() {
           page_size: PAGE_SIZE,
           type: typeValue,
           model_name: modelValue,
+          token_name: keyName || undefined,
           start_timestamp: dateToUnixTimestamp(start),
           end_timestamp: dateToUnixTimestamp(end),
           user_id: subjectUser.subjectUserId,
@@ -132,6 +137,7 @@ export function PortalLogsPanel() {
         await getUserLogStats({
           type: typeValue,
           model_name: modelValue,
+          token_name: keyName || undefined,
           start_timestamp: dateToUnixTimestamp(start),
           end_timestamp: dateToUnixTimestamp(end),
           user_id: subjectUser.subjectUserId,
@@ -150,7 +156,8 @@ export function PortalLogsPanel() {
     start.getTime() === defaultRange.start.getTime() &&
     end.getTime() === defaultRange.end.getTime() &&
     logType === ALL_LOG_TYPES &&
-    !modelValue
+    !modelValue &&
+    !keyName
   const typeItems = useMemo(
     () => [
       { value: ALL_LOG_TYPES, label: t('All Types') },
@@ -188,6 +195,7 @@ export function PortalLogsPanel() {
         title={t('Failed to load')}
         onRetry={() => {
           void listQuery.refetch()
+          void statsQuery.refetch()
         }}
       />
     )
@@ -231,6 +239,7 @@ export function PortalLogsPanel() {
             value={subjectUser.subject}
             onValueChange={(user) => {
               subjectUser.setSubject(user)
+              setKeyName('')
               setPage(1)
             }}
           />
@@ -281,6 +290,36 @@ export function PortalLogsPanel() {
               setPage(1)
             }}
           />
+          <PortalLogKeyCombobox
+            value={keyName}
+            userId={subjectUser.subjectUserId}
+            onValueChange={(value) => {
+              setKeyName(value)
+              setPage(1)
+            }}
+          />
+          <Button
+            type='button'
+            variant='outline'
+            size='sm'
+            className='rounded-full'
+            disabled={
+              rangeTooLong || listQuery.isFetching || statsQuery.isFetching
+            }
+            onClick={() => {
+              void listQuery.refetch()
+              void statsQuery.refetch()
+            }}
+          >
+            <RefreshCw
+              className={
+                listQuery.isFetching || statsQuery.isFetching
+                  ? 'size-3.5 animate-spin'
+                  : 'size-3.5'
+              }
+            />
+            {t('Refresh')}
+          </Button>
           {filtersAreDefault ? null : (
             <Button
               type='button'
@@ -293,6 +332,7 @@ export function PortalLogsPanel() {
                 setEnd(next.end)
                 setLogType(ALL_LOG_TYPES)
                 setModelName('')
+                setKeyName('')
                 setPage(1)
               }}
             >
@@ -371,6 +411,123 @@ export function PortalLogsPanel() {
         }}
       />
     </div>
+  )
+}
+
+function toPortalKeySearchKeyword(input: string): string | undefined {
+  const literal = input.trim().replaceAll('%', '')
+  if (literal.length < 2) return undefined
+  return `%${literal}%`
+}
+
+function PortalLogKeyCombobox(props: {
+  value: string
+  userId?: number
+  onValueChange: (value: string) => void
+}) {
+  const { t } = useTranslation()
+  const [open, setOpen] = useState(false)
+  const [keyword, setKeyword] = useState('')
+  const debouncedKeyword = useDebounce(keyword, 300)
+  const searchKeyword = toPortalKeySearchKeyword(debouncedKeyword)
+  const search = useQuery({
+    queryKey: [
+      'user-portal',
+      'log-keys',
+      props.userId ?? 0,
+      searchKeyword ?? '',
+    ],
+    enabled: open && searchKeyword != null,
+    queryFn: async () => {
+      const result = requireServerSuccess(
+        await searchApiKeys({
+          keyword: searchKeyword,
+          p: 1,
+          size: 8,
+          user_id: props.userId,
+        })
+      )
+      return result.data?.items ?? []
+    },
+  })
+
+  const keyNames = [
+    ...new Set(
+      (searchKeyword ? (search.data ?? []) : [])
+        .map((item) => item.name)
+        .filter((name) => name !== '')
+    ),
+  ]
+  const close = () => {
+    setOpen(false)
+    setKeyword('')
+  }
+
+  return (
+    <Popover
+      open={open}
+      onOpenChange={(nextOpen) => {
+        setOpen(nextOpen)
+        if (!nextOpen) setKeyword('')
+      }}
+    >
+      <PopoverTrigger
+        render={
+          <Button
+            type='button'
+            variant='outline'
+            size='sm'
+            role='combobox'
+            aria-expanded={open}
+            aria-label={t('API Key')}
+            className='max-w-52 min-w-36 justify-between rounded-full'
+          />
+        }
+      >
+        <span className='truncate'>{props.value || t('API Key')}</span>
+        <ChevronsUpDown className='size-3.5 opacity-50' />
+      </PopoverTrigger>
+      <PopoverContent
+        align='start'
+        className='w-72 overflow-hidden rounded-xl p-0'
+      >
+        <Command shouldFilter={false}>
+          <CommandInput
+            placeholder={t('Search...')}
+            value={keyword}
+            onValueChange={setKeyword}
+          />
+          <CommandList>
+            {searchKeyword && !search.isFetching && keyNames.length === 0 ? (
+              <CommandEmpty>{t('No results found')}</CommandEmpty>
+            ) : null}
+            <CommandGroup>
+              <CommandItem
+                value='all-keys'
+                onSelect={() => {
+                  props.onValueChange('')
+                  close()
+                }}
+              >
+                {t('All')}
+              </CommandItem>
+              {keyNames.map((name) => (
+                <CommandItem
+                  key={name}
+                  value={name}
+                  onSelect={() => {
+                    props.onValueChange(name)
+                    close()
+                  }}
+                >
+                  {name}
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
   )
 }
 
