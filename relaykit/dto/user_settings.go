@@ -10,6 +10,8 @@ type UserSetting struct {
 	GotifyUrl                        string  `json:"gotify_url,omitempty"`                           // GotifyUrl Gotify服务器地址
 	GotifyToken                      string  `json:"gotify_token,omitempty"`                         // GotifyToken Gotify应用令牌
 	GotifyPriority                   int     `json:"gotify_priority"`                                // GotifyPriority Gotify消息优先级
+	FeishuWebhookUrl                 string  `json:"feishu_webhook_url,omitempty"`                   // FeishuWebhookUrl 飞书自定义机器人 webhook
+	FeishuWebhookSecret              string  `json:"feishu_webhook_secret,omitempty"`                // FeishuWebhookSecret 飞书机器人签名校验密钥
 	UpstreamModelUpdateNotifyEnabled bool    `json:"upstream_model_update_notify_enabled,omitempty"` // 是否接收上游模型更新定时检测通知（仅管理员）
 	AcceptUnsetRatioModel            bool    `json:"accept_unset_model_ratio_model,omitempty"`       // AcceptUnsetRatioModel 是否接受未设置价格的模型
 	RecordIpLog                      bool    `json:"record_ip_log,omitempty"`                        // 是否记录请求和错误日志IP
@@ -23,4 +25,5 @@ var (
 	NotifyTypeWebhook = "webhook" // Webhook
 	NotifyTypeBark    = "bark"    // Bark 推送
 	NotifyTypeGotify  = "gotify"  // Gotify 推送
+	NotifyTypeFeishu  = "feishu"  // 飞书自定义机器人
 )

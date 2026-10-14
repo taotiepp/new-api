@@ -50,6 +50,8 @@ const settings = {
   gotify_url: '',
   gotify_token: '',
   gotify_priority: 5,
+  feishu_webhook_url: '',
+  feishu_webhook_secret: '',
   accept_unset_model_ratio_model: true,
   record_ip_log: true,
   upstream_model_update_notify_enabled: true,
@@ -94,6 +96,8 @@ describe('user settings saves across profile and security', () => {
       gotify_url: '',
       gotify_token: '',
       gotify_priority: 5,
+      feishu_webhook_url: '',
+      feishu_webhook_secret: '',
       accept_unset_model_ratio_model: false,
       record_ip_log: true,
       upstream_model_update_notify_enabled: false,
@@ -189,6 +193,45 @@ describe('user settings saves across profile and security', () => {
       ...settings,
       quota_warning_threshold: 2700,
       record_ip_log: false,
+    })
+  })
+
+  it('saving Feishu notification sends the bot webhook and optional secret', async () => {
+    const onUpdate = vi.fn()
+    vi.spyOn(api, 'get').mockResolvedValue({
+      data: {
+        success: true,
+        data: { ...profile, setting: JSON.stringify(settings) },
+      },
+    })
+    const put = vi
+      .spyOn(api, 'put')
+      .mockResolvedValue({ data: { success: true } })
+    render(
+      <NotificationTab
+        profile={{ ...profile, setting: JSON.stringify(settings) }}
+        onUpdate={onUpdate}
+      />
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Feishu' }))
+    fireEvent.change(screen.getByLabelText('Feishu Bot Webhook URL'), {
+      target: {
+        value: 'https://open.feishu.cn/open-apis/bot/v2/hook/example',
+      },
+    })
+    fireEvent.change(screen.getByLabelText('Feishu Bot Secret'), {
+      target: { value: 'bot-secret' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Save Settings' }))
+
+    await waitFor(() => expect(onUpdate).toHaveBeenCalled())
+    expect(put).toHaveBeenCalledWith('/api/user/setting', {
+      ...settings,
+      notify_type: 'feishu',
+      feishu_webhook_url:
+        'https://open.feishu.cn/open-apis/bot/v2/hook/example',
+      feishu_webhook_secret: 'bot-secret',
     })
   })
 })

@@ -16,7 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { Bell, Loader2, Mail, Server, Webhook } from 'lucide-react'
+import { Bell, Bot, Loader2, Mail, Server, Webhook } from 'lucide-react'
 import { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -40,6 +40,7 @@ const NOTIFICATION_ICONS: Record<NotifyType, typeof Mail> = {
   webhook: Webhook,
   bark: Bell,
   gotify: Server,
+  feishu: Bot,
 }
 
 // ============================================================================
@@ -110,7 +111,7 @@ export function NotificationTab({ profile, onUpdate }: NotificationTabProps) {
           variant='outline'
           size='lg'
           spacing={2}
-          className='grid w-full grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3'
+          className='grid w-full grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 lg:grid-cols-5'
         >
           {NOTIFICATION_METHODS.map((method) => {
             const Icon = NOTIFICATION_ICONS[method.value]
@@ -274,6 +275,80 @@ export function NotificationTab({ profile, onUpdate }: NotificationTabProps) {
                 className='text-primary underline underline-offset-4'
               >
                 {t('Gotify Documentation')}
+              </a>
+            </p>
+          </div>
+        </>
+      )}
+
+      {notifyType === 'feishu' && (
+        <>
+          <div className='space-y-1.5'>
+            <Label htmlFor='feishuWebhookUrl'>
+              {t('Feishu Bot Webhook URL')}
+            </Label>
+            <Input
+              id='feishuWebhookUrl'
+              type='url'
+              className='h-9'
+              value={settings.feishu_webhook_url}
+              onChange={(e) =>
+                updateField('feishu_webhook_url', e.target.value)
+              }
+              placeholder={t(
+                'https://open.feishu.cn/open-apis/bot/v2/hook/...'
+              )}
+            />
+            <p className='text-muted-foreground text-xs'>
+              {t(
+                'Supports Feishu (open.feishu.cn) and Lark (open.larksuite.com) custom bot webhooks.'
+              )}
+            </p>
+          </div>
+          <div className='space-y-1.5'>
+            <Label htmlFor='feishuWebhookSecret'>
+              {t('Feishu Bot Secret')}
+            </Label>
+            <PasswordInput
+              id='feishuWebhookSecret'
+              value={settings.feishu_webhook_secret}
+              onChange={(e) =>
+                updateField('feishu_webhook_secret', e.target.value)
+              }
+              placeholder={t('Enter secret key')}
+            />
+            <p className='text-muted-foreground text-xs'>
+              {t('Leave empty if signature verification is not enabled')}
+            </p>
+          </div>
+          <div className='bg-muted/50 rounded-lg border p-3 sm:p-4'>
+            <h5 className='mb-1.5 text-sm font-medium sm:mb-2'>
+              {t('Setup Instructions')}
+            </h5>
+            <ol className='text-muted-foreground space-y-1 text-xs'>
+              <li>
+                {t(
+                  '1. In a Feishu group, add a custom bot and copy its webhook URL'
+                )}
+              </li>
+              <li>
+                {t(
+                  '2. If the bot has signature verification enabled, copy the secret'
+                )}
+              </li>
+              <li>
+                {t('3. Paste the webhook URL and the optional secret above')}
+              </li>
+            </ol>
+            <p className='text-muted-foreground mt-3 text-xs'>
+              {t('Learn more:')}{' '}
+              <a
+                href='https://open.feishu.cn/document/client-docs/bot-v3/add-custom-bot'
+                target='_blank'
+                rel='noopener noreferrer'
+                className='text-primary underline underline-offset-4'
+              >
+                {t('Feishu Custom Bot Documentation')}
               </a>
             </p>
           </div>

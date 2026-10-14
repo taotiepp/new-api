@@ -41,6 +41,8 @@ export function normalizeUserSettings(
     gotify_url: parsed.gotify_url ?? '',
     gotify_token: parsed.gotify_token ?? '',
     gotify_priority: parsed.gotify_priority ?? 5,
+    feishu_webhook_url: parsed.feishu_webhook_url ?? '',
+    feishu_webhook_secret: parsed.feishu_webhook_secret ?? '',
     accept_unset_model_ratio_model:
       parsed.accept_unset_model_ratio_model || false,
     record_ip_log: parsed.record_ip_log || false,

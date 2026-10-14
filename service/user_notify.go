@@ -2,10 +2,16 @@ package service
 
 import (
 	"bytes"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/base64"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/model"
@@ -100,6 +106,13 @@ func NotifyUser(userId int, userEmail string, userSetting dto.UserSetting, data 
 			return nil
 		}
 		return sendGotifyNotify(gotifyUrl, gotifyToken, userSetting.GotifyPriority, data)
+	case dto.NotifyTypeFeishu:
+		feishuWebhookURL := userSetting.FeishuWebhookUrl
+		if feishuWebhookURL == "" {
+			common.SysLog(fmt.Sprintf("user %d has no feishu webhook url, skip sending feishu", userId))
+			return nil
+		}
+		return sendFeishuNotify(feishuWebhookURL, userSetting.FeishuWebhookSecret, data)
 	}
 	return nil
 }
@@ -274,5 +287,100 @@ func sendGotifyNotify(gotifyUrl string, gotifyToken string, priority int, data d
 		}
 	}
 
+	return nil
+}
+
+// feishuBotSign 按飞书自定义机器人的签名算法计算 sign。
+// 密钥是 timestamp、换行和 secret 拼成的字符串，消息体为空。
+func feishuBotSign(timestamp string, secret string) string {
+	mac := hmac.New(sha256.New, []byte(timestamp+"\n"+secret))
+	return base64.StdEncoding.EncodeToString(mac.Sum(nil))
+}
+
+func sendFeishuNotify(webhookURL string, secret string, data dto.Notify) error {
+	content := data.Content
+	for _, value := range data.Values {
+		content = strings.Replace(content, dto.ContentValueParam, fmt.Sprintf("%v", value), 1)
+	}
+	text := content
+	if data.Title != "" {
+		if text != "" {
+			text = data.Title + "\n" + text
+		} else {
+			text = data.Title
+		}
+	}
+
+	payload := struct {
+		Timestamp string `json:"timestamp,omitempty"`
+		Sign      string `json:"sign,omitempty"`
+		MsgType   string `json:"msg_type"`
+		Content   struct {
+			Text string `json:"text"`
+		} `json:"content"`
+	}{
+		MsgType: "text",
+	}
+	payload.Content.Text = text
+	if secret != "" {
+		payload.Timestamp = strconv.FormatInt(time.Now().Unix(), 10)
+		payload.Sign = feishuBotSign(payload.Timestamp, secret)
+	}
+
+	payloadBytes, err := common.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("failed to marshal feishu payload: %v", err)
+	}
+
+	var resp *http.Response
+	if system_setting.EnableWorker() {
+		resp, err = DoWorkerRequest(&WorkerRequest{
+			URL:    webhookURL,
+			Key:    system_setting.WorkerValidKey,
+			Method: http.MethodPost,
+			Headers: map[string]string{
+				"Content-Type": "application/json; charset=utf-8",
+				"User-Agent":   "NewAPI-Feishu-Notify/1.0",
+			},
+			Body: payloadBytes,
+		})
+		if err != nil {
+			return fmt.Errorf("failed to send feishu request through worker: %v", err)
+		}
+	} else {
+		if err = ValidateSSRFProtectedFetchURL(webhookURL); err != nil {
+			return fmt.Errorf("request reject: %v", err)
+		}
+		req, reqErr := http.NewRequest(http.MethodPost, webhookURL, bytes.NewBuffer(payloadBytes))
+		if reqErr != nil {
+			return fmt.Errorf("failed to create feishu request: %v", reqErr)
+		}
+		req.Header.Set("Content-Type", "application/json; charset=utf-8")
+		req.Header.Set("User-Agent", "NewAPI-Feishu-Notify/1.0")
+		resp, err = GetSSRFProtectedHTTPClient().Do(req)
+		if err != nil {
+			return fmt.Errorf("failed to send feishu request: %v", err)
+		}
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return fmt.Errorf("feishu webhook request failed with status code: %d", resp.StatusCode)
+	}
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if err != nil {
+		return fmt.Errorf("failed to read feishu webhook response: %v", err)
+	}
+	var result struct {
+		Code *int   `json:"code"`
+		Msg  string `json:"msg"`
+	}
+	if err = common.Unmarshal(body, &result); err != nil || result.Code == nil || *result.Code != 0 {
+		msg := strings.TrimSpace(result.Msg)
+		if msg == "" {
+			msg = "unexpected response"
+		}
+		return fmt.Errorf("feishu webhook rejected: %s", msg)
+	}
 	return nil
 }

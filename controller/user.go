@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -1279,6 +1280,8 @@ type UpdateUserSettingRequest struct {
 	GotifyUrl                        string  `json:"gotify_url,omitempty"`
 	GotifyToken                      string  `json:"gotify_token,omitempty"`
 	GotifyPriority                   int     `json:"gotify_priority,omitempty"`
+	FeishuWebhookUrl                 string  `json:"feishu_webhook_url,omitempty"`
+	FeishuWebhookSecret              string  `json:"feishu_webhook_secret,omitempty"`
 	UpstreamModelUpdateNotifyEnabled *bool   `json:"upstream_model_update_notify_enabled,omitempty"`
 	AcceptUnsetModelRatioModel       bool    `json:"accept_unset_model_ratio_model"`
 	RecordIpLog                      bool    `json:"record_ip_log"`
@@ -1292,7 +1295,13 @@ func UpdateUserSetting(c *gin.Context) {
 	}
 
 	// 验证预警类型
-	if req.QuotaWarningType != dto.NotifyTypeEmail && req.QuotaWarningType != dto.NotifyTypeWebhook && req.QuotaWarningType != dto.NotifyTypeBark && req.QuotaWarningType != dto.NotifyTypeGotify {
+	if !slices.Contains([]string{
+		dto.NotifyTypeEmail,
+		dto.NotifyTypeWebhook,
+		dto.NotifyTypeBark,
+		dto.NotifyTypeGotify,
+		dto.NotifyTypeFeishu,
+	}, req.QuotaWarningType) {
 		common.ApiErrorI18n(c, i18n.MsgSettingInvalidType)
 		return
 	}
@@ -1365,6 +1374,21 @@ func UpdateUserSetting(c *gin.Context) {
 		}
 	}
 
+	if req.QuotaWarningType == dto.NotifyTypeFeishu {
+		if req.FeishuWebhookUrl == "" {
+			common.ApiErrorI18n(c, i18n.MsgSettingFeishuWebhookEmpty)
+			return
+		}
+		if _, err := url.ParseRequestURI(req.FeishuWebhookUrl); err != nil {
+			common.ApiErrorI18n(c, i18n.MsgSettingFeishuWebhookInvalid)
+			return
+		}
+		if !strings.HasPrefix(req.FeishuWebhookUrl, "https://") && !strings.HasPrefix(req.FeishuWebhookUrl, "http://") {
+			common.ApiErrorI18n(c, i18n.MsgSettingUrlMustHttp)
+			return
+		}
+	}
+
 	userId := c.GetInt("id")
 	user, err := model.GetUserById(userId, true)
 	if err != nil {
@@ -1413,6 +1437,13 @@ func UpdateUserSetting(c *gin.Context) {
 			settings.GotifyPriority = 5
 		} else {
 			settings.GotifyPriority = req.GotifyPriority
+		}
+	}
+
+	if req.QuotaWarningType == dto.NotifyTypeFeishu {
+		settings.FeishuWebhookUrl = req.FeishuWebhookUrl
+		if req.FeishuWebhookSecret != "" {
+			settings.FeishuWebhookSecret = req.FeishuWebhookSecret
 		}
 	}
 
