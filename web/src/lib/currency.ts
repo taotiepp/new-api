@@ -252,6 +252,28 @@ export function usePricingCurrency() {
   }, [config, override])
 }
 
+/** Convert a USD or CNY amount into stored quota units. */
+export function quotaFromCurrencyAmount(
+  amount: number,
+  quotaPerUnit: number,
+  exchangeRate: number
+): number {
+  if (!Number.isFinite(amount) || amount <= 0 || quotaPerUnit <= 0) return 0
+  const rate = exchangeRate > 0 ? exchangeRate : 1
+  return Math.round((amount / rate) * quotaPerUnit)
+}
+
+/** Convert stored quota units into a USD or CNY amount for an input. */
+export function currencyAmountFromQuota(
+  quota: number,
+  quotaPerUnit: number,
+  exchangeRate: number
+): number {
+  if (!Number.isFinite(quota) || quota <= 0 || quotaPerUnit <= 0) return 0
+  const rate = exchangeRate > 0 ? exchangeRate : 1
+  return Number(((quota / quotaPerUnit) * rate).toFixed(6))
+}
+
 function getConfig(
   currency: CurrencyConfig = useSystemConfigStore.getState().config.currency
 ): CurrencyConfig {

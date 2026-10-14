@@ -27,6 +27,11 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import {
+  currencyAmountFromQuota,
+  quotaFromCurrencyAmount,
+  usePricingCurrency,
+} from '@/lib/currency'
 import { handleServerError } from '@/lib/handle-server-error'
 import { ROLE } from '@/lib/roles'
 
@@ -54,10 +59,20 @@ interface NotificationTabProps {
 
 export function NotificationTab({ profile, onUpdate }: NotificationTabProps) {
   const { t } = useTranslation()
+  const { currency, exchangeRate, quotaPerUnit } = usePricingCurrency()
   const isAdmin = (profile?.role ?? 0) >= ROLE.ADMIN
   const [loading, setLoading] = useState(false)
   const [testing, setTesting] = useState(false)
   const [settings, setSettings] = useState(() => normalizeUserSettings())
+  const [thresholdAmount, setThresholdAmount] = useState(() =>
+    String(
+      currencyAmountFromQuota(
+        normalizeUserSettings().quota_warning_threshold,
+        quotaPerUnit,
+        exchangeRate
+      )
+    )
+  )
 
   // Update form field helper
   const updateField = useCallback(
@@ -76,10 +91,38 @@ export function NotificationTab({ profile, onUpdate }: NotificationTabProps) {
     }
   }, [profile])
 
+  useEffect(() => {
+    setThresholdAmount(
+      String(
+        currencyAmountFromQuota(
+          settings.quota_warning_threshold,
+          quotaPerUnit,
+          exchangeRate
+        )
+      )
+    )
+  }, [exchangeRate, quotaPerUnit, settings.quota_warning_threshold])
+
+  const notificationSettingsForRequest = () => {
+    const { record_ip_log: _recordIpLog, ...notificationSettings } = settings
+    return {
+      ...notificationSettings,
+      quota_warning_threshold: quotaFromCurrencyAmount(
+        Number(thresholdAmount),
+        quotaPerUnit,
+        exchangeRate
+      ),
+    }
+  }
+
   const handleSave = async () => {
+    const notificationSettings = notificationSettingsForRequest()
+    if (notificationSettings.quota_warning_threshold <= 0) {
+      toast.error(t('Enter an amount greater than 0'))
+      return
+    }
     try {
       setLoading(true)
-      const { record_ip_log: _recordIpLog, ...notificationSettings } = settings
       const response = await updateUserSettings(notificationSettings)
 
       if (response.success) {
@@ -96,9 +139,14 @@ export function NotificationTab({ profile, onUpdate }: NotificationTabProps) {
   }
 
   const handleTest = async () => {
+    const notificationSettings = notificationSettingsForRequest()
+    if (notificationSettings.quota_warning_threshold <= 0) {
+      toast.error(t('Enter an amount greater than 0'))
+      return
+    }
     try {
       setTesting(true)
-      const response = await testUserNotification(settings)
+      const response = await testUserNotification(notificationSettings)
       if (response.success) {
         toast.success(t('Test notification sent'))
       } else {
@@ -150,19 +198,24 @@ export function NotificationTab({ profile, onUpdate }: NotificationTabProps) {
 
       {/* Warning Threshold */}
       <div className='space-y-1.5'>
-        <Label htmlFor='threshold'>{t('Quota Warning Threshold')}</Label>
+        <Label htmlFor='threshold'>
+          {t('Quota Warning Threshold')} ({currency})
+        </Label>
         <Input
           id='threshold'
           type='number'
+          min={0}
+          step='0.01'
           className='h-9'
-          value={settings.quota_warning_threshold}
-          onChange={(e) =>
-            updateField('quota_warning_threshold', Number(e.target.value))
-          }
+          value={thresholdAmount}
+          onChange={(e) => setThresholdAmount(e.target.value)}
           placeholder={t('Enter threshold')}
         />
         <p className='text-muted-foreground text-xs'>
-          {t('Get notified when balance falls below this value')}
+          {t(
+            'Get notified when the balance falls below this {{currency}} amount',
+            { currency }
+          )}
         </p>
       </div>
 

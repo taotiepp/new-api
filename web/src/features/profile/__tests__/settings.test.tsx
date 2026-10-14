@@ -17,9 +17,14 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api } from '@/lib/api'
+import { useCatalogPricingCurrencyStore } from '@/stores/catalog-pricing-currency-store'
+import {
+  DEFAULT_CURRENCY_CONFIG,
+  useSystemConfigStore,
+} from '@/stores/system-config-store'
 
 import { updateUserSettings } from '../api'
 import { NotificationTab } from '../components/tabs/notification-tab'
@@ -56,6 +61,13 @@ const settings = {
   record_ip_log: true,
   upstream_model_update_notify_enabled: true,
 }
+
+beforeEach(() => {
+  useCatalogPricingCurrencyStore.setState({ currency: null })
+  useSystemConfigStore.getState().setConfig({
+    currency: { ...DEFAULT_CURRENCY_CONFIG },
+  })
+})
 
 afterEach(() => vi.restoreAllMocks())
 
@@ -184,15 +196,67 @@ describe('user settings saves across profile and security', () => {
       screen.queryByRole('switch', { name: 'Record IP Address' })
     ).not.toBeInTheDocument()
     fireEvent.change(
-      screen.getByRole('spinbutton', { name: 'Quota Warning Threshold' }),
-      { target: { value: '2700' } }
+      screen.getByRole('spinbutton', { name: 'Quota Warning Threshold (USD)' }),
+      { target: { value: '2.7' } }
     )
     fireEvent.click(screen.getByRole('button', { name: 'Save Settings' }))
     await waitFor(() => expect(onUpdate).toHaveBeenCalled())
     expect(put).toHaveBeenCalledWith('/api/user/setting', {
       ...settings,
-      quota_warning_threshold: 2700,
+      quota_warning_threshold: 1_350_000,
       record_ip_log: false,
+    })
+  })
+
+  it('saves a yuan alert amount as quota', async () => {
+    useSystemConfigStore.getState().setConfig({
+      currency: {
+        ...DEFAULT_CURRENCY_CONFIG,
+        pricingDisplayType: 'CNY',
+        usdExchangeRate: 7,
+        quotaPerUnit: 500_000,
+      },
+    })
+    const onUpdate = vi.fn()
+    vi.spyOn(api, 'get').mockResolvedValue({
+      data: {
+        success: true,
+        data: {
+          ...profile,
+          setting: JSON.stringify({
+            ...settings,
+            quota_warning_threshold: 500_000,
+          }),
+        },
+      },
+    })
+    const put = vi
+      .spyOn(api, 'put')
+      .mockResolvedValue({ data: { success: true } })
+    render(
+      <NotificationTab
+        profile={{
+          ...profile,
+          setting: JSON.stringify({
+            ...settings,
+            quota_warning_threshold: 500_000,
+          }),
+        }}
+        onUpdate={onUpdate}
+      />
+    )
+
+    const amount = screen.getByRole('spinbutton', {
+      name: 'Quota Warning Threshold (CNY)',
+    })
+    expect(amount).toHaveValue(7)
+    fireEvent.change(amount, { target: { value: '14' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save Settings' }))
+
+    await waitFor(() => expect(onUpdate).toHaveBeenCalled())
+    expect(put).toHaveBeenCalledWith('/api/user/setting', {
+      ...settings,
+      quota_warning_threshold: 1_000_000,
     })
   })
 
@@ -249,8 +313,12 @@ describe('user settings saves across profile and security', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Send test message' }))
 
+    const { record_ip_log: _recordIpLog, ...notificationSettings } = settings
     await waitFor(() =>
-      expect(post).toHaveBeenCalledWith('/api/user/setting/test', settings)
+      expect(post).toHaveBeenCalledWith('/api/user/setting/test', {
+        ...notificationSettings,
+        quota_warning_threshold: 1200,
+      })
     )
     expect(onUpdate).not.toHaveBeenCalled()
   })
