@@ -194,3 +194,135 @@ func TestGetUserBillsRejectsInvalidPeriod(t *testing.T) {
 	require.False(t, payload.Success)
 	require.Equal(t, "invalid period", payload.Message)
 }
+
+func requestScopedUserBills(t *testing.T, userId int, role int, query string) userBillResponse {
+	t.Helper()
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	ctx.Set("id", userId)
+	ctx.Set("role", role)
+	ctx.Set("username", "alice")
+	ctx.Request = httptest.NewRequest(http.MethodGet, "/api/bills/self?"+query, nil)
+	GetUserBills(ctx)
+	require.Equal(t, http.StatusOK, recorder.Code)
+	var payload userBillResponse
+	require.NoError(t, common.Unmarshal(recorder.Body.Bytes(), &payload))
+	return payload
+}
+
+func TestGetUserBillsAdminReadsAnotherUser(t *testing.T) {
+	setupUserBillControllerTestDB(t)
+	require.NoError(t, model.DB.Create(&model.User{Id: 1, Username: "alice", Role: common.RoleAdminUser, AffCode: "alice-bill"}).Error)
+	require.NoError(t, model.DB.Create(&model.User{Id: 2, Username: "bob", Role: common.RoleCommonUser, AffCode: "bob-bill"}).Error)
+
+	now := time.Now()
+	current := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.Local)
+	period := current.Format("2006-01")
+	createdAt := current.Add(2 * time.Hour).Unix()
+	require.NoError(t, model.DB.Create(&model.QuotaData{
+		UserID: 1, Username: "alice", ModelName: "gpt-a", CreatedAt: createdAt, Count: 1, Quota: 10, TokenUsed: 1,
+	}).Error)
+	require.NoError(t, model.DB.Create(&model.QuotaData{
+		UserID: 2, Username: "bob", ModelName: "gpt-b", CreatedAt: createdAt, Count: 4, Quota: 80, TokenUsed: 8,
+	}).Error)
+
+	payload := requestScopedUserBills(t, 1, common.RoleAdminUser, "period="+period+"&months=6&user_id=2")
+	require.True(t, payload.Success, payload.Message)
+	require.Equal(t, 80, payload.Data.Quota)
+	require.Equal(t, 4, payload.Data.Count)
+	require.Len(t, payload.Data.Items, 1)
+	require.Equal(t, "gpt-b", payload.Data.Items[0].ModelName)
+}
+
+func TestGetUserBillsRejectsCrossUserAndInvalidTarget(t *testing.T) {
+	setupUserBillControllerTestDB(t)
+	require.NoError(t, model.DB.Create(&model.User{Id: 1, Username: "alice", Role: common.RoleCommonUser, AffCode: "alice-deny"}).Error)
+
+	denied := requestScopedUserBills(t, 1, common.RoleCommonUser, "user_id=2")
+	require.False(t, denied.Success)
+	require.Equal(t, "access denied", denied.Message)
+
+	invalid := requestScopedUserBills(t, 1, common.RoleAdminUser, "user_id=0")
+	require.False(t, invalid.Success)
+	require.Equal(t, "invalid user id", invalid.Message)
+
+	missing := requestScopedUserBills(t, 1, common.RoleAdminUser, "user_id=99")
+	require.False(t, missing.Success)
+	require.Equal(t, "user not found", missing.Message)
+}
+
+type scopedLogListResponse struct {
+	Success bool   `json:"success"`
+	Message string `json:"message"`
+	Data    struct {
+		Items []struct {
+			UserId    int    `json:"user_id"`
+			ModelName string `json:"model_name"`
+		} `json:"items"`
+		Total int `json:"total"`
+	} `json:"data"`
+}
+
+type scopedLogStatResponse struct {
+	Success bool   `json:"success"`
+	Message string `json:"message"`
+	Data    struct {
+		Quota int `json:"quota"`
+	} `json:"data"`
+}
+
+func TestGetUserLogsAdminReadsAnotherUser(t *testing.T) {
+	setupUserBillControllerTestDB(t)
+	require.NoError(t, model.LOG_DB.AutoMigrate(&model.Log{}))
+	require.NoError(t, model.DB.Create(&model.User{Id: 1, Username: "alice", Role: common.RoleAdminUser, AffCode: "alice-log"}).Error)
+	require.NoError(t, model.DB.Create(&model.User{Id: 2, Username: "bob", Role: common.RoleCommonUser, AffCode: "bob-log"}).Error)
+	createdAt := time.Now().Unix()
+	require.NoError(t, model.LOG_DB.Create(&model.Log{
+		UserId: 1, Username: "alice", ModelName: "gpt-a", Type: model.LogTypeConsume, Quota: 10, CreatedAt: createdAt,
+	}).Error)
+	require.NoError(t, model.LOG_DB.Create(&model.Log{
+		UserId: 2, Username: "bob", ModelName: "gpt-b", Type: model.LogTypeConsume, Quota: 40, CreatedAt: createdAt,
+	}).Error)
+
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	ctx.Set("id", 1)
+	ctx.Set("role", common.RoleAdminUser)
+	ctx.Set("username", "alice")
+	ctx.Request = httptest.NewRequest(http.MethodGet, "/api/log/self?user_id=2", nil)
+	GetUserLogs(ctx)
+	require.Equal(t, http.StatusOK, recorder.Code)
+	var listed scopedLogListResponse
+	require.NoError(t, common.Unmarshal(recorder.Body.Bytes(), &listed))
+	require.True(t, listed.Success, listed.Message)
+	require.Equal(t, 1, listed.Data.Total)
+	require.Len(t, listed.Data.Items, 1)
+	require.Equal(t, 2, listed.Data.Items[0].UserId)
+	require.Equal(t, "gpt-b", listed.Data.Items[0].ModelName)
+
+	statRecorder := httptest.NewRecorder()
+	statCtx, _ := gin.CreateTestContext(statRecorder)
+	statCtx.Set("id", 1)
+	statCtx.Set("role", common.RoleAdminUser)
+	statCtx.Set("username", "alice")
+	statCtx.Request = httptest.NewRequest(http.MethodGet, "/api/log/self/stat?user_id=2", nil)
+	GetLogsSelfStat(statCtx)
+	require.Equal(t, http.StatusOK, statRecorder.Code)
+	var stat scopedLogStatResponse
+	require.NoError(t, common.Unmarshal(statRecorder.Body.Bytes(), &stat))
+	require.True(t, stat.Success, stat.Message)
+	require.Equal(t, 40, stat.Data.Quota)
+
+	deniedRecorder := httptest.NewRecorder()
+	deniedCtx, _ := gin.CreateTestContext(deniedRecorder)
+	deniedCtx.Set("id", 1)
+	deniedCtx.Set("role", common.RoleCommonUser)
+	deniedCtx.Set("username", "alice")
+	deniedCtx.Request = httptest.NewRequest(http.MethodGet, "/api/log/self?user_id=2", nil)
+	GetUserLogs(deniedCtx)
+	require.Equal(t, http.StatusOK, deniedRecorder.Code)
+	var denied scopedLogListResponse
+	require.NoError(t, common.Unmarshal(deniedRecorder.Body.Bytes(), &denied))
+	require.False(t, denied.Success)
+	require.Equal(t, "access denied", denied.Message)
+}

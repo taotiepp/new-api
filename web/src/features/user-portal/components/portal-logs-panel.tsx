@@ -56,12 +56,14 @@ import { formatNumber } from '@/lib/format'
 import { requireServerSuccess } from '@/lib/server-error-message'
 import { dateToUnixTimestamp } from '@/lib/time'
 
+import { usePortalSubjectUser } from '../hooks/use-portal-subject-user'
 import {
   createDefaultPortalBillingRange,
   isPortalBillingRangeTooLong,
 } from '../lib/billing'
 import { PortalLogDetailsDialog } from './portal-log-details-dialog'
 import { PortalLogsTable } from './portal-logs-table'
+import { PortalSubjectUserPicker } from './portal-subject-user-picker'
 
 const PAGE_SIZE = 20
 const ALL_LOG_TYPES = 'all'
@@ -76,6 +78,7 @@ export function PortalLogsPanel() {
   const [modelName, setModelName] = useState('')
   const [page, setPage] = useState(1)
   const [selected, setSelected] = useState<UsageLog | null>(null)
+  const subjectUser = usePortalSubjectUser()
 
   const rangeTooLong = isPortalBillingRangeTooLong(start, end)
   const typeValue = logType === ALL_LOG_TYPES ? undefined : Number(logType)
@@ -94,6 +97,7 @@ export function PortalLogsPanel() {
   const queryKey = [
     'user-portal',
     'logs',
+    subjectUser.subjectUserId ?? 0,
     start.getTime(),
     end.getTime(),
     logType,
@@ -113,6 +117,7 @@ export function PortalLogsPanel() {
           model_name: modelValue,
           start_timestamp: dateToUnixTimestamp(start),
           end_timestamp: dateToUnixTimestamp(end),
+          user_id: subjectUser.subjectUserId,
         })
       )
       return result.data
@@ -120,7 +125,7 @@ export function PortalLogsPanel() {
   })
 
   const statsQuery = useQuery({
-    queryKey: ['user-portal', 'logs-stats', queryKey.slice(0, 6)],
+    queryKey: ['user-portal', 'logs-stats', queryKey.slice(0, -1)],
     enabled: !rangeTooLong,
     queryFn: async () => {
       const result = requireServerSuccess(
@@ -129,6 +134,7 @@ export function PortalLogsPanel() {
           model_name: modelValue,
           start_timestamp: dateToUnixTimestamp(start),
           end_timestamp: dateToUnixTimestamp(end),
+          user_id: subjectUser.subjectUserId,
         })
       )
       return result.data
@@ -210,10 +216,24 @@ export function PortalLogsPanel() {
         <p className='text-muted-foreground text-sm'>
           {t('Review your API request history.')}
         </p>
+        {subjectUser.subject ? (
+          <p className='text-sm text-[var(--portal-ink)]'>
+            {t('Viewing {{username}}', {
+              username: subjectUser.subject.username,
+            })}
+          </p>
+        ) : null}
       </header>
 
       <div className='flex flex-wrap items-center justify-between gap-3 border-t pt-5'>
         <div className='flex flex-wrap items-center gap-2'>
+          <PortalSubjectUserPicker
+            value={subjectUser.subject}
+            onValueChange={(user) => {
+              subjectUser.setSubject(user)
+              setPage(1)
+            }}
+          />
           <CompactDateTimeRangePicker
             start={start}
             end={end}

@@ -408,6 +408,7 @@ export interface GetLogsParams {
   group?: string
   request_id?: string
   upstream_request_id?: string
+  user_id?: number
 }
 
 export interface GetLogsResponse {
@@ -432,6 +433,7 @@ export interface GetLogStatsParams {
   group?: string
   request_id?: string
   upstream_request_id?: string
+  user_id?: number
 }
 
 export interface GetLogStatsResponse {

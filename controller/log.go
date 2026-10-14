@@ -40,7 +40,11 @@ func GetAllLogs(c *gin.Context) {
 
 func GetUserLogs(c *gin.Context) {
 	pageInfo := common.GetPageQuery(c)
-	userId := c.GetInt("id")
+	subject, ok := resolveScopedUser(c)
+	if !ok {
+		return
+	}
+	userId := subject.ID
 	logType, _ := strconv.Atoi(c.Query("type"))
 	startTimestamp, _ := strconv.ParseInt(c.Query("start_timestamp"), 10, 64)
 	endTimestamp, _ := strconv.ParseInt(c.Query("end_timestamp"), 10, 64)
@@ -129,7 +133,11 @@ func GetLogsStat(c *gin.Context) {
 }
 
 func GetLogsSelfStat(c *gin.Context) {
-	username := c.GetString("username")
+	subject, ok := resolveScopedUser(c)
+	if !ok {
+		return
+	}
+	username := subject.Username
 	logType, _ := strconv.Atoi(c.Query("type"))
 	startTimestamp, _ := strconv.ParseInt(c.Query("start_timestamp"), 10, 64)
 	endTimestamp, _ := strconv.ParseInt(c.Query("end_timestamp"), 10, 64)

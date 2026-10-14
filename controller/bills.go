@@ -11,7 +11,11 @@ import (
 )
 
 func GetUserBills(c *gin.Context) {
-	userId := c.GetInt("id")
+	subject, ok := resolveScopedUser(c)
+	if !ok {
+		return
+	}
+	userId := subject.ID
 	period := c.Query("period")
 	if period == "" {
 		now := time.Now()

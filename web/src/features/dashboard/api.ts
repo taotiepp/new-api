@@ -54,6 +54,7 @@ export async function getUserQuotaDates(
 export async function getUserBills(params: {
   period: string
   months?: number
+  user_id?: number
 }) {
   const res = await api.get<{
     success: boolean

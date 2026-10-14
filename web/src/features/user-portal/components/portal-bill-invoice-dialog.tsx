@@ -40,6 +40,7 @@ type PortalBillInvoiceDialogProps = {
   period: string
   isCurrentMonth: boolean
   items: PortalBillStatementItem[]
+  subjectUser?: { id: number; username: string } | null
 }
 
 const INVOICE_CSV_LABELS = {
@@ -71,7 +72,9 @@ function printInvoiceSheet(sheet: HTMLElement) {
     return
   }
 
-  const headMarkup = [...document.querySelectorAll('style, link[rel="stylesheet"]')]
+  const headMarkup = [
+    ...document.querySelectorAll('style, link[rel="stylesheet"]'),
+  ]
     .map((node) => node.outerHTML)
     .join('\n')
   doc.open()
@@ -80,7 +83,7 @@ function printInvoiceSheet(sheet: HTMLElement) {
       html, body { margin: 0; background: #fff; color: #171717; color-scheme: light; }
       body { padding: 16mm; }
       @page { margin: 12mm; }
-    </style></head><body></body></html>`,
+    </style></head><body></body></html>`
   )
   doc.close()
 
@@ -125,18 +128,26 @@ export function PortalBillInvoiceDialog(props: PortalBillInvoiceDialogProps) {
   const { currency: catalogCurrency, formatQuota } = usePricingCurrency()
   const user = useAuthStore((state) => state.auth.user)
   const issuer = String(status?.system_name ?? '').trim() || 'New API'
-  const invoiceNumber = buildPortalInvoiceNumber(props.period, user?.id ?? 0)
+  const subjectUser = props.subjectUser
+  const billUserId = subjectUser?.id ?? user?.id ?? 0
+  const invoiceNumber = buildPortalInvoiceNumber(props.period, billUserId)
   const invoiceDate = buildPortalInvoiceDate(props.period)
   const title = props.isCurrentMonth ? 'PRO FORMA INVOICE' : 'INVOICE'
-  const billTo =
-    user?.display_name?.trim() || user?.username?.trim() || 'Unknown'
+  let billTo = user?.display_name?.trim() || user?.username?.trim() || 'Unknown'
+  let billUsername = user?.username
+  let billEmail = user?.email
+  if (subjectUser) {
+    billTo = subjectUser.username
+    billUsername = subjectUser.username
+    billEmail = undefined
+  }
   const totals = props.items.reduce(
     (acc, item) => ({
       quota: acc.quota + (Number(item.quota) || 0),
       count: acc.count + (Number(item.count) || 0),
       tokens: acc.tokens + (Number(item.token_used) || 0),
     }),
-    { quota: 0, count: 0, tokens: 0 },
+    { quota: 0, count: 0, tokens: 0 }
   )
 
   const handleDownloadCsv = () => {
@@ -226,11 +237,11 @@ export function PortalBillInvoiceDialog(props: PortalBillInvoiceDialogProps) {
               Bill To
             </p>
             <p className='mt-2 font-medium'>{billTo}</p>
-            {user?.username && user.username !== billTo ? (
-              <p className='text-sm text-neutral-500'>{user.username}</p>
+            {billUsername && billUsername !== billTo ? (
+              <p className='text-sm text-neutral-500'>{billUsername}</p>
             ) : null}
-            {user?.email ? (
-              <p className='text-sm text-neutral-500'>{user.email}</p>
+            {billEmail ? (
+              <p className='text-sm text-neutral-500'>{billEmail}</p>
             ) : null}
           </div>
           <div>

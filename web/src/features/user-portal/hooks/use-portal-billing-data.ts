@@ -32,13 +32,9 @@ import {
 export function usePortalBillingData(
   start: Date,
   end: Date,
-  maxRangeSeconds = PORTAL_BILLING_MAX_RANGE_SECONDS,
+  maxRangeSeconds = PORTAL_BILLING_MAX_RANGE_SECONDS
 ) {
-  const rangeTooLong = isPortalBillingRangeTooLong(
-    start,
-    end,
-    maxRangeSeconds,
-  )
+  const rangeTooLong = isPortalBillingRangeTooLong(start, end, maxRangeSeconds)
   const timeRange = computeTimeRange(1, start, end)
 
   const quotaQuery = useQuery({
@@ -51,8 +47,8 @@ export function usePortalBillingData(
             start_timestamp: timeRange.start_timestamp,
             end_timestamp: timeRange.end_timestamp,
           },
-          false,
-        ),
+          false
+        )
       )
       return (result.data ?? []) as PortalBillingRow[]
     },
@@ -66,13 +62,23 @@ export function usePortalBillingData(
   }
 }
 
-export function usePortalBills(period: string) {
+export function usePortalBills(period: string, userId?: number) {
   return useQuery({
-    queryKey: ['user-portal', 'bills', period, PORTAL_BILL_TREND_MONTHS],
+    queryKey: [
+      'user-portal',
+      'bills',
+      period,
+      PORTAL_BILL_TREND_MONTHS,
+      userId ?? 0,
+    ],
     enabled: period.length > 0,
     queryFn: async () =>
       requireServerSuccess(
-        await getUserBills({ period, months: PORTAL_BILL_TREND_MONTHS }),
+        await getUserBills({
+          period,
+          months: PORTAL_BILL_TREND_MONTHS,
+          user_id: userId,
+        })
       ).data,
   })
 }

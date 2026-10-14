@@ -37,6 +37,7 @@ import dayjs from '@/lib/dayjs'
 import { dateToUnixTimestamp } from '@/lib/time'
 
 import { usePortalBills } from '../hooks/use-portal-billing-data'
+import { usePortalSubjectUser } from '../hooks/use-portal-subject-user'
 import {
   buildPortalCostTrend,
   createPortalBillMonthRange,
@@ -46,6 +47,7 @@ import {
 import { PortalBillInvoiceDialog } from './portal-bill-invoice-dialog'
 import { PortalBillModelChart } from './portal-bill-model-chart'
 import { PortalBillingChart } from './portal-billing-chart'
+import { PortalSubjectUserPicker } from './portal-subject-user-picker'
 
 export function PortalBillPanel() {
   const { t } = useTranslation()
@@ -53,13 +55,14 @@ export function PortalBillPanel() {
   const months = useMemo(() => listPortalBillMonths(), [])
   const [monthValue, setMonthValue] = useState(months[0]?.value ?? '')
   const [invoiceOpen, setInvoiceOpen] = useState(false)
+  const subjectUser = usePortalSubjectUser()
   const selectedMonth =
     months.find((month) => month.value === monthValue) ?? months[0]
   const range = useMemo(
     () => createPortalBillMonthRange(selectedMonth?.date ?? new Date()),
-    [selectedMonth],
+    [selectedMonth]
   )
-  const bills = usePortalBills(monthValue)
+  const bills = usePortalBills(monthValue, subjectUser.subjectUserId)
   const unknownModel = t('Unknown model')
   const othersLabel = t('Other models')
   const overview = bills.data
@@ -74,21 +77,21 @@ export function PortalBillPanel() {
           token_used: item.token_used,
         })),
         unknownModel,
-        othersLabel,
+        othersLabel
       ),
-    [othersLabel, overview?.items, unknownModel],
+    [othersLabel, overview?.items, unknownModel]
   )
   const trendPoints = useMemo(
     () => buildPortalCostTrend(overview?.trend ?? [], t('Cost trend')),
-    [overview?.trend, t],
+    [overview?.trend, t]
   )
   const trendTotal = useMemo(
     () =>
       (overview?.trend ?? []).reduce(
         (sum, month) => sum + (Number(month.quota) || 0),
-        0,
+        0
       ),
-    [overview?.trend],
+    [overview?.trend]
   )
   const isCurrentMonth = dayjs(selectedMonth?.date).isSame(new Date(), 'month')
 
@@ -101,11 +104,22 @@ export function PortalBillPanel() {
           </h1>
           <p className='text-muted-foreground text-sm'>
             {t(
-              'Monthly statements group consumption by calendar month. Open usage statistics for custom ranges and daily trends.',
+              'Monthly statements group consumption by calendar month. Open usage statistics for custom ranges and daily trends.'
             )}
           </p>
+          {subjectUser.subject ? (
+            <p className='text-sm text-[var(--portal-ink)]'>
+              {t('Viewing {{username}}', {
+                username: subjectUser.subject.username,
+              })}
+            </p>
+          ) : null}
         </div>
         <div className='flex flex-wrap items-center gap-2'>
+          <PortalSubjectUserPicker
+            value={subjectUser.subject}
+            onValueChange={subjectUser.setSubject}
+          />
           <Select
             items={months.map((month) => ({
               value: month.value,
@@ -193,10 +207,7 @@ export function PortalBillPanel() {
       </div>
 
       {bills.isError ? (
-        <ErrorState
-          className='min-h-48'
-          title={t('Failed to load bills')}
-        />
+        <ErrorState className='min-h-48' title={t('Failed to load bills')} />
       ) : (
         <PortalBillModelChart shares={shares} loading={bills.isLoading} />
       )}
@@ -206,6 +217,7 @@ export function PortalBillPanel() {
         period={monthValue}
         isCurrentMonth={isCurrentMonth}
         items={overview?.items ?? []}
+        subjectUser={subjectUser.subject}
       />
     </div>
   )
