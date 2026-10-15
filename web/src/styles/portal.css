@@ -390,6 +390,15 @@ For commercial licensing, please contact support@quantumnous.com
   [data-user-portal][data-portal-console] .portal-content {
     padding-bottom: 0;
   }
+
+  [data-user-portal][data-portal-console].portal-shell {
+    height: 100dvh;
+    overflow: hidden;
+  }
+
+  [data-user-portal][data-portal-console] .portal-console-main {
+    overflow-y: auto;
+  }
 }
 
 [data-user-portal] .portal-console-body {
@@ -401,6 +410,7 @@ For commercial licensing, please contact support@quantumnous.com
 
 @media (width >= 1024px) {
   [data-user-portal] .portal-console-body {
+    overflow: hidden;
     flex-direction: row;
   }
 }
@@ -417,6 +427,7 @@ For commercial licensing, please contact support@quantumnous.com
   [data-user-portal] .portal-console-nav {
     display: flex;
     width: var(--portal-console-nav-width);
+    min-height: 0;
     flex-shrink: 0;
     flex-direction: column;
     gap: 0.25rem;
@@ -451,7 +462,7 @@ For commercial licensing, please contact support@quantumnous.com
     width: 100%;
   }
 
-  [data-user-portal] .portal-console-nav-link:last-child {
+  [data-user-portal] .portal-console-nav-footer {
     margin-top: auto;
   }
 }

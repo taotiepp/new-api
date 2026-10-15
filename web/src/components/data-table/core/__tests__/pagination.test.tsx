@@ -23,7 +23,7 @@ import {
 } from '@tanstack/react-table'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { expect, it } from 'vitest'
+import { expect, it, vi } from 'vitest'
 
 import { DataTablePagination } from '../pagination'
 
@@ -64,4 +64,27 @@ it('shows a valid empty page with navigation disabled', () => {
 it('keeps page size selection available in the default layout', () => {
   render(<Fixture />)
   expect(screen.getByRole('combobox')).toBeVisible()
+})
+it('selects a page and page size from controlled pagination', async () => {
+  const user = userEvent.setup()
+  const onPageChange = vi.fn()
+  const onPageSizeChange = vi.fn()
+  render(
+    <DataTablePagination
+      pagination={{
+        page: 1,
+        pageSize: 20,
+        total: 45,
+        onPageChange,
+        onPageSizeChange,
+      }}
+    />
+  )
+
+  await user.click(screen.getByRole('button', { name: /Go to page 2/ }))
+  expect(onPageChange).toHaveBeenCalledWith(2)
+
+  await user.click(screen.getByRole('combobox'))
+  await user.click(screen.getByRole('option', { name: '50' }))
+  expect(onPageSizeChange).toHaveBeenCalledWith(50)
 })

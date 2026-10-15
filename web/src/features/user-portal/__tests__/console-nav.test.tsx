@@ -81,6 +81,12 @@ describe('portal console navigation', () => {
       'href',
       '/app/settings',
     )
+    expect(screen.getByRole('link', { name: 'System Settings' })).toHaveClass(
+      'portal-console-nav-footer',
+    )
+    expect(screen.getByRole('link', { name: 'Request Logs' })).not.toHaveClass(
+      'portal-console-nav-footer',
+    )
     expect(screen.getByRole('navigation', { name: 'Console navigation' })).toHaveClass(
       'portal-console-nav',
     )

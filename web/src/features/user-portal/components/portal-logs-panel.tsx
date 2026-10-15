@@ -22,6 +22,7 @@ import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
+import { DataTablePagination } from '@/components/data-table'
 import { ErrorState } from '@/components/error-state'
 import { Button } from '@/components/ui/button'
 import {
@@ -67,7 +68,7 @@ import { PortalLogDetailsDialog } from './portal-log-details-dialog'
 import { PortalLogsTable } from './portal-logs-table'
 import { PortalSubjectUserPicker } from './portal-subject-user-picker'
 
-const PAGE_SIZE = 20
+const DEFAULT_PAGE_SIZE = 20
 const ALL_LOG_TYPES = 'all'
 
 export function PortalLogsPanel() {
@@ -80,6 +81,7 @@ export function PortalLogsPanel() {
   const [modelName, setModelName] = useState('')
   const [keyName, setKeyName] = useState('')
   const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE)
   const [selected, setSelected] = useState<UsageLog | null>(null)
   const subjectUser = usePortalSubjectUser()
 
@@ -107,6 +109,7 @@ export function PortalLogsPanel() {
     modelValue ?? '',
     keyName,
     page,
+    pageSize,
   ] as const
 
   const listQuery = useQuery({
@@ -116,7 +119,7 @@ export function PortalLogsPanel() {
       const result = requireServerSuccess(
         await getUserLogs({
           p: page,
-          page_size: PAGE_SIZE,
+          page_size: pageSize,
           type: typeValue,
           model_name: modelValue,
           token_name: keyName || undefined,
@@ -130,7 +133,7 @@ export function PortalLogsPanel() {
   })
 
   const statsQuery = useQuery({
-    queryKey: ['user-portal', 'logs-stats', queryKey.slice(0, -1)],
+    queryKey: ['user-portal', 'logs-stats', queryKey.slice(0, -2)],
     enabled: !rangeTooLong,
     queryFn: async () => {
       const result = requireServerSuccess(
@@ -149,7 +152,6 @@ export function PortalLogsPanel() {
 
   const items = (listQuery.data?.items ?? []) as UsageLog[]
   const total = listQuery.data?.total ?? 0
-  const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE))
   const stats = statsQuery.data
   const defaultRange = createDefaultPortalBillingRange()
   const filtersAreDefault =
@@ -340,33 +342,6 @@ export function PortalLogsPanel() {
             </Button>
           )}
         </div>
-        {total > PAGE_SIZE ? (
-          <div className='flex items-center gap-2'>
-            <Button
-              type='button'
-              variant='outline'
-              size='sm'
-              className='rounded-full'
-              disabled={page <= 1}
-              onClick={() => setPage((current) => Math.max(1, current - 1))}
-            >
-              {t('Previous')}
-            </Button>
-            <span className='text-muted-foreground text-sm tabular-nums'>
-              {t('Page')} {page} {t('of')} {pageCount}
-            </span>
-            <Button
-              type='button'
-              variant='outline'
-              size='sm'
-              className='rounded-full'
-              disabled={page >= pageCount}
-              onClick={() => setPage((current) => current + 1)}
-            >
-              {t('Next page')}
-            </Button>
-          </div>
-        ) : null}
       </div>
 
       <div className='grid gap-3 sm:grid-cols-3'>
@@ -403,6 +378,21 @@ export function PortalLogsPanel() {
       </div>
 
       {listBody}
+
+      {rangeTooLong ? null : (
+        <DataTablePagination
+          pagination={{
+            page,
+            pageSize,
+            total,
+            onPageChange: setPage,
+            onPageSizeChange: (nextPageSize) => {
+              setPageSize(nextPageSize)
+              setPage(1)
+            },
+          }}
+        />
+      )}
 
       <PortalLogDetailsDialog
         log={selected}

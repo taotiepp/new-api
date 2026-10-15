@@ -364,6 +364,76 @@ describe('portal console pages', () => {
     })
   })
 
+  test('pages request logs from the bottom of the list', async () => {
+    getUserModels.mockResolvedValue({ success: true, data: [] })
+    getUserLogs.mockResolvedValue({
+      success: true,
+      data: {
+        items: [
+          usageLogSchema.parse({
+            id: 9,
+            user_id: 1,
+            created_at: 1_700_000_000,
+            type: 2,
+            content: 'ok',
+            username: 'alice',
+            token_name: 'production',
+            model_name: 'gpt-4.1',
+            quota: 120,
+            prompt_tokens: 10,
+            completion_tokens: 20,
+            use_time: 1,
+            is_stream: true,
+            channel: 3,
+            token_id: 7,
+            group: '',
+            ip: '127.0.0.1',
+            other: '{}',
+            request_id: 'req_1',
+            upstream_request_id: '',
+          }),
+        ],
+        total: 45,
+        page: 1,
+        page_size: 20,
+      },
+    })
+    getUserLogStats.mockResolvedValue({
+      success: true,
+      data: { quota: 0, rpm: 0, tpm: 0 },
+    })
+
+    const user = userEvent.setup()
+    renderPanel(<PortalLogsPanel />)
+
+    const model = await screen.findByText('gpt-4.1')
+    const pageTwo = screen.getByRole('button', { name: /Go to page 2/ })
+    expect(
+      model.compareDocumentPosition(pageTwo) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy()
+
+    await user.click(pageTwo)
+    await waitFor(() => {
+      expect(getUserLogs).toHaveBeenCalledWith(
+        expect.objectContaining({ p: 2, page_size: 20 })
+      )
+    })
+
+    const pageSizeSelect = screen
+      .getAllByRole('combobox')
+      .find((element) => element.textContent?.includes('20'))
+    if (!pageSizeSelect) {
+      throw new Error('page size select not found')
+    }
+    await user.click(pageSizeSelect)
+    await user.click(await screen.findByRole('option', { name: '50' }))
+    await waitFor(() => {
+      expect(getUserLogs).toHaveBeenCalledWith(
+        expect.objectContaining({ p: 1, page_size: 50 })
+      )
+    })
+  })
+
   test('filters request logs by an exact key name chosen from search', async () => {
     getUserModels.mockResolvedValue({ success: true, data: [] })
     getUserLogs.mockResolvedValue({

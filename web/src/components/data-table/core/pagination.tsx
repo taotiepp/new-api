@@ -36,9 +36,77 @@ import {
 } from '@/components/ui/select'
 import { cn, getPageNumbers } from '@/lib/utils'
 
+type ControlledPagination = {
+  page: number
+  pageSize: number
+  total: number
+  onPageChange: (page: number) => void
+  onPageSizeChange: (pageSize: number) => void
+}
+
 type DataTablePaginationProps<TData> = {
-  table: Table<TData>
   compact?: boolean
+} & (
+  | { table: Table<TData>; pagination?: never }
+  | { table?: never; pagination: ControlledPagination }
+)
+
+type PaginationControls = {
+  currentPage: number
+  pageSize: number
+  totalPages: number
+  totalRows: number
+  canPrevious: boolean
+  canNext: boolean
+  goToFirst: () => void
+  goToPrevious: () => void
+  goToNext: () => void
+  goToLast: () => void
+  goToPage: (page: number) => void
+  setPageSize: (pageSize: number) => void
+}
+
+function tablePaginationControls<TData>(table: Table<TData>): PaginationControls {
+  const pagination = table.getState().pagination
+  return {
+    currentPage: pagination.pageIndex + 1,
+    pageSize: pagination.pageSize,
+    totalPages: table.getPageCount(),
+    totalRows: table.getRowCount(),
+    canPrevious: table.getCanPreviousPage(),
+    canNext: table.getCanNextPage(),
+    goToFirst: () => table.setPageIndex(0),
+    goToPrevious: () => table.previousPage(),
+    goToNext: () => table.nextPage(),
+    goToLast: () => table.setPageIndex(table.getPageCount() - 1),
+    goToPage: (page) => table.setPageIndex(page - 1),
+    setPageSize: (pageSize) => table.setPageSize(pageSize),
+  }
+}
+
+function controlledPaginationControls(
+  pagination: ControlledPagination
+): PaginationControls {
+  const totalPages = Math.max(
+    1,
+    Math.ceil(pagination.total / pagination.pageSize)
+  )
+  return {
+    currentPage: pagination.page,
+    pageSize: pagination.pageSize,
+    totalPages,
+    totalRows: pagination.total,
+    canPrevious: pagination.page > 1,
+    canNext: pagination.page < totalPages,
+    goToFirst: () => pagination.onPageChange(1),
+    goToPrevious: () =>
+      pagination.onPageChange(Math.max(1, pagination.page - 1)),
+    goToNext: () =>
+      pagination.onPageChange(Math.min(totalPages, pagination.page + 1)),
+    goToLast: () => pagination.onPageChange(totalPages),
+    goToPage: (page) => pagination.onPageChange(page),
+    setPageSize: (pageSize) => pagination.onPageSizeChange(pageSize),
+  }
 }
 
 const PAGE_SIZE_OPTIONS = [10, 20, 30, 40, 50, 100] as const
@@ -47,16 +115,18 @@ const PAGE_SIZE_SELECT_ITEMS = PAGE_SIZE_OPTIONS.map((pageSize) => ({
   label: pageSize,
 }))
 
-export function DataTablePagination<TData>({
-  table,
-  compact = false,
-}: DataTablePaginationProps<TData>) {
+export function DataTablePagination<TData>(
+  props: DataTablePaginationProps<TData>
+) {
   const { t } = useTranslation()
-  const pagination = table.getState().pagination
-  const currentPage = pagination.pageIndex + 1
-  const pageSize = pagination.pageSize
-  const totalPages = table.getPageCount()
-  const totalRows = table.getRowCount()
+  const compact = props.compact ?? false
+  const controls = props.table
+    ? tablePaginationControls(props.table)
+    : controlledPaginationControls(props.pagination)
+  const currentPage = controls.currentPage
+  const pageSize = controls.pageSize
+  const totalPages = controls.totalPages
+  const totalRows = controls.totalRows
   const pageNumbers = getPageNumbers(currentPage, totalPages)
   const pageItems = pageNumbers.map((page, index) => ({
     page,
@@ -78,8 +148,8 @@ export function DataTablePagination<TData>({
             size='icon'
             className='size-11'
             aria-label={t('Go to previous page')}
-            onClick={() => table.previousPage()}
-            disabled={!table.getCanPreviousPage()}
+            onClick={() => controls.goToPrevious()}
+            disabled={!controls.canPrevious}
           >
             <ChevronLeftIcon />
           </Button>
@@ -91,8 +161,8 @@ export function DataTablePagination<TData>({
             size='icon'
             className='size-11'
             aria-label={t('Go to next page')}
-            onClick={() => table.nextPage()}
-            disabled={!table.getCanNextPage()}
+            onClick={() => controls.goToNext()}
+            disabled={!controls.canNext}
           >
             <ChevronRightIcon />
           </Button>
@@ -124,7 +194,7 @@ export function DataTablePagination<TData>({
             items={PAGE_SIZE_SELECT_ITEMS}
             value={`${pageSize}`}
             onValueChange={(value) => {
-              table.setPageSize(Number(value))
+              controls.setPageSize(Number(value))
             }}
           >
             <SelectTrigger className='text-foreground h-8 w-[64px] font-medium tabular-nums sm:w-[70px]'>
@@ -146,8 +216,8 @@ export function DataTablePagination<TData>({
           <Button
             variant='outline'
             className='text-muted-foreground hover:text-foreground disabled:text-muted-foreground/50 size-8 p-0 @max-lg/pagination:hidden'
-            onClick={() => table.setPageIndex(0)}
-            disabled={!table.getCanPreviousPage()}
+            onClick={() => controls.goToFirst()}
+            disabled={!controls.canPrevious}
           >
             <span className='sr-only'>{t('Go to first page')}</span>
             <DoubleArrowLeftIcon className='h-4 w-4' />
@@ -155,8 +225,8 @@ export function DataTablePagination<TData>({
           <Button
             variant='outline'
             className='text-muted-foreground hover:text-foreground disabled:text-muted-foreground/50 size-8 p-0'
-            onClick={() => table.previousPage()}
-            disabled={!table.getCanPreviousPage()}
+            onClick={() => controls.goToPrevious()}
+            disabled={!controls.canPrevious}
           >
             <span className='sr-only'>{t('Go to previous page')}</span>
             <ChevronLeftIcon className='h-4 w-4' />
@@ -164,11 +234,7 @@ export function DataTablePagination<TData>({
 
           {pageItems.map(({ page: pageNumber, key }) => (
             <div key={key} className='flex items-center'>
-              {pageNumber === '...' ? (
-                <span className='text-muted-foreground/60 px-0.5 text-sm @lg/pagination:px-1'>
-                  ...
-                </span>
-              ) : (
+              {typeof pageNumber === 'number' ? (
                 <Button
                   variant={currentPage === pageNumber ? 'default' : 'outline'}
                   className={cn(
@@ -177,13 +243,17 @@ export function DataTablePagination<TData>({
                       ? 'font-semibold'
                       : 'text-muted-foreground hover:text-foreground'
                   )}
-                  onClick={() => table.setPageIndex((pageNumber as number) - 1)}
+                  onClick={() => controls.goToPage(pageNumber)}
                 >
                   <span className='sr-only'>
                     {t('Go to page {{page}}', { page: pageNumber })}
                   </span>
                   {pageNumber}
                 </Button>
+              ) : (
+                <span className='text-muted-foreground/60 px-0.5 text-sm @lg/pagination:px-1'>
+                  ...
+                </span>
               )}
             </div>
           ))}
@@ -191,8 +261,8 @@ export function DataTablePagination<TData>({
           <Button
             variant='outline'
             className='text-muted-foreground hover:text-foreground disabled:text-muted-foreground/50 size-8 p-0'
-            onClick={() => table.nextPage()}
-            disabled={!table.getCanNextPage()}
+            onClick={() => controls.goToNext()}
+            disabled={!controls.canNext}
           >
             <span className='sr-only'>{t('Go to next page')}</span>
             <ChevronRightIcon className='h-4 w-4' />
@@ -200,8 +270,8 @@ export function DataTablePagination<TData>({
           <Button
             variant='outline'
             className='text-muted-foreground hover:text-foreground disabled:text-muted-foreground/50 size-8 p-0 @max-lg/pagination:hidden'
-            onClick={() => table.setPageIndex(table.getPageCount() - 1)}
-            disabled={!table.getCanNextPage()}
+            onClick={() => controls.goToLast()}
+            disabled={!controls.canNext}
           >
             <span className='sr-only'>{t('Go to last page')}</span>
             <DoubleArrowRightIcon className='h-4 w-4' />

@@ -43,6 +43,7 @@ export function PortalConsoleNav() {
             aria-current={active ? 'page' : undefined}
             className={cn(
               'portal-console-nav-link',
+              item.href === '/app/settings' && 'portal-console-nav-footer',
               active && 'portal-console-nav-active',
             )}
             key={item.href}
