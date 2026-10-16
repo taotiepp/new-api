@@ -26,10 +26,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { LOG_TYPES } from '@/features/usage-logs/constants'
+import { LOG_TYPE_ENUM, LOG_TYPES } from '@/features/usage-logs/constants'
 import type { UsageLog } from '@/features/usage-logs/data/schema'
 import {
   formatAppliedDiscount,
+  formatDiscountMultiplier,
   getAppliedUserDiscount,
 } from '@/features/usage-logs/lib/discount-display'
 import {
@@ -47,6 +48,7 @@ import {
 } from '@/lib/currency'
 import dayjs from '@/lib/dayjs'
 import { formatNumber, formatUseTime } from '@/lib/format'
+import { cn } from '@/lib/utils'
 
 type PortalLogDetailsDialogProps = {
   log: UsageLog | null
@@ -179,7 +181,13 @@ export function PortalLogDetailsDialog(props: PortalLogDetailsDialogProps) {
           {log?.content ? (
             <div className='grid gap-1'>
               <dt className='text-muted-foreground text-sm'>{t('Content')}</dt>
-              <dd className='rounded-[var(--portal-radius)] bg-[var(--portal-surface-muted)] px-3 py-2 text-sm break-all whitespace-pre-wrap'>
+              <dd
+                className={cn(
+                  'rounded-[var(--portal-radius)] bg-[var(--portal-surface-muted)] px-3 py-2 text-sm break-all whitespace-pre-wrap',
+                  log.type === LOG_TYPE_ENUM.ERROR &&
+                    'text-red-600 dark:text-red-400'
+                )}
+              >
                 {log.content}
               </dd>
             </div>
@@ -217,110 +225,242 @@ function effectiveGroupRatio(other: LogOtherData): {
   }
 }
 
+function formulaDiscountLabel(
+  other: LogOtherData,
+  t: (key: string) => string
+): string {
+  const userDiscount = getAppliedUserDiscount(other)
+  if (userDiscount) {
+    const applied = formatAppliedDiscount(userDiscount, t)
+    const separator = ' · '
+    const splitAt = applied.indexOf(separator)
+    if (splitAt === -1) return `${t('Customer discount')} ${applied}`
+    const multiplier = applied.slice(0, splitAt)
+    const source = applied.slice(splitAt + separator.length)
+    return `${t('Customer discount')} ${multiplier} (${source})`
+  }
+  const group = effectiveGroupRatio(other)
+  if (!group) return ''
+  return `${t(group.labelKey)} ${formatDiscountMultiplier(group.value)}`
+}
+
+function tieredTermTokens(
+  field: string,
+  log: UsageLog,
+  other: LogOtherData,
+  fields: ReadonlySet<string>
+): number {
+  const cacheRead = other.cache_tokens || 0
+  const cacheWrite5m = other.cache_creation_tokens_5m || 0
+  const cacheWrite1h = other.cache_creation_tokens_1h || 0
+  const cacheWrite = other.cache_creation_tokens || 0
+  const imageTokens = other.image_output || 0
+  const audioIn = other.audio_input_token_count || other.audio_input || 0
+  const audioOut = other.audio_output || 0
+  const showOneHour = fields.has('cacheCreate1hPrice') && cacheWrite1h > 0
+  let writeTokens = cacheWrite
+  if (cacheWrite5m > 0) {
+    writeTokens = cacheWrite5m
+  } else if (showOneHour && cacheWrite >= cacheWrite1h) {
+    writeTokens = cacheWrite - cacheWrite1h
+  }
+
+  if (field === 'cacheReadPrice') return cacheRead
+  if (field === 'cacheCreatePrice') return writeTokens
+  if (field === 'cacheCreate1hPrice') return cacheWrite1h
+  if (field === 'imagePrice') return imageTokens
+  if (field === 'audioInputPrice') return audioIn
+  if (field === 'audioOutputPrice') return audioOut
+
+  if (other.claude === true) {
+    if (field === 'inputPrice') return Math.max(log.prompt_tokens, 0)
+    if (field === 'outputPrice') return Math.max(log.completion_tokens, 0)
+    return 0
+  }
+
+  if (field === 'outputPrice') {
+    const tokens = fields.has('audioOutputPrice')
+      ? log.completion_tokens - audioOut
+      : log.completion_tokens
+    return Math.max(tokens, 0)
+  }
+  if (field === 'inputPrice') {
+    let tokens = log.prompt_tokens
+    if (fields.has('cacheReadPrice')) tokens -= cacheRead
+    if (fields.has('cacheCreatePrice')) tokens -= writeTokens
+    if (showOneHour) tokens -= cacheWrite1h
+    if (fields.has('imagePrice')) tokens -= imageTokens
+    if (fields.has('audioInputPrice')) tokens -= audioIn
+    return Math.max(tokens, 0)
+  }
+  return 0
+}
+
+function tokenPriceTerm(
+  label: string,
+  tokens: number,
+  priceLabel: string
+): string | null {
+  if (tokens <= 0) return null
+  return `${label} ${formatNumber(tokens)} × ${priceLabel}`
+}
+
+function surchargeTerms(
+  other: LogOtherData,
+  t: (key: string) => string
+): string[] {
+  const terms: string[] = []
+  if (other.web_search && other.web_search_call_count) {
+    const price = other.web_search_price
+      ? ` × ${formatPrice(other.web_search_price)}`
+      : ''
+    terms.push(
+      `${t('Web Search')} ${formatNumber(other.web_search_call_count)}${price}`
+    )
+  }
+  if (other.file_search && other.file_search_call_count) {
+    const price = other.file_search_price
+      ? ` × ${formatPrice(other.file_search_price)}`
+      : ''
+    terms.push(
+      `${t('File Search')} ${formatNumber(other.file_search_call_count)}${price}`
+    )
+  }
+  if (other.image_generation_call && other.image_generation_call_price) {
+    terms.push(
+      `${t('Image Generation')} ${formatPrice(other.image_generation_call_price)}`
+    )
+  }
+  return terms
+}
+
+function perTokenFormulaTerms(
+  log: UsageLog,
+  other: LogOtherData,
+  t: (key: string) => string
+): string[] {
+  if (other.model_ratio == null) return []
+  const inputPrice = other.model_ratio * 2.0
+  const cacheRead = other.cache_tokens || 0
+  const cacheWrite = other.cache_creation_tokens || 0
+  const cacheWrite5m = other.cache_creation_tokens_5m || 0
+  const cacheWrite1h = other.cache_creation_tokens_1h || 0
+  const showPlainWrite =
+    cacheWrite > 0 && cacheWrite5m === 0 && cacheWrite1h === 0
+  let inputTokens = log.prompt_tokens
+  if (other.claude !== true) {
+    inputTokens -= cacheRead
+    if (showPlainWrite) inputTokens -= cacheWrite
+    if (cacheWrite5m > 0) inputTokens -= cacheWrite5m
+    if (cacheWrite1h > 0) inputTokens -= cacheWrite1h
+    inputTokens = Math.max(inputTokens, 0)
+  }
+
+  const terms: string[] = []
+  const inputTerm = tokenPriceTerm(
+    t('Input'),
+    inputTokens,
+    `${formatPrice(inputPrice)}/M`
+  )
+  if (inputTerm) terms.push(inputTerm)
+  if (other.completion_ratio != null) {
+    const outputTerm = tokenPriceTerm(
+      t('Output'),
+      log.completion_tokens,
+      `${formatPrice(inputPrice * other.completion_ratio)}/M`
+    )
+    if (outputTerm) terms.push(outputTerm)
+  }
+  if (cacheRead > 0) {
+    const cacheRatio = other.cache_ratio ?? 1
+    const term = tokenPriceTerm(
+      t('Cache Read'),
+      cacheRead,
+      `${formatPrice(inputPrice * cacheRatio)}/M`
+    )
+    if (term) terms.push(term)
+  }
+  if (showPlainWrite) {
+    const writeRatio = other.cache_creation_ratio ?? 1
+    const term = tokenPriceTerm(
+      t('Cache Write'),
+      cacheWrite,
+      `${formatPrice(inputPrice * writeRatio)}/M`
+    )
+    if (term) terms.push(term)
+  }
+  if (cacheWrite5m > 0) {
+    const writeRatio = other.cache_creation_ratio_5m ?? 1
+    const term = tokenPriceTerm(
+      t('Cache Write (5m)'),
+      cacheWrite5m,
+      `${formatPrice(inputPrice * writeRatio)}/M`
+    )
+    if (term) terms.push(term)
+  }
+  if (cacheWrite1h > 0) {
+    const writeRatio = other.cache_creation_ratio_1h ?? 1
+    const term = tokenPriceTerm(
+      t('Cache Write (1h)'),
+      cacheWrite1h,
+      `${formatPrice(inputPrice * writeRatio)}/M`
+    )
+    if (term) terms.push(term)
+  }
+  return terms
+}
+
 function formatPortalCostFormula(
   log: UsageLog,
   other: LogOtherData | null,
   t: (key: string) => string,
   formatQuota: (quota: number) => string
 ): string {
-  const total = `${t('Total Cost')} = ${formatQuota(log.quota)}`
-  if (!other) return total
+  const total = formatQuota(log.quota)
+  if (!other) return `${t('Total Cost')} = ${total}`
 
-  const lines: string[] = []
-  const userDiscount = getAppliedUserDiscount(other)
-  const group = userDiscount ? null : effectiveGroupRatio(other)
-  const isTieredExpr = other.billing_mode === 'tiered_expr'
-  const isPerCall = isPerCallBilling(other.model_price)
+  const discount = formulaDiscountLabel(other, t)
+  const terms: string[] = []
+  let tierPrefix = ''
 
-  if (isTieredExpr) {
-    lines.push(t('Dynamic Pricing'))
+  if (other.billing_mode === 'tiered_expr') {
     if (other.matched_tier) {
-      lines.push(`${t('Matched Tier')}: ${other.matched_tier}`)
+      tierPrefix = `${t('Matched Tier')}: ${other.matched_tier}\n`
     }
     const summary = getTieredBillingSummary(other)
     if (summary) {
+      const fields = new Set(summary.priceEntries.map((entry) => entry.field))
       for (const entry of summary.priceEntries) {
         const unit = entry.unit === 'request' ? t('request') : 'M'
-        lines.push(
-          `${t(entry.shortLabel)}: ${formatPrice(entry.price)}/${unit}`
+        const priceLabel = `${formatPrice(entry.price)}/${unit}`
+        if (entry.unit === 'request') {
+          terms.push(`${t(entry.shortLabel)} ${priceLabel}`)
+          continue
+        }
+        const term = tokenPriceTerm(
+          t(entry.shortLabel),
+          tieredTermTokens(entry.field, log, other, fields),
+          priceLabel
         )
+        if (term) terms.push(term)
       }
     }
-  } else if (isPerCall) {
-    lines.push(t('Per-call'))
+  } else if (isPerCallBilling(other.model_price)) {
     if (other.model_price != null) {
-      lines.push(`${t('Model Price')} ${formatPrice(other.model_price)}`)
+      terms.push(`${t('Per-call')} ${formatPrice(other.model_price)}`)
     }
-  } else if (other.model_ratio != null) {
-    const inputPrice = other.model_ratio * 2.0
-    lines.push(t('Per-token'))
-    lines.push(
-      `${t('Input')} ${formatNumber(log.prompt_tokens)} × ${formatPrice(inputPrice)}/M`
-    )
-    if (other.completion_ratio != null) {
-      lines.push(
-        `+ ${t('Output')} ${formatNumber(log.completion_tokens)} × ${formatPrice(inputPrice * other.completion_ratio)}/M`
-      )
-    }
-    if ((other.cache_tokens || 0) > 0) {
-      const cacheRatio = other.cache_ratio ?? 1
-      lines.push(
-        `+ ${t('Cache Read')} ${formatNumber(other.cache_tokens || 0)} × ${formatPrice(inputPrice * cacheRatio)}/M`
-      )
-    }
-    if (
-      (other.cache_creation_tokens || 0) > 0 &&
-      (other.cache_creation_tokens_5m || 0) === 0 &&
-      (other.cache_creation_tokens_1h || 0) === 0
-    ) {
-      const writeRatio = other.cache_creation_ratio ?? 1
-      lines.push(
-        `+ ${t('Cache Write')} ${formatNumber(other.cache_creation_tokens || 0)} × ${formatPrice(inputPrice * writeRatio)}/M`
-      )
-    }
-    if ((other.cache_creation_tokens_5m || 0) > 0) {
-      const writeRatio = other.cache_creation_ratio_5m ?? 1
-      lines.push(
-        `+ ${t('Cache Write (5m)')} ${formatNumber(other.cache_creation_tokens_5m || 0)} × ${formatPrice(inputPrice * writeRatio)}/M`
-      )
-    }
-    if ((other.cache_creation_tokens_1h || 0) > 0) {
-      const writeRatio = other.cache_creation_ratio_1h ?? 1
-      lines.push(
-        `+ ${t('Cache Write (1h)')} ${formatNumber(other.cache_creation_tokens_1h || 0)} × ${formatPrice(inputPrice * writeRatio)}/M`
-      )
-    }
+  } else {
+    terms.push(...perTokenFormulaTerms(log, other, t))
   }
 
-  if (other.web_search && other.web_search_call_count) {
-    let searchLine = `+ ${t('Web Search')} ${other.web_search_call_count}x`
-    if (other.web_search_price) {
-      searchLine += ` (${formatPrice(other.web_search_price)})`
-    }
-    lines.push(searchLine)
-  }
-  if (other.file_search && other.file_search_call_count) {
-    let searchLine = `+ ${t('File Search')} ${other.file_search_call_count}x`
-    if (other.file_search_price) {
-      searchLine += ` (${formatPrice(other.file_search_price)})`
-    }
-    lines.push(searchLine)
-  }
-  if (other.image_generation_call && other.image_generation_call_price) {
-    lines.push(
-      `+ ${t('Image Generation')} ${formatPrice(other.image_generation_call_price)}`
-    )
+  terms.push(...surchargeTerms(other, t))
+
+  if (terms.length === 0) {
+    if (!discount) return `${t('Total Cost')} = ${total}`
+    return `${tierPrefix}× ${discount} = ${total}`
   }
 
-  if (userDiscount) {
-    lines.push(
-      `× ${t('Customer discount')} ${formatAppliedDiscount(userDiscount, t)}`
-    )
-  } else if (group) {
-    lines.push(`× ${t(group.labelKey)} ${group.value.toFixed(4)}x`)
-  }
-
-  if (lines.length === 0) return total
-  lines.push(`= ${formatQuota(log.quota)}`)
-  return lines.join('\n')
+  const sum = terms.length === 1 ? terms[0] : `(${terms.join(' + ')})`
+  const equation = discount ? `(${terms.join(' + ')}) × ${discount}` : sum
+  return `${tierPrefix}${equation} = ${total}`
 }

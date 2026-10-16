@@ -69,7 +69,7 @@ it('selects a page and page size from controlled pagination', async () => {
   const user = userEvent.setup()
   const onPageChange = vi.fn()
   const onPageSizeChange = vi.fn()
-  render(
+  const { rerender } = render(
     <DataTablePagination
       pagination={{
         page: 1,
@@ -83,6 +83,27 @@ it('selects a page and page size from controlled pagination', async () => {
 
   await user.click(screen.getByRole('button', { name: /Go to page 2/ }))
   expect(onPageChange).toHaveBeenCalledWith(2)
+
+  rerender(
+    <DataTablePagination
+      pagination={{
+        page: 4,
+        pageSize: 20,
+        total: 8800,
+        onPageChange,
+        onPageSizeChange,
+      }}
+    />
+  )
+  expect(
+    screen.getByRole('button', { name: 'Go to page 33' })
+  ).toBeVisible()
+  expect(
+    screen.getByRole('button', { name: 'Go to page 44' })
+  ).toBeVisible()
+  expect(
+    screen.getByRole('button', { name: 'Go to page 55' })
+  ).toBeVisible()
 
   await user.click(screen.getByRole('combobox'))
   await user.click(screen.getByRole('option', { name: '50' }))

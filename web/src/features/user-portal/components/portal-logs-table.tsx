@@ -24,13 +24,18 @@ import {
   staticDataTableClassNames,
   type StaticDataTableColumn,
 } from '@/components/data-table'
+import {
+  StatusBadge,
+  type StatusBadgeProps,
+} from '@/components/status-badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { TableCell, TableRow } from '@/components/ui/table'
 import { LogCostDisplay } from '@/features/usage-logs/components/log-cost-display'
 import { StreamTpsCell } from '@/features/usage-logs/components/timing-metrics-cell'
+import { LOG_TYPE_ENUM } from '@/features/usage-logs/constants'
 import type { UsageLog } from '@/features/usage-logs/data/schema'
 import { parseLogOther } from '@/features/usage-logs/lib/format'
-import { isTimingLogType } from '@/features/usage-logs/lib/utils'
+import { getLogTypeConfig, isTimingLogType } from '@/features/usage-logs/lib/utils'
 import dayjs from '@/lib/dayjs'
 import { formatNumber, formatUseTime } from '@/lib/format'
 import { cn } from '@/lib/utils'
@@ -55,6 +60,21 @@ export function PortalLogsTable(props: PortalLogsTableProps) {
         cell: (log) => dayjs.unix(log.created_at).format('MM/DD HH:mm:ss'),
       },
       {
+        id: 'type',
+        header: t('Type'),
+        cell: (log) => {
+          const config = getLogTypeConfig(log.type)
+          return (
+            <StatusBadge
+              label={t(config.label)}
+              variant={config.color as StatusBadgeProps['variant']}
+              size='sm'
+              copyable={false}
+            />
+          )
+        },
+      },
+      {
         id: 'model',
         header: t('Model'),
         cellClassName: 'max-w-44 font-medium',
@@ -65,6 +85,25 @@ export function PortalLogsTable(props: PortalLogsTableProps) {
         header: t('API Key'),
         cellClassName: staticDataTableClassNames.compactMutedCell,
         cell: (log) => log.token_name || DASH,
+      },
+      {
+        id: 'content',
+        header: t('Content'),
+        cellClassName: 'max-w-72',
+        cell: (log) => {
+          if (!log.content) return DASH
+          return (
+            <span
+              className={cn(
+                'line-clamp-3 break-all whitespace-pre-wrap',
+                log.type === LOG_TYPE_ENUM.ERROR &&
+                  'text-red-600 dark:text-red-400'
+              )}
+            >
+              {log.content}
+            </span>
+          )
+        },
       },
       {
         id: 'input',
@@ -159,7 +198,11 @@ export function PortalLogsTable(props: PortalLogsTableProps) {
       renderRow={(log) => (
         <TableRow
           tabIndex={0}
-          className='cursor-pointer'
+          className={cn(
+            'cursor-pointer',
+            log.type === LOG_TYPE_ENUM.ERROR &&
+              'bg-rose-50/40 hover:bg-rose-50/70 dark:bg-rose-950/20 dark:hover:bg-rose-950/30'
+          )}
           onClick={() => props.onSelect(log)}
           onKeyDown={(event) => {
             selectLogOnActivate(event, log, props.onSelect)

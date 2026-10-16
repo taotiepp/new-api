@@ -277,8 +277,10 @@ describe('portal console pages', () => {
       expect(screen.getByText('req_1')).toBeInTheDocument()
     })
     expect(screen.getByText('Cost formula')).toBeInTheDocument()
-    expect(screen.getByText(/Per-token/)).toBeInTheDocument()
-    expect(screen.getByText(/Group Ratio/)).toBeInTheDocument()
+    expect(screen.getByText(/Input 5 ×/)).toBeInTheDocument()
+    expect(screen.getByText(/Output 20 ×/)).toBeInTheDocument()
+    expect(screen.getByText(/Cache Read 5 ×/)).toBeInTheDocument()
+    expect(screen.getByText(/Group Ratio 1x/)).toBeInTheDocument()
     expect(screen.getByText(/\/M/)).toBeInTheDocument()
   })
 
@@ -496,6 +498,68 @@ describe('portal console pages', () => {
 
     await waitFor(() => {
       expect(getUserLogs.mock.calls.length).toBeGreaterThan(callsBeforeRefresh)
+    })
+  })
+
+  test('shows error log content in red and filters by log type', async () => {
+    getUserModels.mockResolvedValue({ success: true, data: [] })
+    getUserLogs.mockResolvedValue({
+      success: true,
+      data: {
+        items: [
+          usageLogSchema.parse({
+            id: 11,
+            user_id: 1,
+            created_at: 1_700_000_000,
+            type: 5,
+            content: 'upstream timeout',
+            username: 'alice',
+            token_name: 'production',
+            model_name: 'gpt-4.1',
+            quota: 0,
+            prompt_tokens: 0,
+            completion_tokens: 0,
+            use_time: 1,
+            is_stream: false,
+            channel: 3,
+            token_id: 7,
+            group: '',
+            ip: '',
+            other: '{}',
+            request_id: 'req_err',
+            upstream_request_id: '',
+          }),
+        ],
+        total: 1,
+        page: 1,
+        page_size: 20,
+      },
+    })
+    getUserLogStats.mockResolvedValue({
+      success: true,
+      data: { quota: 0, rpm: 0, tpm: 0 },
+    })
+
+    const user = userEvent.setup()
+    renderPanel(<PortalLogsPanel />)
+
+    expect(
+      await screen.findByRole('columnheader', { name: 'Type' })
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('columnheader', { name: 'Content' })
+    ).toBeInTheDocument()
+    const content = await screen.findByText('upstream timeout')
+    expect(content).toHaveClass('text-red-600')
+    expect(content.closest('tr')).toHaveClass('bg-rose-50/40')
+    expect(screen.getByText('Error')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('combobox', { name: 'All Types' }))
+    await user.click(await screen.findByRole('option', { name: 'Error' }))
+    await waitFor(() => {
+      expect(getUserLogs).toHaveBeenCalledWith(
+        expect.objectContaining({ type: 5 })
+      )
     })
   })
 })
