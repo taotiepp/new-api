@@ -14,7 +14,7 @@ import (
 )
 
 func SetRouter(router *gin.Engine, assets WebAssets) {
-	router.GET("/metrics", middleware.AdminAuth(), controller.Metrics)
+	router.GET("/metrics", controller.Metrics)
 	SetApiRouter(router)
 	SetDashboardRouter(router)
 	SetRelayRouter(router)
