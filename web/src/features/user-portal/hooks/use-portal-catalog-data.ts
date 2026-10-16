@@ -52,7 +52,7 @@ export function usePortalCatalogData(enabled = true) {
       return {
         ...model,
         key: model.model_name,
-        enable_groups: [],
+        enable_groups: model.enable_groups ?? [],
         vendor_name: vendor?.name,
         vendor_icon: vendor?.icon,
         vendor_description: vendor?.description,

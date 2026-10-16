@@ -20,6 +20,7 @@ import { FILTER_ALL, SORT_OPTIONS } from '@/features/pricing/constants'
 import type { PricingModel } from '@/features/pricing/types'
 
 export const PORTAL_VENDOR_ALL = FILTER_ALL
+export const PORTAL_GROUP_ALL = FILTER_ALL
 export const PORTAL_VENDOR_OTHER = '__other__'
 
 const PORTAL_PINNED_VENDOR_ALIASES = [
@@ -70,6 +71,27 @@ export function filterPortalCatalogBySearch(
       model.model_name?.toLowerCase().includes(lowerQuery) ||
       model.description?.toLowerCase().includes(lowerQuery) ||
       model.vendor_name?.toLowerCase().includes(lowerQuery),
+  )
+}
+
+export function filterPortalCatalogByGroup(
+  models: PricingModel[],
+  group: string,
+): PricingModel[] {
+  if (!group || group === PORTAL_GROUP_ALL) return models
+  return models.filter((model) => model.enable_groups?.includes(group))
+}
+
+export function listPortalCatalogGroups(models: PricingModel[]): string[] {
+  const names = new Set<string>()
+  for (const model of models) {
+    for (const group of model.enable_groups ?? []) {
+      if (!group || group === 'auto' || group === 'all') continue
+      names.add(group)
+    }
+  }
+  return [...names].sort((left, right) =>
+    left.localeCompare(right, undefined, { sensitivity: 'base' }),
   )
 }
 

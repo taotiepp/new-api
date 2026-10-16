@@ -21,9 +21,11 @@ import { describe, expect, it } from 'vitest'
 import type { PricingModel } from '@/features/pricing/types'
 
 import {
+  filterPortalCatalogByGroup,
   filterPortalCatalogBySearch,
   filterPortalCatalogByVendor,
   groupPortalCatalogModels,
+  listPortalCatalogGroups,
   listPortalCatalogVendors,
   PORTAL_VENDOR_OTHER,
   sortPortalCatalogModels,
@@ -79,6 +81,18 @@ describe('portal catalog filters', () => {
         (m) => m.model_name,
       ),
     ).toEqual(['alpha-model'])
+  })
+
+  it('filters models by the groups they belong to', () => {
+    const models: PricingModel[] = [
+      { ...sampleModels[0], enable_groups: ['default', 'vip'] },
+      { ...sampleModels[1], enable_groups: ['vip'] },
+      { ...sampleModels[2], enable_groups: ['default'] },
+    ]
+    expect(
+      filterPortalCatalogByGroup(models, 'vip').map((model) => model.model_name),
+    ).toEqual(['alpha-model', 'beta-model'])
+    expect(listPortalCatalogGroups(models)).toEqual(['default', 'vip'])
   })
 
   it('filters and lists vendors, keeping unassigned models under Other', () => {

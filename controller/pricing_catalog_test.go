@@ -20,12 +20,22 @@ func TestRedactPricingForUserCatalog(t *testing.T) {
 			Description: "Catalog summary from model metadata.",
 		},
 	}
-	redacted := redactPricingForUserCatalog(items)
+	redacted := redactPricingForUserCatalog(items, map[string]string{
+		"default": "Default",
+		"vip":     "VIP",
+		"auto":    "Auto",
+	})
 	require.Len(t, redacted, 1)
 	require.Equal(t, "gpt-test", redacted[0].ModelName)
 	require.Equal(t, "Catalog summary from model metadata.", redacted[0].Description)
 	require.Equal(t, 42, redacted[0].VendorID)
-	require.Nil(t, redacted[0].EnableGroup)
+	require.Equal(t, []string{"default", "vip"}, redacted[0].EnableGroup)
+
+	open := redactPricingForUserCatalog([]model.Pricing{{
+		ModelName:   "open-model",
+		EnableGroup: []string{"all"},
+	}}, map[string]string{"vip": "VIP", "default": "Default", "auto": "Auto"})
+	require.Equal(t, []string{"default", "vip"}, open[0].EnableGroup)
 }
 
 func TestCatalogVendorsForItems(t *testing.T) {

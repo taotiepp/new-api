@@ -26,7 +26,7 @@ import { EmptyState } from '@/features/pricing/components'
 
 import { useAppPricingFilters } from '../hooks/use-app-pricing-filters'
 import { usePortalCatalogData } from '../hooks/use-portal-catalog-data'
-import { PORTAL_VENDOR_ALL } from '../lib/catalog-filters'
+import { PORTAL_GROUP_ALL, PORTAL_VENDOR_ALL } from '../lib/catalog-filters'
 import { PortalCatalogToolbar } from './portal-catalog-toolbar'
 import { PortalModelGrid } from './portal-model-grid'
 import { PortalSearch } from './portal-search'
@@ -43,8 +43,11 @@ export function UserPortalModelPlaza() {
     searchInput,
     vendorFilter,
     vendors,
+    groupFilter,
+    groups,
     setSearchInput,
     setVendorFilter,
+    setGroupFilter,
     filteredModels,
     clearSearch,
     clearFilters,
@@ -89,8 +92,8 @@ export function UserPortalModelPlaza() {
         actions={headerActions}
       >
         <div className='portal-catalog-section border-t border-[var(--portal-hairline)]'>
-          {['a', 'b', 'c', 'd'].map((id) => (
-            <Skeleton key={id} className='my-4 h-16 rounded-none' />
+          {['a', 'b', 'c', 'd', 'e', 'f'].map((id) => (
+            <Skeleton key={id} className='my-3 h-10 rounded-none' />
           ))}
         </div>
       </UserPortalPage>
@@ -112,6 +115,9 @@ export function UserPortalModelPlaza() {
           vendorFilter={vendorFilter}
           vendors={vendors}
           onVendorChange={setVendorFilter}
+          groupFilter={groupFilter}
+          groups={groups}
+          onGroupChange={setGroupFilter}
           trailing={
             <PortalSearch
               className='w-full sm:w-72'
@@ -126,15 +132,16 @@ export function UserPortalModelPlaza() {
           <EmptyState
             searchQuery={searchInput}
             hasActiveFilters={
-              vendorFilter !== PORTAL_VENDOR_ALL || Boolean(searchInput)
+              vendorFilter !== PORTAL_VENDOR_ALL ||
+              groupFilter !== PORTAL_GROUP_ALL ||
+              Boolean(searchInput)
             }
             onClearFilters={handleClearAll}
           />
         ) : (
           <PortalModelGrid
             models={filteredModels}
-            filterKey={`${vendorFilter}:${searchInput}`}
-            groupByVendor={vendorFilter === PORTAL_VENDOR_ALL}
+            filterKey={`${groupFilter}:${vendorFilter}:${searchInput}`}
             onModelClick={handleModelClick}
             priceRate={priceRate}
             usdExchangeRate={usdExchangeRate}

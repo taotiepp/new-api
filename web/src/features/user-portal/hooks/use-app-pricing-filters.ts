@@ -24,9 +24,12 @@ import { SORT_OPTIONS } from '@/features/pricing/constants'
 import type { PricingModel } from '@/features/pricing/types'
 
 import {
+  filterPortalCatalogByGroup,
   filterPortalCatalogBySearch,
   filterPortalCatalogByVendor,
+  listPortalCatalogGroups,
   listPortalCatalogVendors,
+  PORTAL_GROUP_ALL,
   PORTAL_VENDOR_ALL,
   sortPortalCatalogModels,
 } from '../lib/catalog-filters'
@@ -35,6 +38,7 @@ type PortalCatalogSearch = {
   search?: string
   sort?: string
   vendor?: string
+  group?: string
 }
 
 export function useAppPricingFilters(models: PricingModel[]) {
@@ -43,12 +47,14 @@ export function useAppPricingFilters(models: PricingModel[]) {
     search: search.search,
     sort: search.sort,
     vendor: search.vendor,
+    group: search.group,
   }))
 
   const searchInput = filterState.search || ''
   const debouncedSearchInput = useDebounce(searchInput, 200)
   const sortBy = filterState.sort || SORT_OPTIONS.NAME
   const vendorFilter = filterState.vendor || PORTAL_VENDOR_ALL
+  const groupFilter = filterState.group || PORTAL_GROUP_ALL
 
   const updateFilters = useCallback((updates: Record<string, unknown>) => {
     setFilterState((prev) => {
@@ -73,6 +79,14 @@ export function useAppPricingFilters(models: PricingModel[]) {
     [updateFilters],
   )
 
+  const setGroupFilter = useCallback(
+    (value: string) =>
+      updateFilters({
+        group: value === PORTAL_GROUP_ALL ? undefined : value,
+      }),
+    [updateFilters],
+  )
+
   const setVendorFilter = useCallback(
     (value: string) =>
       updateFilters({
@@ -82,30 +96,35 @@ export function useAppPricingFilters(models: PricingModel[]) {
   )
 
   const vendors = useMemo(() => listPortalCatalogVendors(models), [models])
+  const groups = useMemo(() => listPortalCatalogGroups(models), [models])
 
   const filteredModels = useMemo(() => {
     if (models.length === 0) return []
     const searched = filterPortalCatalogBySearch(models, debouncedSearchInput)
-    const byVendor = filterPortalCatalogByVendor(searched, vendorFilter)
+    const byGroup = filterPortalCatalogByGroup(searched, groupFilter)
+    const byVendor = filterPortalCatalogByVendor(byGroup, vendorFilter)
     return sortPortalCatalogModels(byVendor, sortBy)
-  }, [models, debouncedSearchInput, vendorFilter, sortBy])
+  }, [models, debouncedSearchInput, groupFilter, vendorFilter, sortBy])
 
   const clearSearch = useCallback(() => {
     updateFilters({ search: undefined })
   }, [updateFilters])
 
   const clearFilters = useCallback(() => {
-    updateFilters({ search: undefined, vendor: undefined })
+    updateFilters({ search: undefined, vendor: undefined, group: undefined })
   }, [updateFilters])
 
   return {
     searchInput,
     sortBy,
     vendorFilter,
+    groupFilter,
     vendors,
+    groups,
     setSearchInput,
     setSortBy,
     setVendorFilter,
+    setGroupFilter,
     filteredModels,
     clearSearch,
     clearFilters,

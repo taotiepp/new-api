@@ -19,11 +19,18 @@ For commercial licensing, please contact support@quantumnous.com
 import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { Button } from '@/components/ui/button'
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { getLobeIcon } from '@/lib/lobe-icon'
-import { cn } from '@/lib/utils'
 
 import {
+  PORTAL_GROUP_ALL,
   PORTAL_VENDOR_ALL,
   PORTAL_VENDOR_OTHER,
   type PortalVendorOption,
@@ -35,20 +42,122 @@ type PortalCatalogToolbarProps = {
   vendorFilter: string
   vendors: PortalVendorOption[]
   onVendorChange: (value: string) => void
+  groupFilter: string
+  groups: string[]
+  onGroupChange: (value: string) => void
   trailing?: ReactNode
 }
 
 export function PortalCatalogToolbar(props: PortalCatalogToolbarProps) {
   const { t } = useTranslation()
-  const showVendorChips = props.vendors.length > 0
+  const groupItems = [
+    { value: PORTAL_GROUP_ALL, label: t('All') },
+    ...props.groups.map((group) => ({ value: group, label: group })),
+  ]
+  const vendorItems: Array<{
+    value: string
+    label: string
+    icon?: string
+    count?: number
+  }> = [
+    { value: PORTAL_VENDOR_ALL, label: t('All') },
+    ...props.vendors.map((vendor) => ({
+      value: vendor.value,
+      label:
+        vendor.value === PORTAL_VENDOR_OTHER
+          ? t('Other')
+          : vendor.name || t('Other'),
+      icon: vendor.icon,
+      count: vendor.count,
+    })),
+  ]
 
   return (
-    <div className='flex flex-col gap-4'>
-      <div className='flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between'>
-        <p className='text-sm text-[var(--portal-ink-muted)] tabular-nums'>
+    <div className='flex flex-col gap-3'>
+      <div className='flex flex-col gap-3 lg:flex-row lg:items-center'>
+        <div className='min-w-0 flex-1'>{props.trailing}</div>
+        {props.groups.length > 0 ? (
+          <Select
+            items={groupItems}
+            value={props.groupFilter}
+            onValueChange={(value) => {
+              if (value) props.onGroupChange(value)
+            }}
+          >
+            <SelectTrigger
+              size='sm'
+              className='w-full lg:w-44'
+              aria-label={t('Group')}
+            >
+              <SelectValue>
+                <span className='truncate'>
+                  {t('Group')}{' '}
+                  {groupItems.find((item) => item.value === props.groupFilter)
+                    ?.label ?? t('All')}
+                </span>
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectGroup>
+                {groupItems.map((item) => (
+                  <SelectItem key={item.value} value={item.value}>
+                    {item.label}
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+            </SelectContent>
+          </Select>
+        ) : null}
+        {props.vendors.length > 0 ? (
+          <Select
+            items={vendorItems.map((item) => ({
+              value: item.value,
+              label: item.label,
+            }))}
+            value={props.vendorFilter}
+            onValueChange={(value) => {
+              if (value) props.onVendorChange(value)
+            }}
+          >
+            <SelectTrigger
+              size='sm'
+              className='w-full lg:w-52'
+              aria-label={t('Vendors')}
+            >
+              <SelectValue>
+                <span className='truncate'>
+                  {t('Vendor')}{' '}
+                  {vendorItems.find((item) => item.value === props.vendorFilter)
+                    ?.label ?? t('All')}
+                </span>
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectGroup>
+                {vendorItems.map((item) => (
+                  <SelectItem key={item.value} value={item.value}>
+                    <span className='flex min-w-0 items-center gap-2'>
+                      {item.icon ? (
+                        <span className='size-3.5 shrink-0'>
+                          {getLobeIcon(item.icon, 14)}
+                        </span>
+                      ) : null}
+                      <span className='truncate'>{item.label}</span>
+                      {item.count != null ? (
+                        <span className='text-muted-foreground tabular-nums'>
+                          {item.count}
+                        </span>
+                      ) : null}
+                    </span>
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+            </SelectContent>
+          </Select>
+        ) : null}
+        <p className='text-sm text-[var(--portal-ink-muted)] tabular-nums lg:shrink-0'>
           {t('{{count}} models', { count: props.filteredCount })}
         </p>
-        {props.trailing}
       </div>
       {props.filteredCount !== props.totalCount ? (
         <p className='text-muted-foreground text-sm'>
@@ -57,61 +166,6 @@ export function PortalCatalogToolbar(props: PortalCatalogToolbarProps) {
           })}
         </p>
       ) : null}
-
-      {showVendorChips ? (
-        <div
-          role='group'
-          aria-label={t('Vendors')}
-          className='flex flex-wrap gap-x-5 gap-y-2'
-        >
-          <VendorChip
-            selected={props.vendorFilter === PORTAL_VENDOR_ALL}
-            onSelect={() => props.onVendorChange(PORTAL_VENDOR_ALL)}
-            label={t('All')}
-            count={props.totalCount}
-          />
-          {props.vendors.map((vendor) => (
-            <VendorChip
-              key={vendor.value}
-              selected={props.vendorFilter === vendor.value}
-              onSelect={() => props.onVendorChange(vendor.value)}
-              label={
-                vendor.value === PORTAL_VENDOR_OTHER ? t('Other') : vendor.name
-              }
-              count={vendor.count}
-              icon={vendor.icon ? getLobeIcon(vendor.icon, 14) : undefined}
-            />
-          ))}
-        </div>
-      ) : null}
     </div>
-  )
-}
-
-function VendorChip(props: {
-  selected: boolean
-  onSelect: () => void
-  label: string
-  count: number
-  icon?: ReturnType<typeof getLobeIcon>
-}) {
-  return (
-    <Button
-      type='button'
-      aria-pressed={props.selected}
-      variant='ghost'
-      size='sm'
-      className={cn(
-        'h-8 rounded-none px-0 hover:bg-transparent',
-        props.selected
-          ? 'border-b-2 border-[var(--portal-accent)] font-medium text-[var(--portal-ink)]'
-          : 'text-[var(--portal-ink-muted)]',
-      )}
-      onClick={props.onSelect}
-    >
-      {props.icon ? <span className='size-3.5 shrink-0'>{props.icon}</span> : null}
-      <span>{props.label}</span>
-      <span className='tabular-nums opacity-70'>{props.count}</span>
-    </Button>
   )
 }
