@@ -684,6 +684,34 @@ func SumUsedQuota(logType int, startTimestamp int64, endTimestamp int64, modelNa
 	return stat, nil
 }
 
+// UserModelRate is the consume-log request and token rate for one user and model
+// over the last 60 seconds. RPM counts requests; TPM sums prompt and completion tokens.
+type UserModelRate struct {
+	UserId    int    `json:"user_id"`
+	Username  string `json:"username"`
+	ModelName string `json:"model_name"`
+	Rpm       int    `json:"rpm"`
+	Tpm       int    `json:"tpm"`
+}
+
+// SumUserModelRates returns per-user, per-model RPM and TPM from consume logs
+// in the last 60 seconds.
+func SumUserModelRates() ([]UserModelRate, error) {
+	rows := make([]UserModelRate, 0)
+	err := LOG_DB.Table("logs").
+		Select("user_id, MAX(username) AS username, model_name, COUNT(*) AS rpm, COALESCE(SUM(prompt_tokens), 0) + COALESCE(SUM(completion_tokens), 0) AS tpm").
+		Where("type = ?", LogTypeConsume).
+		Where("created_at >= ?", time.Now().Add(-60*time.Second).Unix()).
+		Group("user_id, model_name").
+		Order("user_id ASC, model_name ASC").
+		Scan(&rows).Error
+	if err != nil {
+		common.SysError("failed to query user model rpm/tpm: " + err.Error())
+		return nil, errors.New("查询统计数据失败")
+	}
+	return rows, nil
+}
+
 func SumChannelSettlement(startTimestamp int64, endTimestamp int64, modelName string, channel int) (rows []ChannelSettlementRow, err error) {
 	tx := LOG_DB.Table("logs").Select("channel_id, COALESCE(sum(quota), 0) quota, COALESCE(sum(cost_quota), 0) cost_quota")
 	if startTimestamp != 0 {
