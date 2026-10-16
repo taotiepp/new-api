@@ -192,7 +192,7 @@ export function PortalBillModelChart(props: PortalBillModelChartProps) {
   }
 
   return (
-    <section className='rounded-2xl bg-[var(--portal-surface-muted)] p-4 sm:p-5'>
+    <section className='border-t border-[var(--portal-hairline)] pt-5'>
       <div className='mb-4'>
         <p className='text-sm font-medium text-[var(--portal-ink)]'>
           {t('Summary by model')}

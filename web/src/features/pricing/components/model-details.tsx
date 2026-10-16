@@ -1432,16 +1432,27 @@ export function ModelDetailsContent(props: ModelDetailsContentProps) {
       ) : null}
 
       <Tabs defaultValue='overview' className='gap-4'>
-        <TabsList className='bg-muted/60 grid w-full grid-cols-3 gap-1 rounded-lg p-1 group-data-horizontal/tabs:h-auto'>
+        <TabsList
+          variant={isPortal ? 'line' : 'default'}
+          className={
+            isPortal
+              ? 'h-auto w-full justify-start gap-5 border-b border-[var(--portal-hairline)] bg-transparent p-0'
+              : 'bg-muted/60 grid w-full grid-cols-3 gap-1 rounded-lg p-1 group-data-horizontal/tabs:h-auto'
+          }
+        >
           {TAB_VALUES.map((value) => {
             const Icon = TAB_META[value].icon
             return (
               <TabsTrigger
                 key={value}
                 value={value}
-                className='h-8 min-w-0 gap-1.5 rounded-md px-3 text-xs sm:text-sm'
+                className={
+                  isPortal
+                    ? 'h-9 flex-none rounded-none px-0 text-sm data-active:bg-transparent'
+                    : 'h-8 min-w-0 gap-1.5 rounded-md px-3 text-xs sm:text-sm'
+                }
               >
-                <Icon className='size-3.5' />
+                {isPortal ? null : <Icon className='size-3.5' />}
                 <span className='truncate'>{t(TAB_META[value].labelKey)}</span>
               </TabsTrigger>
             )
@@ -1451,7 +1462,13 @@ export function ModelDetailsContent(props: ModelDetailsContentProps) {
         <TabsContent value='overview' className='space-y-6 outline-none'>
           <OverviewSummaryGrid model={props.model} />
 
-          <section className='bg-card/60 space-y-5 rounded-xl border p-4 shadow-sm'>
+          <section
+            className={
+              isPortal
+                ? 'space-y-5 border-t border-[var(--portal-hairline)] pt-5'
+                : 'bg-card/60 space-y-5 rounded-xl border p-4 shadow-sm'
+            }
+          >
             <SectionTitle>{t('Pricing')}</SectionTitle>
             {showBasePrices && (
               <PriceSection

@@ -89,7 +89,7 @@ export function PortalSubjectUserPicker(props: {
             role='combobox'
             aria-expanded={open}
             aria-label={t('User')}
-            className='max-w-52 min-w-36 justify-between rounded-full'
+            className='max-w-52 min-w-36 justify-between'
           />
         }
       >

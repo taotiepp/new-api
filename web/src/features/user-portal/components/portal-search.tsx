@@ -16,14 +16,11 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { ArrowUp, Search, X } from 'lucide-react'
 import { useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-
-import { PortalBezel } from '@/components/layout/portal/portal-bezel'
 
 type PortalSearchProps = {
   value: string
@@ -52,55 +49,45 @@ export function PortalSearch(props: PortalSearchProps) {
 
   if (variant === 'composer') {
     return (
-      <PortalBezel
-        className={cn('portal-search-composer', props.className)}
-        innerClassName='p-4 sm:p-5'
-        as='section'
-      >
+      <div className={cn('portal-search-composer', props.className)}>
         <input
           ref={inputRef}
           type='search'
           value={props.value}
           onChange={(event) => props.onChange(event.target.value)}
           placeholder={
-            props.placeholder ??
-            t('Search models by name or description...')
+            props.placeholder ?? t('Search models by name or description...')
           }
           aria-label={t('Search models')}
+          className='border-b border-[var(--portal-hairline)]'
         />
-        <div className='mt-5 flex items-center justify-end gap-1.5'>
+        <div className='mt-3 flex items-center justify-end'>
           {props.value ? (
             <Button
               variant='ghost'
               size='sm'
               onClick={props.onClear}
-              className='rounded-full text-xs transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] active:scale-[0.98]'
+              className='h-8 px-0 text-xs hover:bg-transparent'
             >
               {t('Clear search')}
             </Button>
           ) : (
-            <kbd className='text-muted-foreground/60 hidden rounded-full border border-[var(--portal-hairline)] bg-[var(--portal-surface-muted)] px-2 py-0.5 font-mono text-[10px] sm:inline'>
+            <kbd className='text-muted-foreground hidden text-xs sm:inline'>
               ⌘K
             </kbd>
           )}
-          <span
-            aria-hidden
-            className='flex size-9 shrink-0 items-center justify-center rounded-full bg-[var(--portal-accent)] text-white shadow-[var(--portal-shadow-soft)]'
-          >
-            <ArrowUp className='size-4' />
-          </span>
         </div>
-      </PortalBezel>
+      </div>
     )
   }
 
   return (
-      <PortalBezel
-        tone='card'
-        className={props.className}
-        innerClassName='flex items-center gap-2 px-3 py-1'
-      >
-      <Search aria-hidden className='text-muted-foreground/60 size-3.5 shrink-0' />
+    <div
+      className={cn(
+        'flex items-center gap-2 border-b border-[var(--portal-hairline)]',
+        props.className
+      )}
+    >
       <input
         ref={inputRef}
         type='search'
@@ -109,20 +96,19 @@ export function PortalSearch(props: PortalSearchProps) {
         placeholder={
           props.placeholder ?? t('Search models by name or description...')
         }
-        className='h-8 min-w-0 flex-1 bg-transparent text-sm outline-none'
+        className='h-9 min-w-0 flex-1 bg-transparent text-sm outline-none'
         aria-label={t('Search models')}
       />
       {props.value ? (
         <Button
           variant='ghost'
-          size='icon-sm'
+          size='sm'
           onClick={props.onClear}
-          aria-label={t('Clear search')}
-          className='rounded-full active:scale-[0.98]'
+          className='h-8 px-0 hover:bg-transparent'
         >
-          <X className='size-4' />
+          {t('Clear search')}
         </Button>
       ) : null}
-    </PortalBezel>
+    </div>
   )
 }

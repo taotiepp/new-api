@@ -248,7 +248,7 @@ export function PortalLogsPanel() {
           <CompactDateTimeRangePicker
             start={start}
             end={end}
-            className='h-7 w-auto max-w-[min(100%,28rem)] rounded-full'
+            className='h-7 w-auto max-w-[min(100%,28rem)]'
             onChange={({ start: nextStart, end: nextEnd }) => {
               if (!nextStart || !nextEnd) return
               applyRange(nextStart, nextEnd)
@@ -264,7 +264,7 @@ export function PortalLogsPanel() {
           >
             <SelectTrigger
               size='sm'
-              className='max-w-44 min-w-32 rounded-full'
+              className='max-w-44 min-w-32'
               aria-label={t('All Types')}
             >
               <SelectValue>
@@ -304,7 +304,6 @@ export function PortalLogsPanel() {
             type='button'
             variant='outline'
             size='sm'
-            className='rounded-full'
             disabled={
               rangeTooLong || listQuery.isFetching || statsQuery.isFetching
             }
@@ -363,7 +362,7 @@ export function PortalLogsPanel() {
         ).map((card) => (
           <article
             key={card.label}
-            className='rounded-2xl bg-[var(--portal-surface-muted)] px-5 py-4'
+            className='border-b border-[var(--portal-hairline)] py-4'
           >
             <p className='text-muted-foreground text-sm'>{card.label}</p>
             {statsQuery.isLoading ? (
@@ -470,7 +469,7 @@ function PortalLogKeyCombobox(props: {
             role='combobox'
             aria-expanded={open}
             aria-label={t('API Key')}
-            className='max-w-52 min-w-36 justify-between rounded-full'
+            className='max-w-52 min-w-36 justify-between'
           />
         }
       >
@@ -574,7 +573,7 @@ function PortalLogModelCombobox(props: {
             role='combobox'
             aria-expanded={open}
             aria-label={t('Model')}
-            className='max-w-52 min-w-36 justify-between rounded-full'
+            className='max-w-52 min-w-36 justify-between'
           />
         }
       >

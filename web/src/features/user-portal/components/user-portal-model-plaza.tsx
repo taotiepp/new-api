@@ -17,16 +17,12 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { Link, useNavigate } from '@tanstack/react-router'
-import { KeyRound, Sparkles } from 'lucide-react'
 import { useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { Button } from '@/components/ui/button'
-import {
-  EmptyState,
-  LoadingSkeleton,
-} from '@/features/pricing/components'
-import { VIEW_MODES } from '@/features/pricing/constants'
+import { Skeleton } from '@/components/ui/skeleton'
+import { EmptyState } from '@/features/pricing/components'
 
 import { useAppPricingFilters } from '../hooks/use-app-pricing-filters'
 import { usePortalCatalogData } from '../hooks/use-portal-catalog-data'
@@ -70,21 +66,14 @@ export function UserPortalModelPlaza() {
 
   const headerActions = (
     <>
-      <Button
-        size='sm'
-        className='rounded-full shadow-md'
-        render={<Link to='/app/playground' />}
-      >
-        <Sparkles className='size-3.5' />
+      <Button size='sm' render={<Link to='/app/playground' />}>
         {t('Try Online')}
       </Button>
       <Button
         size='sm'
         variant='outline'
-        className='rounded-full border-border/70 bg-background/80'
         render={<Link to='/app/keys' />}
       >
-        <KeyRound className='size-3.5' />
         {t('API Keys')}
       </Button>
     </>
@@ -94,10 +83,15 @@ export function UserPortalModelPlaza() {
     return (
       <UserPortalPage
         title={t('Model Square')}
+        description={t(
+          'Compare price, context, and vendor, then open a model.'
+        )}
         actions={headerActions}
       >
-        <div className='portal-catalog-section'>
-          <LoadingSkeleton viewMode={VIEW_MODES.CARD} />
+        <div className='portal-catalog-section border-t border-[var(--portal-hairline)]'>
+          {['a', 'b', 'c', 'd'].map((id) => (
+            <Skeleton key={id} className='my-4 h-16 rounded-none' />
+          ))}
         </div>
       </UserPortalPage>
     )
@@ -106,6 +100,9 @@ export function UserPortalModelPlaza() {
   return (
     <UserPortalPage
       title={t('Model Square')}
+      description={t(
+        'Compare price, context, and vendor, then open a model.'
+      )}
       actions={headerActions}
     >
       <div className='portal-catalog-section space-y-5'>

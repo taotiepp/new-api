@@ -70,7 +70,6 @@ export function UserPortalHeader() {
               render={<Link to='/dashboard' />}
               size='icon-sm'
               variant='ghost'
-              className='rounded-full'
               aria-label={t('Back to Console')}
             >
               <ArrowLeftIcon aria-hidden className='size-4' />
@@ -84,7 +83,7 @@ export function UserPortalHeader() {
             <Button
               size='sm'
               variant='secondary'
-              className='h-9 rounded-full px-4 text-sm font-medium'
+              className='h-9 px-4 text-sm font-medium'
               render={<Link to='/sign-in' />}
             >
               {t('Sign in')}

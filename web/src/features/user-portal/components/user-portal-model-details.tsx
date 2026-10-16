@@ -22,7 +22,6 @@ import {
   useParams,
   useSearch,
 } from '@tanstack/react-router'
-import { ArrowLeft, KeyRound, Sparkles } from 'lucide-react'
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -33,7 +32,6 @@ import { DEFAULT_TOKEN_UNIT } from '@/features/pricing/constants'
 import type { TokenUnit } from '@/features/pricing/types'
 
 import { usePortalCatalogData } from '../hooks/use-portal-catalog-data'
-import { PortalBezel } from '@/components/layout/portal/portal-bezel'
 import { UserPortalPage } from './user-portal-page'
 
 const MODEL_DETAILS_SKELETON_KEYS = ['a', 'b', 'c', 'd'] as const
@@ -67,10 +65,10 @@ export function UserPortalModelDetails() {
   if (isLoading) {
     return (
       <UserPortalPage>
-        <Skeleton className='mb-4 h-32 w-full rounded-[var(--portal-radius-lg)]' />
-        <div className='grid grid-cols-2 gap-2 sm:grid-cols-4'>
+        <Skeleton className='mb-4 h-16 w-full rounded-none' />
+        <div className='grid grid-cols-2 gap-2 border-t border-[var(--portal-hairline)] sm:grid-cols-4'>
           {MODEL_DETAILS_SKELETON_KEYS.map((key) => (
-            <Skeleton key={key} className='h-16 w-full rounded-xl' />
+            <Skeleton key={key} className='h-16 w-full rounded-none' />
           ))}
         </div>
       </UserPortalPage>
@@ -79,15 +77,13 @@ export function UserPortalModelDetails() {
 
   if (!model) {
     return (
-      <UserPortalPage title={t('Model not found')} centeredHero>
-        <PortalBezel className='max-w-lg' innerClassName='p-6'>
-          <p className='text-muted-foreground mb-4 text-sm'>
-            {t("The model you're looking for doesn't exist.")}
-          </p>
-          <Button onClick={handleBack} variant='outline' size='sm'>
-            {t('Back to Models')}
-          </Button>
-        </PortalBezel>
+      <UserPortalPage title={t('Model not found')}>
+        <p className='text-muted-foreground mb-4 border-t border-[var(--portal-hairline)] pt-4 text-sm'>
+          {t("The model you're looking for doesn't exist.")}
+        </p>
+        <Button onClick={handleBack} variant='outline' size='sm'>
+          {t('Back to Models')}
+        </Button>
       </UserPortalPage>
     )
   }
@@ -96,32 +92,18 @@ export function UserPortalModelDetails() {
 
   const headerActions = (
     <>
-      <Button
-        variant='ghost'
-        size='sm'
-        onClick={handleBack}
-        className='text-muted-foreground hover:text-foreground h-9 gap-1 rounded-full px-3'
-      >
-        <ArrowLeft className='size-3.5' />
+      <Button variant='ghost' size='sm' onClick={handleBack}>
         {t('Back')}
       </Button>
       <Button
         size='sm'
-        className='rounded-full shadow-md'
         render={
           <Link to='/app/playground' search={{ model: model.model_name }} />
         }
       >
-        <Sparkles className='size-3.5' />
         {t('Try Online')}
       </Button>
-      <Button
-        size='sm'
-        variant='outline'
-        className='rounded-full border-border/70 bg-background/80'
-        render={<Link to='/app/keys' />}
-      >
-        <KeyRound className='size-3.5' />
+      <Button size='sm' variant='outline' render={<Link to='/app/keys' />}>
         {t('Create API Key')}
       </Button>
     </>
@@ -129,14 +111,11 @@ export function UserPortalModelDetails() {
 
   return (
     <UserPortalPage
-      eyebrow={t('Model Square')}
-      title={
-        <span className='font-mono tracking-tight'>{model.model_name}</span>
-      }
+      title={model.model_name}
       description={summary ? summary : t('No description available.')}
       actions={headerActions}
     >
-      <PortalBezel innerClassName='p-6 sm:p-8'>
+      <div className='border-t border-[var(--portal-hairline)] pt-6'>
         <ModelDetailsContent
           model={model}
           groupRatio={{}}
@@ -154,7 +133,7 @@ export function UserPortalModelDetails() {
             >) || {}
           }
         />
-      </PortalBezel>
+      </div>
     </UserPortalPage>
   )
 }

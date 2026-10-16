@@ -225,7 +225,6 @@ export function PortalKeysCreateDialog(props: PortalKeysCreateDialogProps) {
             <DialogFooter>
               <Button
                 type='button'
-                className='rounded-full'
                 onClick={() => handleOpenChange(false)}
               >
                 {t('Done')}
@@ -334,7 +333,6 @@ export function PortalKeysCreateDialog(props: PortalKeysCreateDialogProps) {
               <Button
                 type='button'
                 variant='outline'
-                className='rounded-full'
                 disabled={submitting}
                 onClick={() => handleOpenChange(false)}
               >
@@ -342,7 +340,6 @@ export function PortalKeysCreateDialog(props: PortalKeysCreateDialogProps) {
               </Button>
               <Button
                 type='button'
-                className='rounded-full'
                 disabled={submitting}
                 onClick={() => {
                   void handleCreate()

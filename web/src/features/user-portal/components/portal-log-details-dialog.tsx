@@ -196,7 +196,6 @@ export function PortalLogDetailsDialog(props: PortalLogDetailsDialogProps) {
         <DialogFooter>
           <Button
             type='button'
-            className='rounded-full'
             onClick={() => props.onOpenChange(false)}
           >
             {t('Done')}

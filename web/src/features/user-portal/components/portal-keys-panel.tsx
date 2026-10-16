@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Check, Copy, KeyRound, Loader2, Plus } from 'lucide-react'
+import { Check, Copy, KeyRound, Loader2 } from 'lucide-react'
 import { useEffect, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -146,7 +146,7 @@ export function PortalKeysPanel() {
     body = (
       <div className='space-y-3'>
         {['a', 'b', 'c'].map((id) => (
-          <Skeleton key={id} className='h-28 rounded-2xl' />
+          <Skeleton key={id} className='h-16 rounded-none' />
         ))}
       </div>
     )
@@ -158,12 +158,7 @@ export function PortalKeysPanel() {
           'No API keys available. Create your first API key to get started.'
         )}
         action={
-          <Button
-            type='button'
-            className='rounded-full'
-            onClick={() => setCreateOpen(true)}
-          >
-            <Plus className='size-3.5' />
+          <Button type='button' onClick={() => setCreateOpen(true)}>
             {t('Create API Key')}
           </Button>
         }
@@ -171,7 +166,7 @@ export function PortalKeysPanel() {
     )
   } else {
     body = (
-      <div className='space-y-3'>
+      <div className='border-t border-[var(--portal-hairline)]'>
         {items.map((key) => {
           const status =
             API_KEY_STATUSES[key.status] ??
@@ -184,7 +179,7 @@ export function PortalKeysPanel() {
           return (
             <article
               key={key.id}
-              className='rounded-2xl bg-[var(--portal-surface-muted)] px-5 py-4'
+              className='border-b border-[var(--portal-hairline)] py-4'
             >
               <div className='flex flex-wrap items-start justify-between gap-3'>
                 <div className='min-w-0'>
@@ -206,7 +201,6 @@ export function PortalKeysPanel() {
                       type='button'
                       variant='outline'
                       size='sm'
-                      className='rounded-full'
                       onClick={() => {
                         void handleStatus(key)
                       }}
@@ -220,7 +214,6 @@ export function PortalKeysPanel() {
                     type='button'
                     variant='destructive'
                     size='sm'
-                    className='rounded-full'
                     onClick={() => setPendingDelete(key)}
                   >
                     {t('Delete')}
@@ -276,10 +269,8 @@ export function PortalKeysPanel() {
         <Button
           type='button'
           size='sm'
-          className='rounded-full'
           onClick={() => setCreateOpen(true)}
         >
-          <Plus className='size-3.5' />
           {t('Create API Key')}
         </Button>
       </header>
@@ -289,7 +280,7 @@ export function PortalKeysPanel() {
           value={keywordInput}
           onChange={(event) => setKeywordInput(event.target.value)}
           placeholder={t('Search')}
-          className='max-w-xs rounded-full'
+          className='max-w-xs'
           aria-label={t('Search')}
         />
         {total > PAGE_SIZE ? (
@@ -298,7 +289,6 @@ export function PortalKeysPanel() {
               type='button'
               variant='outline'
               size='sm'
-              className='rounded-full'
               disabled={page <= 1}
               onClick={() => setPage((current) => Math.max(1, current - 1))}
             >
@@ -311,7 +301,6 @@ export function PortalKeysPanel() {
               type='button'
               variant='outline'
               size='sm'
-              className='rounded-full'
               disabled={page >= pageCount}
               onClick={() => setPage((current) => current + 1)}
             >

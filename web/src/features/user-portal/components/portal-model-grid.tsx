@@ -70,15 +70,15 @@ export function PortalModelGrid(props: PortalModelGridProps) {
   return (
     <div className='flex flex-col gap-6'>
       {groupByVendor ? (
-        <div className='flex flex-col gap-8'>
+        <div className='flex flex-col gap-10'>
           {vendorGroups.map((group) => (
-            <section key={group.vendor || PORTAL_VENDOR_ALL} className='space-y-3'>
+            <section key={group.vendor || PORTAL_VENDOR_ALL}>
               {vendorGroups.length > 1 ? (
-                <h3 className='text-sm font-medium text-[var(--portal-ink)]'>
+                <h3 className='mb-1 text-base font-medium text-[var(--portal-ink)]'>
                   {group.vendor || t('Other')}
                 </h3>
               ) : null}
-              <div className='grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3'>
+              <div className='border-t border-[var(--portal-hairline)]'>
                 {group.models.map((model) => (
                   <PortalModelCard
                     key={model.id ?? model.model_name}
@@ -94,7 +94,7 @@ export function PortalModelGrid(props: PortalModelGridProps) {
           ))}
         </div>
       ) : (
-        <div className='grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3'>
+        <div className='border-t border-[var(--portal-hairline)]'>
           {pagedModels.map((model) => (
             <PortalModelCard
               key={model.id ?? model.model_name}
@@ -121,7 +121,6 @@ export function PortalModelGrid(props: PortalModelGridProps) {
               type='button'
               variant='outline'
               size='sm'
-              className='rounded-full border-border/40 bg-background/80'
               onClick={() => setPage((current) => Math.max(1, current - 1))}
               disabled={currentPage <= 1}
             >
@@ -132,7 +131,6 @@ export function PortalModelGrid(props: PortalModelGridProps) {
               type='button'
               variant='outline'
               size='sm'
-              className='rounded-full border-border/40 bg-background/80'
               onClick={() =>
                 setPage((current) => Math.min(totalPages, current + 1))
               }

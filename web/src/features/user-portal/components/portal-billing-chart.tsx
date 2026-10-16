@@ -137,7 +137,7 @@ export function PortalBillingChart(props: PortalBillingChartProps) {
   }
 
   return (
-    <section className='rounded-2xl bg-[var(--portal-surface-muted)] p-4 sm:p-5'>
+    <section className='border-t border-[var(--portal-hairline)] pt-5'>
       <div className='mb-4 flex flex-wrap items-center justify-between gap-3'>
         <div className='flex flex-col gap-1'>
           <p className='text-sm font-medium text-[var(--portal-ink)]'>

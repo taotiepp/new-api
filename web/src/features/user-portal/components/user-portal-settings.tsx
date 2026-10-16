@@ -16,16 +16,13 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { Profile } from '@/features/profile'
-
+import { PortalSettingsPanel } from './portal-settings-panel'
 import { UserPortalPage } from './user-portal-page'
 
 export function UserPortalSettings() {
   return (
     <UserPortalPage framed={false}>
-      <div className='portal-feature-embed min-h-0 flex-1 overflow-auto'>
-        <Profile />
-      </div>
+      <PortalSettingsPanel />
     </UserPortalPage>
   )
 }

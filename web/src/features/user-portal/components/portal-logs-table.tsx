@@ -178,7 +178,7 @@ export function PortalLogsTable(props: PortalLogsTableProps) {
     )
     return (
       <StaticDataTable
-        className='rounded-2xl border-0 bg-[var(--portal-surface-muted)]'
+        className='rounded-none border-x-0 border-b-0 border-t border-[var(--portal-hairline)] bg-transparent'
         headerRowClassName={staticDataTableClassNames.mutedHeaderRow}
         columns={loadingColumns}
         data={[...LOADING_ROWS]}
@@ -189,7 +189,7 @@ export function PortalLogsTable(props: PortalLogsTableProps) {
 
   return (
     <StaticDataTable
-      className='rounded-2xl border-0 bg-[var(--portal-surface-muted)]'
+      className='rounded-none border-x-0 border-b-0 border-t border-[var(--portal-hairline)] bg-transparent'
       headerRowClassName={staticDataTableClassNames.mutedHeaderRow}
       columns={columns}
       data={props.logs}

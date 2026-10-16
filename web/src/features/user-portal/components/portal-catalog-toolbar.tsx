@@ -45,12 +45,9 @@ export function PortalCatalogToolbar(props: PortalCatalogToolbarProps) {
   return (
     <div className='flex flex-col gap-4'>
       <div className='flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between'>
-        <h2 className='text-xl font-semibold tracking-tight text-[var(--portal-ink)]'>
-          {t('Models')}
-          <span className='text-muted-foreground ms-2 text-sm font-medium tabular-nums'>
-            {props.filteredCount}
-          </span>
-        </h2>
+        <p className='text-sm text-[var(--portal-ink-muted)] tabular-nums'>
+          {t('{{count}} models', { count: props.filteredCount })}
+        </p>
         {props.trailing}
       </div>
       {props.filteredCount !== props.totalCount ? (
@@ -65,7 +62,7 @@ export function PortalCatalogToolbar(props: PortalCatalogToolbarProps) {
         <div
           role='group'
           aria-label={t('Vendors')}
-          className='flex flex-wrap gap-2'
+          className='flex flex-wrap gap-x-5 gap-y-2'
         >
           <VendorChip
             selected={props.vendorFilter === PORTAL_VENDOR_ALL}
@@ -102,12 +99,13 @@ function VendorChip(props: {
     <Button
       type='button'
       aria-pressed={props.selected}
-      variant={props.selected ? 'default' : 'outline'}
+      variant='ghost'
       size='sm'
       className={cn(
-        'h-8 rounded-full px-3',
-        !props.selected &&
-          'border-0 bg-[var(--portal-card)] text-[var(--portal-ink)]',
+        'h-8 rounded-none px-0 hover:bg-transparent',
+        props.selected
+          ? 'border-b-2 border-[var(--portal-accent)] font-medium text-[var(--portal-ink)]'
+          : 'text-[var(--portal-ink-muted)]',
       )}
       onClick={props.onSelect}
     >

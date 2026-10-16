@@ -20,7 +20,6 @@ import { useTranslation } from 'react-i18next'
 
 import { Playground } from '@/features/playground'
 
-import { PortalBezel } from '@/components/layout/portal/portal-bezel'
 import { UserPortalPage } from './user-portal-page'
 
 export function UserPortalPlayground() {
@@ -32,12 +31,9 @@ export function UserPortalPlayground() {
       title={t('Experience Center')}
       description={t('Chat with models in a focused workspace.')}
     >
-      <PortalBezel
-        className='portal-workspace-panel min-h-0 flex-1'
-        innerClassName='flex min-h-0 flex-1 flex-col overflow-hidden p-0'
-      >
+      <div className='portal-workspace-panel flex min-h-0 flex-1 flex-col overflow-hidden border-t border-[var(--portal-hairline)]'>
         <Playground />
-      </PortalBezel>
+      </div>
     </UserPortalPage>
   )
 }

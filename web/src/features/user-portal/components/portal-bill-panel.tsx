@@ -132,7 +132,7 @@ export function PortalBillPanel() {
           >
             <SelectTrigger
               size='sm'
-              className='w-40 rounded-full'
+              className='w-40'
               aria-label={t('Billing period')}
             >
               <SelectValue>
@@ -152,7 +152,6 @@ export function PortalBillPanel() {
           <Button
             type='button'
             size='sm'
-            className='rounded-full'
             onClick={() => setInvoiceOpen(true)}
             disabled={bills.isLoading || bills.isError}
           >
@@ -172,14 +171,14 @@ export function PortalBillPanel() {
         </div>
       </header>
 
-      <p className='text-muted-foreground rounded-2xl bg-[var(--portal-surface-muted)] px-4 py-3 text-sm'>
+      <p className='text-muted-foreground border-t border-[var(--portal-hairline)] pt-4 text-sm'>
         {isCurrentMonth
           ? t('This month is still accumulating.')
           : t('Bill overview')}
       </p>
 
       <div className='grid gap-3 xl:grid-cols-[minmax(16rem,22rem)_minmax(0,1fr)]'>
-        <article className='rounded-2xl bg-[var(--portal-surface-muted)] p-5'>
+        <article className='border-b border-[var(--portal-hairline)] py-5'>
           <p className='text-muted-foreground text-sm'>
             {t('{{month}} bill', { month: monthValue })}
           </p>

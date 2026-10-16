@@ -87,6 +87,47 @@ func TestUserNotificationSendsWebhookWithoutSavingOrUsingQuotaLimit(t *testing.T
 	assert.NotContains(t, sent.Content, "http")
 }
 
+func TestUpdateUserSettingKeepsLanguageAndSidebar(t *testing.T) {
+	setupModelListControllerTestDB(t)
+	require.NoError(t, i18n.Init())
+
+	user := &model.User{
+		Username: "cara",
+		Password: "placeholder",
+		Role:     common.RoleCommonUser,
+		Status:   common.UserStatusEnabled,
+		Group:    "default",
+		AffCode:  "notify-test-cara",
+		Email:    "cara@example.com",
+		Setting:  `{"notify_type":"email","quota_warning_threshold":10,"language":"zhCN","sidebar_modules":"keys","billing_preference":"subscription_only","record_ip_log":true}`,
+	}
+	require.NoError(t, model.DB.Create(user).Error)
+
+	encoded, err := common.Marshal(map[string]any{
+		"notify_type":             "email",
+		"quota_warning_threshold": 1200,
+		"record_ip_log":           true,
+	})
+	require.NoError(t, err)
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	ctx.Set("id", user.Id)
+	ctx.Request = httptest.NewRequest(http.MethodPut, "/api/user/setting", bytes.NewReader(encoded))
+	ctx.Request.Header.Set("Content-Type", "application/json")
+	ctx.Request.Header.Set("Accept-Language", "en")
+	UpdateUserSetting(ctx)
+	require.Equal(t, http.StatusOK, recorder.Code)
+
+	var stored model.User
+	require.NoError(t, model.DB.First(&stored, user.Id).Error)
+	got := stored.GetSetting()
+	assert.Equal(t, "zhCN", got.Language)
+	assert.Equal(t, "keys", got.SidebarModules)
+	assert.Equal(t, "subscription_only", got.BillingPreference)
+	assert.True(t, got.RecordIpLog)
+	assert.Equal(t, 1200.0, got.QuotaWarningThreshold)
+}
+
 func TestUserNotificationRejectsIncompleteSettingsWithoutSaving(t *testing.T) {
 	setupModelListControllerTestDB(t)
 	require.NoError(t, i18n.Init())

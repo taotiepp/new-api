@@ -226,7 +226,7 @@ export function PortalBillingPanel(props: PortalBillingPanelProps) {
       </header>
 
       <div className='grid gap-3 sm:grid-cols-2'>
-        <article className='rounded-2xl bg-[var(--portal-surface-muted)] p-5'>
+        <article className='border-b border-[var(--portal-hairline)] py-5'>
           <div className='flex items-start justify-between gap-3'>
             <div>
               <p className='text-muted-foreground flex items-center gap-1 text-sm'>
@@ -249,14 +249,13 @@ export function PortalBillingPanel(props: PortalBillingPanelProps) {
             </div>
             <Button
               size='sm'
-              className='rounded-full'
               render={<Link to='/wallet' />}
             >
               {t('Recharge')}
             </Button>
           </div>
         </article>
-        <article className='rounded-2xl bg-[var(--portal-surface-muted)] p-5'>
+        <article className='border-b border-[var(--portal-hairline)] py-5'>
           <p className='text-muted-foreground text-sm'>
             {t('Total consumption')}
           </p>
@@ -278,7 +277,6 @@ export function PortalBillingPanel(props: PortalBillingPanelProps) {
                   type='button'
                   variant='outline'
                   size='sm'
-                  className='rounded-full'
                 />
               }
             >
@@ -296,7 +294,6 @@ export function PortalBillingPanel(props: PortalBillingPanelProps) {
                     type='button'
                     size='sm'
                     variant='outline'
-                    className='rounded-full'
                     onClick={() => {
                       const nextEnd = getEndOfDay()
                       const nextStart = getStartOfDay()
@@ -325,7 +322,7 @@ export function PortalBillingPanel(props: PortalBillingPanelProps) {
           >
             <SelectTrigger
               size='sm'
-              className='max-w-52 min-w-36 rounded-full'
+              className='max-w-52 min-w-36'
               aria-label={t('Model')}
             >
               <SelectValue>
@@ -366,7 +363,6 @@ export function PortalBillingPanel(props: PortalBillingPanelProps) {
         <Button
           type='button'
           size='sm'
-          className='rounded-full'
           onClick={handleExport}
           disabled={billing.isLoading || points.length === 0}
         >
@@ -397,7 +393,7 @@ export function PortalBillingPanel(props: PortalBillingPanelProps) {
         ).map((card) => (
           <article
             key={card.label}
-            className='rounded-2xl bg-[var(--portal-surface-muted)] px-5 py-4'
+            className='border-b border-[var(--portal-hairline)] py-4'
           >
             <p className='text-muted-foreground text-sm'>{card.label}</p>
             {billing.isLoading ? (
