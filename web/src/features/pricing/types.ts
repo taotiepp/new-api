@@ -47,6 +47,8 @@ export type BillingUsageExample = {
 export type PricingModel = {
   id: number
   model_name: string
+  /** Unix seconds when the model metadata row was created. Missing means unknown. */
+  created_time?: number
   description?: string
   icon?: string
   vendor_id?: number

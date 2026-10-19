@@ -113,6 +113,21 @@ describe('portal catalog filters', () => {
     ])
   })
 
+  it('lists the most recently added models first', () => {
+    const models: PricingModel[] = [
+      { ...sampleModels[0], id: 1, model_name: 'old', created_time: 10 },
+      { ...sampleModels[0], id: 2, model_name: 'new', created_time: 30 },
+      { ...sampleModels[0], id: 4, model_name: 'same-time-later', created_time: 30 },
+      { ...sampleModels[0], id: 3, model_name: 'undated' },
+    ]
+    expect(sortPortalCatalogModels(models, 'added').map((model) => model.model_name)).toEqual([
+      'same-time-later',
+      'new',
+      'old',
+      'undated',
+    ])
+  })
+
   it('pins OpenAI, Anthropic, and Google ahead of other vendors', () => {
     const models: PricingModel[] = [
       { ...sampleModels[0], id: 4, model_name: 'deepseek-chat', vendor_name: 'DeepSeek' },

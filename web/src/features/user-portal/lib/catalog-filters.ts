@@ -22,6 +22,7 @@ import type { PricingModel } from '@/features/pricing/types'
 export const PORTAL_VENDOR_ALL = FILTER_ALL
 export const PORTAL_GROUP_ALL = FILTER_ALL
 export const PORTAL_VENDOR_OTHER = '__other__'
+export const PORTAL_SORT_ADDED = 'added'
 
 const PORTAL_PINNED_VENDOR_ALIASES = [
   ['openai'],
@@ -150,6 +151,15 @@ export function sortPortalCatalogModels(
     })
     return sorted
   }
+  sorted.sort((a, b) => {
+    const timeDelta = (b.created_time ?? 0) - (a.created_time ?? 0)
+    if (timeDelta !== 0) return timeDelta
+    const idDelta = (b.id ?? 0) - (a.id ?? 0)
+    if (idDelta !== 0) return idDelta
+    return (a.model_name || '').localeCompare(b.model_name || '', undefined, {
+      sensitivity: 'base',
+    })
+  })
   return sorted
 }
 

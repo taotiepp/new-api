@@ -20,7 +20,6 @@ import { useSearch } from '@tanstack/react-router'
 import { useCallback, useMemo, useState } from 'react'
 
 import { useDebounce } from '@/hooks/use-debounce'
-import { SORT_OPTIONS } from '@/features/pricing/constants'
 import type { PricingModel } from '@/features/pricing/types'
 
 import {
@@ -30,6 +29,7 @@ import {
   listPortalCatalogGroups,
   listPortalCatalogVendors,
   PORTAL_GROUP_ALL,
+  PORTAL_SORT_ADDED,
   PORTAL_VENDOR_ALL,
   sortPortalCatalogModels,
 } from '../lib/catalog-filters'
@@ -52,7 +52,7 @@ export function useAppPricingFilters(models: PricingModel[]) {
 
   const searchInput = filterState.search || ''
   const debouncedSearchInput = useDebounce(searchInput, 200)
-  const sortBy = filterState.sort || SORT_OPTIONS.NAME
+  const sortBy = filterState.sort || PORTAL_SORT_ADDED
   const vendorFilter = filterState.vendor || PORTAL_VENDOR_ALL
   const groupFilter = filterState.group || PORTAL_GROUP_ALL
 
@@ -75,7 +75,9 @@ export function useAppPricingFilters(models: PricingModel[]) {
 
   const setSortBy = useCallback(
     (value: string) =>
-      updateFilters({ sort: value === SORT_OPTIONS.NAME ? undefined : value }),
+      updateFilters({
+        sort: value === PORTAL_SORT_ADDED ? undefined : value,
+      }),
     [updateFilters],
   )
 
