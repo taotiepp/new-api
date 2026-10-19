@@ -31,6 +31,8 @@ import { PortalBillPanel } from '../components/portal-bill-panel'
 import { PortalLogsPanel } from '../components/portal-logs-panel'
 
 const getUserBills = vi.hoisted(() => vi.fn())
+const listUserInvoices = vi.hoisted(() => vi.fn())
+const issueUserInvoice = vi.hoisted(() => vi.fn())
 const getUserLogs = vi.hoisted(() => vi.fn())
 const getUserLogStats = vi.hoisted(() => vi.fn())
 const getUserModels = vi.hoisted(() => vi.fn())
@@ -55,6 +57,8 @@ vi.mock('@/hooks/use-status', () => ({
 
 vi.mock('@/features/dashboard/api', () => ({
   getUserBills,
+  listUserInvoices,
+  issueUserInvoice,
   getUserQuotaDates: vi.fn(),
 }))
 
@@ -207,6 +211,13 @@ describe('portal subject user', () => {
 
   test('administrator can load another user bills', async () => {
     signIn(ROLE.ADMIN)
+    listUserInvoices.mockResolvedValue({
+      success: true,
+      data: {
+        invoices: [],
+        uninvoiced: { quota: 80, count: 4, token_used: 8, items: [] },
+      },
+    })
     getUserBills.mockResolvedValue({
       success: true,
       data: {

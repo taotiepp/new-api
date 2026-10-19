@@ -31,6 +31,8 @@ func SetApiRouter(router *gin.Engine) {
 		apiRouter.GET("/user-agreement", controller.GetUserAgreement)
 		apiRouter.GET("/privacy-policy", controller.GetPrivacyPolicy)
 		apiRouter.GET("/about", controller.GetAbout)
+		apiRouter.GET("/doc-site/tree", controller.GetDocSiteTree)
+		apiRouter.GET("/doc-site/page/*path", controller.GetDocSitePage)
 		//apiRouter.GET("/midjourney", controller.GetMidjourney)
 		apiRouter.GET("/home_page_content", controller.GetHomePageContent)
 		apiRouter.GET("/pricing", middleware.HeaderNavModuleAuth("pricing"), controller.GetPricing)
@@ -341,6 +343,8 @@ func SetApiRouter(router *gin.Engine) {
 
 		billsRoute := apiRouter.Group("/bills")
 		billsRoute.GET("/self", middleware.UserAuth(), controller.GetUserBills)
+		billsRoute.GET("/invoices", middleware.UserAuth(), controller.ListUserInvoices)
+		billsRoute.POST("/invoices", middleware.UserAuth(), controller.IssueUserInvoice)
 
 		logRoute.Use(middleware.CORS(), middleware.CriticalRateLimit())
 		{

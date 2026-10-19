@@ -78,7 +78,7 @@ export function UserPortalHeader() {
           <PricingCurrencySwitch />
           <ThemeSwitch />
           {user ? (
-            <ProfileDropdown />
+            <ProfileDropdown variant='portal' />
           ) : (
             <Button
               size='sm'

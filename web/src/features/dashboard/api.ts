@@ -80,6 +80,59 @@ export async function getUserBills(params: {
   return res.data
 }
 
+export type UserInvoiceItem = {
+  model_name: string
+  quota: number
+  count: number
+  token_used: number
+}
+
+export type UserInvoice = {
+  id: number
+  number: string
+  period: string
+  sequence: number
+  quota: number
+  count: number
+  token_used: number
+  created_at: number
+  items: UserInvoiceItem[]
+}
+
+export type UserInvoiceHistory = {
+  invoices: UserInvoice[]
+  uninvoiced: {
+    quota: number
+    count: number
+    token_used: number
+    items: UserInvoiceItem[]
+  }
+}
+
+export async function listUserInvoices(params: {
+  period: string
+  user_id?: number
+}) {
+  const res = await api.get<{
+    success: boolean
+    message?: string
+    data: UserInvoiceHistory
+  }>('/api/bills/invoices', { params })
+  return res.data
+}
+
+export async function issueUserInvoice(params: {
+  period: string
+  user_id?: number
+}) {
+  const res = await api.post<{
+    success: boolean
+    message?: string
+    data: UserInvoice
+  }>('/api/bills/invoices', undefined, { params })
+  return res.data
+}
+
 // ----------------------------------------------------------------------------
 // System Monitoring
 // ----------------------------------------------------------------------------

@@ -22,7 +22,7 @@ func setupUserBillControllerTestDB(t *testing.T) {
 	t.Helper()
 	setupFlowControllerTestDB(t)
 	require.NoError(t, model.DB.AutoMigrate(&model.UserBillItem{}))
-	require.NoError(t, model.DB.AutoMigrate(&model.UserBillItem{}))
+	require.NoError(t, model.DB.AutoMigrate(&model.UserInvoice{}, &model.UserInvoiceItem{}, &model.UserInvoiceAllocation{}))
 }
 
 func requestUserBills(t *testing.T, userId int, query string) userBillResponse {
@@ -325,4 +325,100 @@ func TestGetUserLogsAdminReadsAnotherUser(t *testing.T) {
 	require.NoError(t, common.Unmarshal(deniedRecorder.Body.Bytes(), &denied))
 	require.False(t, denied.Success)
 	require.Equal(t, "access denied", denied.Message)
+}
+
+type userInvoiceResponse struct {
+	Success bool              `json:"success"`
+	Message string            `json:"message"`
+	Data    model.UserInvoice `json:"data"`
+}
+
+type userInvoiceHistoryResponse struct {
+	Success bool                     `json:"success"`
+	Message string                   `json:"message"`
+	Data    model.UserInvoiceHistory `json:"data"`
+}
+
+func requestIssueInvoice(t *testing.T, userId int, role int, query string) userInvoiceResponse {
+	t.Helper()
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	ctx.Set("id", userId)
+	ctx.Set("role", role)
+	ctx.Set("username", "alice")
+	ctx.Request = httptest.NewRequest(http.MethodPost, "/api/bills/invoices?"+query, nil)
+	IssueUserInvoice(ctx)
+	require.Equal(t, http.StatusOK, recorder.Code)
+	var payload userInvoiceResponse
+	require.NoError(t, common.Unmarshal(recorder.Body.Bytes(), &payload))
+	return payload
+}
+
+func TestIssueUserInvoiceKeepsHistoryAndBillsOnlyTheIncrease(t *testing.T) {
+	setupUserBillControllerTestDB(t)
+
+	now := time.Now()
+	current := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.Local)
+	period := current.Format("2006-01")
+	row := &model.QuotaData{
+		UserID:    1,
+		Username:  "alice",
+		ModelName: "gpt-a",
+		CreatedAt: current.Add(2 * time.Hour).Unix(),
+		Count:     2,
+		Quota:     100,
+		TokenUsed: 40,
+	}
+	require.NoError(t, model.DB.Create(row).Error)
+	require.NoError(t, model.DB.Create(&model.QuotaData{
+		UserID:    2,
+		Username:  "bob",
+		ModelName: "gpt-b",
+		CreatedAt: current.Add(2 * time.Hour).Unix(),
+		Count:     9,
+		Quota:     900,
+		TokenUsed: 90,
+	}).Error)
+
+	first := requestIssueInvoice(t, 1, common.RoleCommonUser, "period="+period)
+	require.True(t, first.Success, first.Message)
+	require.Equal(t, "INV-"+period+"-0001-01", first.Data.Number)
+	require.Equal(t, 1, first.Data.Sequence)
+	require.Equal(t, 100, first.Data.Quota)
+	require.Equal(t, 2, first.Data.Count)
+	require.Equal(t, 40, first.Data.TokenUsed)
+	require.Len(t, first.Data.Items, 1)
+	require.Equal(t, "gpt-a", first.Data.Items[0].ModelName)
+
+	again := requestIssueInvoice(t, 1, common.RoleCommonUser, "period="+period)
+	require.False(t, again.Success)
+	require.Equal(t, "nothing new to invoice", again.Message)
+
+	require.NoError(t, model.DB.Model(&model.QuotaData{}).Where("id = ?", row.Id).
+		Updates(map[string]any{"quota": 150, "count": 3, "token_used": 55}).Error)
+
+	second := requestIssueInvoice(t, 1, common.RoleCommonUser, "period="+period)
+	require.True(t, second.Success, second.Message)
+	require.Equal(t, "INV-"+period+"-0001-02", second.Data.Number)
+	require.Equal(t, 50, second.Data.Quota)
+	require.Equal(t, 1, second.Data.Count)
+	require.Equal(t, 15, second.Data.TokenUsed)
+	require.Equal(t, 50, second.Data.Items[0].Quota)
+
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	ctx.Set("id", 1)
+	ctx.Set("role", common.RoleCommonUser)
+	ctx.Request = httptest.NewRequest(http.MethodGet, "/api/bills/invoices?period="+period, nil)
+	ListUserInvoices(ctx)
+	require.Equal(t, http.StatusOK, recorder.Code)
+	var history userInvoiceHistoryResponse
+	require.NoError(t, common.Unmarshal(recorder.Body.Bytes(), &history))
+	require.True(t, history.Success, history.Message)
+	require.Len(t, history.Data.Invoices, 2)
+	require.Equal(t, second.Data.Number, history.Data.Invoices[0].Number)
+	require.Equal(t, 100, history.Data.Invoices[1].Quota)
+	require.Zero(t, history.Data.Uninvoiced.Quota)
+	require.Zero(t, history.Data.Uninvoiced.Count)
+	require.Empty(t, history.Data.Uninvoiced.Items)
 }

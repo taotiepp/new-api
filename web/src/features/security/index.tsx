@@ -40,7 +40,11 @@ import { PasskeyCard } from './components/passkey-card'
 import { PrivacyCard } from './components/privacy-card'
 import { TwoFACard } from './components/two-fa-card'
 
-export function Security() {
+type SecurityProps = {
+  embedded?: boolean
+}
+
+export function Security(props: SecurityProps) {
   const { t } = useTranslation()
   const { profile, loading, refreshProfile, fetchProfile } = useProfile()
 
@@ -134,6 +138,10 @@ export function Security() {
         </aside>
       </div>
     )
+  }
+
+  if (props.embedded) {
+    return <div className='w-full'>{content}</div>
   }
 
   return (

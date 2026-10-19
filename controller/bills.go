@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 	"time"
@@ -46,4 +47,54 @@ func GetUserBills(c *gin.Context) {
 		"message": "",
 		"data":    overview,
 	})
+}
+
+func billPeriod(c *gin.Context) (string, bool) {
+	period := c.Query("period")
+	if period == "" {
+		period = model.CurrentBillPeriod(time.Now())
+	}
+	if _, _, ok := model.ParseBillPeriod(period); !ok {
+		common.ApiErrorMsg(c, "invalid period")
+		return "", false
+	}
+	return period, true
+}
+
+func ListUserInvoices(c *gin.Context) {
+	subject, ok := resolveScopedUser(c)
+	if !ok {
+		return
+	}
+	period, ok := billPeriod(c)
+	if !ok {
+		return
+	}
+	history, err := model.ListUserInvoices(subject.ID, period)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, history)
+}
+
+func IssueUserInvoice(c *gin.Context) {
+	subject, ok := resolveScopedUser(c)
+	if !ok {
+		return
+	}
+	period, ok := billPeriod(c)
+	if !ok {
+		return
+	}
+	invoice, err := model.IssueUserInvoice(subject.ID, period, time.Now())
+	if errors.Is(err, model.ErrNothingToInvoice) {
+		common.ApiErrorMsg(c, "nothing new to invoice")
+		return
+	}
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, invoice)
 }

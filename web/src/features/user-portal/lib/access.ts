@@ -68,6 +68,8 @@ export function mapConsolePathToUserPortal(pathname: string): string {
   if (pathname.startsWith('/keys')) return '/app/keys'
   if (pathname.startsWith('/playground')) return '/app/playground'
   if (pathname.startsWith('/usage-logs')) return '/app/logs'
+  if (pathname.startsWith('/profile')) return '/app/settings'
+  if (pathname.startsWith('/security')) return '/app/security'
   return '/app'
 }
 
@@ -82,27 +84,33 @@ export function resolvePostLoginTarget(
 ): string {
   const sanitized = sanitizeAuthRedirect(redirect, origin)
   if (sanitized) {
-    if (!isAdminRole(role) && isConsoleAuthenticatedPath(sanitized)) {
-      return mapConsolePathToUserPortal(sanitized)
+    if (!isAdminRole(role)) {
+      const pathname = new URL(sanitized, origin).pathname
+      if (
+        isConsoleAuthenticatedPath(pathname) ||
+        isPersonalAuthenticatedPath(pathname)
+      ) {
+        return mapConsolePathToUserPortal(pathname)
+      }
     }
     return sanitized
   }
   return resolveDefaultAuthenticatedPath(role)
 }
 
-/** Redirect target for non-admin users on console routes, or null if allowed. */
+/** Redirect target for non-admin users on the old console, or null if allowed. */
 export function resolveUserPortalRedirectForPath(
   role: number,
   pathname: string
 ): string | null {
-  if (isAdminRole(role)) return null
-  if (isUserPortalPath(pathname) || isPersonalAuthenticatedPath(pathname)) {
-    return null
-  }
-  if (isConsoleAuthenticatedPath(pathname)) {
+  if (isAdminRole(role) || isUserPortalPath(pathname)) return null
+  if (
+    isConsoleAuthenticatedPath(pathname) ||
+    isPersonalAuthenticatedPath(pathname)
+  ) {
     return mapConsolePathToUserPortal(pathname)
   }
-  return null
+  return '/app'
 }
 
 export function isUserPortalLogsPath(pathname: string): boolean {

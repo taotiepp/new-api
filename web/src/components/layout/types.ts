@@ -97,6 +97,8 @@ export type TopNavLink = {
   disabled?: boolean
   requiresAuth?: boolean
   external?: boolean
+  /** Active on this path and on pages nested under it. */
+  matchPrefix?: boolean
 }
 
 /**

@@ -19,12 +19,10 @@ For commercial licensing, please contact support@quantumnous.com
 import { Link, useRouterState } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 
-import { useStatus } from '@/hooks/use-status'
 import { cn } from '@/lib/utils'
 
 import {
   isUserPortalNavActive,
-  resolveUserPortalDocsHref,
   USER_PORTAL_TOP_NAV_ITEMS,
   type UserPortalNavItem,
 } from '@/features/user-portal/lib/nav'
@@ -92,34 +90,16 @@ export function PortalNavLink(props: PortalNavLinkProps) {
 }
 
 export function PortalNavLinks(props: { layout: 'island' | 'mobile' }) {
-  const { status } = useStatus()
-  const docs = resolveUserPortalDocsHref(
-    status?.docs_link as string | undefined,
-  )
-
   return (
     <>
-      {USER_PORTAL_TOP_NAV_ITEMS.map((item) => {
-        if (item.match === 'docs') {
-          return (
-            <PortalNavLink
-              key={item.titleKey}
-              item={item}
-              layout={props.layout}
-              href={docs.href}
-              external={docs.external}
-            />
-          )
-        }
-        return (
-          <PortalNavLink
-            key={item.titleKey}
-            item={item}
-            layout={props.layout}
-            href={item.href}
-          />
-        )
-      })}
+      {USER_PORTAL_TOP_NAV_ITEMS.map((item) => (
+        <PortalNavLink
+          key={item.titleKey}
+          item={item}
+          layout={props.layout}
+          href={item.href}
+        />
+      ))}
     </>
   )
 }

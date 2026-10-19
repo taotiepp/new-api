@@ -45,6 +45,13 @@ type AuthPromptTarget = {
   href: string
 }
 
+function isPublicNavLinkActive(pathname: string, link: TopNavLink): boolean {
+  if (link.matchPrefix) {
+    return pathname === link.href || pathname.startsWith(`${link.href}/`)
+  }
+  return pathname === link.href
+}
+
 export interface PublicHeaderProps {
   navLinks?: TopNavLink[]
   mobileLinks?: TopNavLink[]
@@ -218,7 +225,7 @@ export function PublicHeader(props: PublicHeaderProps) {
             {/* Desktop nav */}
             <div className='hidden items-center gap-0.5 sm:flex'>
               {links.map((link, i) => {
-                const isActive = pathname === link.href
+                const isActive = isPublicNavLinkActive(pathname, link)
                 if (link.external) {
                   return (
                     <a
@@ -352,7 +359,7 @@ export function PublicHeader(props: PublicHeaderProps) {
         <div className='flex h-full flex-col justify-between px-8 pt-20 pb-10'>
           <nav className='flex flex-col gap-1'>
             {links.map((link, i) => {
-              const isActive = pathname === link.href
+              const isActive = isPublicNavLinkActive(pathname, link)
               const linkClassName = cn(
                 'flex items-center gap-3 py-3 text-base font-medium tracking-tight transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]',
                 mobileOpen

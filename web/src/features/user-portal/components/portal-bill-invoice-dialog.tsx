@@ -23,23 +23,19 @@ import { useTranslation } from 'react-i18next'
 import { Dialog } from '@/components/dialog'
 import { Button } from '@/components/ui/button'
 import { useStatus } from '@/hooks/use-status'
+import dayjs from '@/lib/dayjs'
 import { usePricingCurrency } from '@/lib/currency'
 import { formatNumber } from '@/lib/format'
 import { useAuthStore } from '@/stores/auth-store'
 
-import {
-  buildPortalBillStatementCsv,
-  buildPortalInvoiceDate,
-  buildPortalInvoiceNumber,
-  type PortalBillStatementItem,
-} from '../lib/billing'
+import type { UserInvoice } from '@/features/dashboard/api'
+
+import { buildPortalBillStatementCsv } from '../lib/billing'
 
 type PortalBillInvoiceDialogProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
-  period: string
-  isCurrentMonth: boolean
-  items: PortalBillStatementItem[]
+  invoice: UserInvoice | null
   subjectUser?: { id: number; username: string } | null
 }
 
@@ -129,10 +125,12 @@ export function PortalBillInvoiceDialog(props: PortalBillInvoiceDialogProps) {
   const user = useAuthStore((state) => state.auth.user)
   const issuer = String(status?.system_name ?? '').trim() || 'New API'
   const subjectUser = props.subjectUser
-  const billUserId = subjectUser?.id ?? user?.id ?? 0
-  const invoiceNumber = buildPortalInvoiceNumber(props.period, billUserId)
-  const invoiceDate = buildPortalInvoiceDate(props.period)
-  const title = props.isCurrentMonth ? 'PRO FORMA INVOICE' : 'INVOICE'
+  const invoice = props.invoice
+  const invoiceNumber = invoice?.number ?? ''
+  const invoiceDate = invoice
+    ? dayjs.unix(invoice.created_at).format('YYYY-MM-DD')
+    : ''
+  const items = invoice?.items ?? []
   let billTo = user?.display_name?.trim() || user?.username?.trim() || 'Unknown'
   let billUsername = user?.username
   let billEmail = user?.email
@@ -141,7 +139,7 @@ export function PortalBillInvoiceDialog(props: PortalBillInvoiceDialogProps) {
     billUsername = subjectUser.username
     billEmail = undefined
   }
-  const totals = props.items.reduce(
+  const totals = items.reduce(
     (acc, item) => ({
       quota: acc.quota + (Number(item.quota) || 0),
       count: acc.count + (Number(item.count) || 0),
@@ -152,10 +150,10 @@ export function PortalBillInvoiceDialog(props: PortalBillInvoiceDialogProps) {
 
   const handleDownloadCsv = () => {
     const csv = buildPortalBillStatementCsv({
-      period: props.period,
-      status: props.isCurrentMonth ? 'Draft' : 'Paid',
+      period: invoice?.period ?? '',
+      status: 'Issued',
       currency: catalogCurrency,
-      items: props.items,
+      items,
       labels: INVOICE_CSV_LABELS,
     })
     const blob = new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8' })
@@ -204,7 +202,7 @@ export function PortalBillInvoiceDialog(props: PortalBillInvoiceDialogProps) {
         <header className='flex flex-col gap-6 border-b border-neutral-200 pb-6 sm:flex-row sm:justify-between'>
           <div>
             <p className='text-xs tracking-[0.22em] text-neutral-500 uppercase'>
-              {title}
+              INVOICE
             </p>
             <h2 className='mt-2 text-2xl font-semibold tracking-tight'>
               {issuer}
@@ -222,11 +220,11 @@ export function PortalBillInvoiceDialog(props: PortalBillInvoiceDialogProps) {
             </div>
             <div>
               <dt className='text-neutral-500'>Billing Period</dt>
-              <dd className='tabular-nums'>{props.period}</dd>
+              <dd className='tabular-nums'>{invoice?.period}</dd>
             </div>
             <div>
               <dt className='text-neutral-500'>Status</dt>
-              <dd>{props.isCurrentMonth ? 'Draft' : 'Paid'}</dd>
+              <dd>Issued</dd>
             </div>
           </dl>
         </header>
@@ -265,7 +263,7 @@ export function PortalBillInvoiceDialog(props: PortalBillInvoiceDialogProps) {
             </tr>
           </thead>
           <tbody>
-            {props.items.map((item) => (
+            {items.map((item) => (
               <tr key={item.model_name} className='border-b border-neutral-200'>
                 <td className='py-2'>{item.model_name || 'Unknown model'}</td>
                 <td className='py-2 text-right tabular-nums'>

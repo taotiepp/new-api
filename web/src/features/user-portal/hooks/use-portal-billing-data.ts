@@ -18,7 +18,11 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { useQuery } from '@tanstack/react-query'
 
-import { getUserBills, getUserQuotaDates } from '@/features/dashboard/api'
+import {
+  getUserBills,
+  getUserQuotaDates,
+  listUserInvoices,
+} from '@/features/dashboard/api'
 import { requireServerSuccess } from '@/lib/server-error-message'
 import { computeTimeRange } from '@/lib/time'
 
@@ -77,6 +81,20 @@ export function usePortalBills(period: string, userId?: number) {
         await getUserBills({
           period,
           months: PORTAL_BILL_TREND_MONTHS,
+          user_id: userId,
+        })
+      ).data,
+  })
+}
+
+export function usePortalInvoices(period: string, userId?: number) {
+  return useQuery({
+    queryKey: ['user-portal', 'invoices', period, userId ?? 0],
+    enabled: period.length > 0,
+    queryFn: async () =>
+      requireServerSuccess(
+        await listUserInvoices({
+          period,
           user_id: userId,
         })
       ).data,

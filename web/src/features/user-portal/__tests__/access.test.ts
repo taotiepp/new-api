@@ -48,6 +48,19 @@ describe('user portal access', () => {
       resolvePostLoginTarget('/dashboard', ROLE.ADMIN, origin)
     ).toBe('/dashboard')
     expect(resolvePostLoginTarget(undefined, ROLE.USER, origin)).toBe('/app')
+    expect(resolvePostLoginTarget('/profile', ROLE.USER, origin)).toBe(
+      '/app/settings'
+    )
+    expect(resolvePostLoginTarget('/security', ROLE.USER, origin)).toBe(
+      '/app/security'
+    )
+    expect(resolvePostLoginTarget('/wallet', ROLE.USER, origin)).toBe('/app')
+    expect(resolvePostLoginTarget('/pricing', ROLE.USER, origin)).toBe(
+      '/pricing'
+    )
+    expect(resolvePostLoginTarget('/profile', ROLE.ADMIN, origin)).toBe(
+      '/profile'
+    )
   })
 
   test('portal path detection', () => {
@@ -60,6 +73,8 @@ describe('user portal access', () => {
     expect(mapConsolePathToUserPortal('/keys')).toBe('/app/keys')
     expect(mapConsolePathToUserPortal('/usage-logs/common')).toBe('/app/logs')
     expect(mapConsolePathToUserPortal('/channels')).toBe('/app')
+    expect(mapConsolePathToUserPortal('/profile')).toBe('/app/settings')
+    expect(mapConsolePathToUserPortal('/security')).toBe('/app/security')
   })
 
   test('authenticated guard redirect for non-admin', () => {
@@ -67,10 +82,18 @@ describe('user portal access', () => {
       resolveUserPortalRedirectForPath(ROLE.USER, '/dashboard/overview')
     ).toBe('/app/usage')
     expect(resolveUserPortalRedirectForPath(ROLE.USER, '/app')).toBe(null)
-    expect(resolveUserPortalRedirectForPath(ROLE.USER, '/profile')).toBe(null)
-    expect(
-      resolveUserPortalRedirectForPath(ROLE.ADMIN, '/channels')
-    ).toBe(null)
+    expect(resolveUserPortalRedirectForPath(ROLE.USER, '/profile')).toBe(
+      '/app/settings'
+    )
+    expect(resolveUserPortalRedirectForPath(ROLE.USER, '/security')).toBe(
+      '/app/security'
+    )
+    expect(resolveUserPortalRedirectForPath(ROLE.USER, '/wallet')).toBe('/app')
+    expect(resolveUserPortalRedirectForPath(ROLE.USER, '/errors/forbidden')).toBe(
+      '/app'
+    )
+    expect(resolveUserPortalRedirectForPath(ROLE.ADMIN, '/channels')).toBe(null)
+    expect(resolveUserPortalRedirectForPath(ROLE.ADMIN, '/profile')).toBe(null)
   })
 
   test('console path classification', () => {

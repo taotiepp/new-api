@@ -16,10 +16,12 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { useQueryClient } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { Download } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { toast } from 'sonner'
 
 import { ErrorState } from '@/components/error-state'
 import { Button } from '@/components/ui/button'
@@ -32,11 +34,17 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
+import { issueUserInvoice, type UserInvoice } from '@/features/dashboard/api'
 import { usePricingCurrency } from '@/lib/currency'
 import dayjs from '@/lib/dayjs'
+import { handleServerError } from '@/lib/handle-server-error'
+import { requireServerSuccess } from '@/lib/server-error-message'
 import { dateToUnixTimestamp } from '@/lib/time'
 
-import { usePortalBills } from '../hooks/use-portal-billing-data'
+import {
+  usePortalBills,
+  usePortalInvoices,
+} from '../hooks/use-portal-billing-data'
 import { usePortalSubjectUser } from '../hooks/use-portal-subject-user'
 import {
   buildPortalCostTrend,
@@ -45,16 +53,20 @@ import {
   summarizePortalBillingByModel,
 } from '../lib/billing'
 import { PortalBillInvoiceDialog } from './portal-bill-invoice-dialog'
+import { PortalInvoiceHistory } from './portal-invoice-history'
 import { PortalBillModelChart } from './portal-bill-model-chart'
 import { PortalBillingChart } from './portal-billing-chart'
 import { PortalSubjectUserPicker } from './portal-subject-user-picker'
 
 export function PortalBillPanel() {
   const { t } = useTranslation()
+  const queryClient = useQueryClient()
   const { currency: catalogCurrency, formatQuota } = usePricingCurrency()
   const months = useMemo(() => listPortalBillMonths(), [])
   const [monthValue, setMonthValue] = useState(months[0]?.value ?? '')
   const [invoiceOpen, setInvoiceOpen] = useState(false)
+  const [activeInvoice, setActiveInvoice] = useState<UserInvoice | null>(null)
+  const [issuing, setIssuing] = useState(false)
   const subjectUser = usePortalSubjectUser()
   const selectedMonth =
     months.find((month) => month.value === monthValue) ?? months[0]
@@ -63,6 +75,7 @@ export function PortalBillPanel() {
     [selectedMonth]
   )
   const bills = usePortalBills(monthValue, subjectUser.subjectUserId)
+  const invoices = usePortalInvoices(monthValue, subjectUser.subjectUserId)
   const unknownModel = t('Unknown model')
   const othersLabel = t('Other models')
   const overview = bills.data
@@ -94,6 +107,41 @@ export function PortalBillPanel() {
     [overview?.trend]
   )
   const isCurrentMonth = dayjs(selectedMonth?.date).isSame(new Date(), 'month')
+  const uninvoiced = invoices.data?.uninvoiced
+  const nothingNew =
+    invoices.isSuccess &&
+    (uninvoiced?.quota ?? 0) === 0 &&
+    (uninvoiced?.count ?? 0) === 0 &&
+    (uninvoiced?.token_used ?? 0) === 0
+  const history = invoices.data?.invoices ?? []
+
+  const issueInvoice = async () => {
+    setIssuing(true)
+    try {
+      const invoice = requireServerSuccess(
+        await issueUserInvoice({
+          period: monthValue,
+          user_id: subjectUser.subjectUserId,
+        })
+      ).data
+      setActiveInvoice(invoice)
+      setInvoiceOpen(true)
+      await queryClient.invalidateQueries({
+        queryKey: ['user-portal', 'invoices', monthValue],
+      })
+    } catch (error) {
+      if (
+        error instanceof Error &&
+        error.message === 'nothing new to invoice'
+      ) {
+        toast.error(t('Nothing new to invoice'))
+        return
+      }
+      handleServerError(error)
+    } finally {
+      setIssuing(false)
+    }
+  }
 
   return (
     <div className='flex w-full flex-col gap-6'>
@@ -152,8 +200,16 @@ export function PortalBillPanel() {
           <Button
             type='button'
             size='sm'
-            onClick={() => setInvoiceOpen(true)}
-            disabled={bills.isLoading || bills.isError}
+            onClick={() => {
+              void issueInvoice()
+            }}
+            disabled={
+              bills.isLoading ||
+              bills.isError ||
+              invoices.isLoading ||
+              issuing ||
+              nothingNew
+            }
           >
             <Download className='size-3.5' />
             {t('Export invoice')}
@@ -194,6 +250,16 @@ export function PortalBillPanel() {
               </>
             )}
           </p>
+          <p className='text-muted-foreground mt-2 text-sm'>
+            {t('Uninvoiced')}{' '}
+            <span className='text-foreground font-medium tabular-nums'>
+              {invoices.isLoading ? (
+                <Skeleton className='inline-block h-4 w-16 align-middle' />
+              ) : (
+                formatQuota(uninvoiced?.quota ?? 0)
+              )}
+            </span>
+          </p>
         </article>
         <PortalBillingChart
           title={t('Cost trend')}
@@ -210,12 +276,24 @@ export function PortalBillPanel() {
       ) : (
         <PortalBillModelChart shares={shares} loading={bills.isLoading} />
       )}
+      <PortalInvoiceHistory
+        loading={invoices.isLoading}
+        error={invoices.isError}
+        invoices={history}
+        currency={catalogCurrency}
+        formatQuota={formatQuota}
+        onRetry={() => {
+          void invoices.refetch()
+        }}
+        onOpen={(invoice) => {
+          setActiveInvoice(invoice)
+          setInvoiceOpen(true)
+        }}
+      />
       <PortalBillInvoiceDialog
         open={invoiceOpen}
         onOpenChange={setInvoiceOpen}
-        period={monthValue}
-        isCurrentMonth={isCurrentMonth}
-        items={overview?.items ?? []}
+        invoice={activeInvoice}
         subjectUser={subjectUser.subject}
       />
     </div>

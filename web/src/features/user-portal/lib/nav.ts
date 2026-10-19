@@ -29,7 +29,7 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 
-export type UserPortalNavMatch = 'console' | 'plaza' | 'prefix' | 'docs'
+export type UserPortalNavMatch = 'console' | 'plaza' | 'prefix'
 
 export type UserPortalNavItem = {
   titleKey: string
@@ -39,7 +39,6 @@ export type UserPortalNavItem = {
 }
 
 export const USER_PORTAL_CONSOLE_HREF = '/app/keys'
-export const DEFAULT_USER_PORTAL_DOCS_HREF = 'https://docs.newapi.pro'
 
 export const USER_PORTAL_TOP_NAV_ITEMS: UserPortalNavItem[] = [
   {
@@ -62,9 +61,9 @@ export const USER_PORTAL_TOP_NAV_ITEMS: UserPortalNavItem[] = [
   },
   {
     titleKey: 'Docs',
-    href: 'docs',
+    href: '/docs',
     icon: BookOpen,
-    match: 'docs',
+    match: 'prefix',
   },
 ]
 
@@ -101,7 +100,16 @@ export const USER_PORTAL_CONSOLE_NAV_ITEMS: UserPortalNavItem[] = [
   },
 ]
 
+const USER_PORTAL_CONSOLE_PAGE_PREFIXES = ['/app/security']
+
 export function isUserPortalConsolePath(pathname: string): boolean {
+  if (
+    USER_PORTAL_CONSOLE_PAGE_PREFIXES.some(
+      (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
+    )
+  ) {
+    return true
+  }
   return USER_PORTAL_CONSOLE_NAV_ITEMS.some(
     (item) => pathname === item.href || pathname.startsWith(`${item.href}/`),
   )
@@ -115,17 +123,6 @@ export function isUserPortalPlazaPath(pathname: string): boolean {
   )
 }
 
-export function resolveUserPortalDocsHref(docsLink: string | undefined): {
-  href: string
-  external: boolean
-} {
-  const href = docsLink?.trim() || DEFAULT_USER_PORTAL_DOCS_HREF
-  return {
-    href,
-    external: href.startsWith('http://') || href.startsWith('https://'),
-  }
-}
-
 export function isUserPortalNavActive(
   pathname: string,
   item: UserPortalNavItem,
@@ -135,9 +132,6 @@ export function isUserPortalNavActive(
   }
   if (item.match === 'plaza') {
     return isUserPortalPlazaPath(pathname)
-  }
-  if (item.match === 'docs') {
-    return false
   }
   return pathname === item.href || pathname.startsWith(`${item.href}/`)
 }

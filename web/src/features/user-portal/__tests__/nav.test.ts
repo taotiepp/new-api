@@ -19,11 +19,9 @@ For commercial licensing, please contact support@quantumnous.com
 import { describe, expect, test } from 'vitest'
 
 import {
-  DEFAULT_USER_PORTAL_DOCS_HREF,
   isUserPortalConsolePath,
   isUserPortalNavActive,
   isUserPortalPlazaPath,
-  resolveUserPortalDocsHref,
   USER_PORTAL_CONSOLE_NAV_ITEMS,
   USER_PORTAL_TOP_NAV_ITEMS,
 } from '../lib/nav'
@@ -52,6 +50,7 @@ describe('user portal navigation', () => {
     expect(isUserPortalConsolePath('/app/keys')).toBe(true)
     expect(isUserPortalConsolePath('/app/bills')).toBe(true)
     expect(isUserPortalConsolePath('/app/settings')).toBe(true)
+    expect(isUserPortalConsolePath('/app/security')).toBe(true)
     expect(isUserPortalConsolePath('/app')).toBe(false)
     expect(isUserPortalConsolePath('/app/playground')).toBe(false)
     expect(isUserPortalPlazaPath('/app')).toBe(true)
@@ -63,23 +62,17 @@ describe('user portal navigation', () => {
     const consoleItem = USER_PORTAL_TOP_NAV_ITEMS[0]
     const plazaItem = USER_PORTAL_TOP_NAV_ITEMS[1]
     expect(isUserPortalNavActive('/app/usage', consoleItem)).toBe(true)
+    expect(isUserPortalNavActive('/app/security', consoleItem)).toBe(true)
     expect(isUserPortalNavActive('/app/usage', plazaItem)).toBe(false)
     expect(isUserPortalNavActive('/app', plazaItem)).toBe(true)
     expect(isUserPortalNavActive('/app', consoleItem)).toBe(false)
   })
 
-  test('uses the configured docs link when present and falls back to the public docs', () => {
-    expect(resolveUserPortalDocsHref('https://example.com/help')).toEqual({
-      href: 'https://example.com/help',
-      external: true,
-    })
-    expect(resolveUserPortalDocsHref('/docs')).toEqual({
-      href: '/docs',
-      external: false,
-    })
-    expect(resolveUserPortalDocsHref(undefined)).toEqual({
-      href: DEFAULT_USER_PORTAL_DOCS_HREF,
-      external: true,
-    })
+  test('opens the in-app docs and marks nested doc pages as active', () => {
+    const docsItem = USER_PORTAL_TOP_NAV_ITEMS[3]
+    expect(docsItem.href).toBe('/docs')
+    expect(isUserPortalNavActive('/docs', docsItem)).toBe(true)
+    expect(isUserPortalNavActive('/docs/api/openai/http', docsItem)).toBe(true)
+    expect(isUserPortalNavActive('/app', docsItem)).toBe(false)
   })
 })
