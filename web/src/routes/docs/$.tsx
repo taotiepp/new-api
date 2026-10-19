@@ -16,15 +16,18 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { createFileRoute } from '@tanstack/react-router'
-
-import { DocsArticle } from '@/features/docs/components/docs-article'
+import { createFileRoute, redirect } from '@tanstack/react-router'
 
 export const Route = createFileRoute('/docs/$')({
-  component: DocsSplat,
+  beforeLoad: ({ params }) => {
+    const path = params._splat
+    if (!path) {
+      throw redirect({ to: '/app/docs', replace: true })
+    }
+    throw redirect({
+      to: '/app/docs/$',
+      params: { _splat: path },
+      replace: true,
+    })
+  },
 })
-
-function DocsSplat() {
-  const { _splat } = Route.useParams()
-  return <DocsArticle path={_splat ?? ''} />
-}

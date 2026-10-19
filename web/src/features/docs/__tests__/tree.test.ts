@@ -45,11 +45,11 @@ describe('doc tree helpers', () => {
   })
 
   test('reads the document path from the docs location', () => {
-    expect(docPathFromLocation('/docs')).toBe('')
-    expect(docPathFromLocation('/docs/api/openai/http')).toBe(
+    expect(docPathFromLocation('/app/docs')).toBe('')
+    expect(docPathFromLocation('/app/docs/api/openai/http')).toBe(
       'api/openai/http'
     )
-    expect(docPathFromLocation('/docs/api/openai/http%20guide')).toBe(
+    expect(docPathFromLocation('/app/docs/api/openai/http%20guide')).toBe(
       'api/openai/http guide'
     )
     expect(docPathFromLocation('/pricing')).toBe('')

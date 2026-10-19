@@ -61,7 +61,7 @@ export const USER_PORTAL_TOP_NAV_ITEMS: UserPortalNavItem[] = [
   },
   {
     titleKey: 'Docs',
-    href: '/docs',
+    href: '/app/docs',
     icon: BookOpen,
     match: 'prefix',
   },

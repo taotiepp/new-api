@@ -61,7 +61,7 @@ export function DocsArticle(props: { path: string }) {
   }
 
   return (
-    <article className='px-4 py-6 md:px-8 md:py-8'>
+    <article className='min-w-0'>
       <RichContent content={pageQuery.data.data.content} />
     </article>
   )

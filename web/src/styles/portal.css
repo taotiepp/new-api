@@ -493,6 +493,16 @@ For commercial licensing, please contact support@quantumnous.com
   opacity: 1;
 }
 
+[data-user-portal] .portal-docs-nav {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0.125rem;
+  border-radius: var(--portal-radius);
+  background: var(--portal-chrome);
+  padding: 0.5rem;
+}
+
 [data-user-portal] .portal-console-stage {
   display: flex;
   min-width: 0;

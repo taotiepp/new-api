@@ -18,27 +18,8 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { createFileRoute, redirect } from '@tanstack/react-router'
 
-import { getDocTree } from '@/features/docs/api'
-import { DocsArticle } from '@/features/docs/components/docs-article'
-import { firstDocPath } from '@/features/docs/lib/tree'
-
 export const Route = createFileRoute('/docs/')({
-  beforeLoad: async ({ context }) => {
-    const tree = await context.queryClient.ensureQueryData({
-      queryKey: ['doc-site', 'tree'],
-      queryFn: getDocTree,
-    })
-    const path = firstDocPath(tree.data ?? [])
-    if (!path) return
-    throw redirect({
-      to: '/docs/$',
-      params: { _splat: path },
-      replace: true,
-    })
+  beforeLoad: () => {
+    throw redirect({ to: '/app/docs', replace: true })
   },
-  component: DocsIndex,
 })
-
-function DocsIndex() {
-  return <DocsArticle path='' />
-}

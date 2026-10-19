@@ -34,7 +34,9 @@ vi.mock('@tanstack/react-router', () => ({
     <a
       aria-current={props['aria-current']}
       className={props.className}
-      href={props.params?._splat ? `/docs/${props.params._splat}` : props.to}
+      href={
+        props.params?._splat ? `/app/docs/${props.params._splat}` : props.to
+      }
       onClick={props.onClick}
     >
       {props.children}
@@ -65,28 +67,33 @@ const nodes: DocNode[] = [
 ]
 
 describe('docs navigation', () => {
-  test('marks the current page and keeps its parent groups expanded', () => {
+  test('marks the current page and starts with every group expanded', () => {
     render(<DocsNav activePath='api/openai/http' nodes={nodes} />)
 
     const current = screen.getByRole('link', { current: 'page' })
-    expect(current).toHaveAttribute('href', '/docs/api/openai/http')
+    expect(current).toHaveAttribute('href', '/app/docs/api/openai/http')
     expect(current).toHaveTextContent('API calls')
     expect(screen.getByRole('link', { name: 'SDK calls' })).toHaveAttribute(
       'href',
-      '/docs/api/openai/sdk'
+      '/app/docs/api/openai/sdk'
     )
     expect(
       screen.getByRole('button', { name: 'Toggle Gemini' })
-    ).toHaveAttribute('aria-expanded', 'false')
+    ).toHaveAttribute('aria-expanded', 'true')
+    expect(
+      screen.getByRole('link', { name: 'API calls', current: false })
+    ).toHaveAttribute('href', '/app/docs/api/gemini/http')
   })
 
-  test('expands a collapsed group from its toggle', () => {
+  test('collapses an expanded group from its toggle', () => {
     render(<DocsNav activePath='api/openai/http' nodes={nodes} />)
 
     const toggle = screen.getByRole('button', { name: 'Toggle Gemini' })
     fireEvent.click(toggle)
 
-    expect(toggle).toHaveAttribute('aria-expanded', 'true')
-    expect(screen.getByRole('link', { name: 'API calls', current: false })).toBeTruthy()
+    expect(toggle).toHaveAttribute('aria-expanded', 'false')
+    expect(
+      screen.queryByRole('link', { name: 'API calls', current: false })
+    ).toBeNull()
   })
 })

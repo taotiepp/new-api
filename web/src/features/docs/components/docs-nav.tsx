@@ -40,7 +40,7 @@ export function DocsNav(props: DocsNavProps) {
   const { t } = useTranslation()
 
   return (
-    <nav aria-label={t('Documentation menu')} className='flex flex-col gap-0.5 p-3'>
+    <nav aria-label={t('Documentation menu')} className='portal-docs-nav'>
       {props.nodes.map((node) => (
         <DocsNavBranch
           key={node.path || node.title}
@@ -67,7 +67,7 @@ function DocsNavBranch(props: {
   const branchActive =
     props.activePath === props.node.path ||
     props.activePath.startsWith(`${props.node.path}/`)
-  const [open, setOpen] = useState(branchActive)
+  const [open, setOpen] = useState(true)
   useEffect(() => {
     if (branchActive) setOpen(true)
   }, [branchActive])
@@ -76,8 +76,8 @@ function DocsNavBranch(props: {
     <span className='min-w-0 flex-1 truncate text-left'>{props.node.title}</span>
   )
   const itemClass = cn(
-    'flex min-w-0 flex-1 items-center rounded-md px-2 py-1.5 text-sm hover:bg-muted',
-    current && 'bg-muted font-medium'
+    'portal-console-nav-link min-w-0 flex-1',
+    current && 'portal-console-nav-active'
   )
 
   const row = props.node.path ? (
@@ -85,13 +85,15 @@ function DocsNavBranch(props: {
       aria-current={current ? 'page' : undefined}
       className={itemClass}
       params={{ _splat: props.node.path }}
-      to='/docs/$'
+      to='/app/docs/$'
       onClick={props.onNavigate}
     >
       {label}
     </Link>
   ) : (
-    <span className={cn(itemClass, 'text-muted-foreground')}>{label}</span>
+    <span className={cn(itemClass, 'text-[var(--portal-ink-muted)]')}>
+      {label}
+    </span>
   )
 
   if (!hasChildren) {
@@ -109,7 +111,7 @@ function DocsNavBranch(props: {
         {row}
         <CollapsibleTrigger
           aria-label={t('Toggle {{name}}', { name: props.node.title })}
-          className='text-muted-foreground hover:bg-muted hover:text-foreground inline-flex size-7 shrink-0 items-center justify-center rounded-md'
+          className='inline-flex size-7 shrink-0 items-center justify-center rounded-[var(--portal-radius)] text-[var(--portal-ink-muted)] hover:bg-[var(--portal-module)] hover:text-[var(--portal-ink)]'
         >
           <ChevronRight
             aria-hidden

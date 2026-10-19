@@ -28,8 +28,8 @@ export function firstDocPath(nodes: DocNode[]): string {
 }
 
 export function docPathFromLocation(pathname: string): string {
-  if (pathname === '/docs') return ''
-  const prefix = '/docs/'
+  if (pathname === '/app/docs' || pathname === '/app/docs/') return ''
+  const prefix = '/app/docs/'
   if (!pathname.startsWith(prefix)) return ''
   return decodeURIComponent(pathname.slice(prefix.length))
 }

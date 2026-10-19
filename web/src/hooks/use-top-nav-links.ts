@@ -90,7 +90,7 @@ export function useTopNavLinks(): TopNavLink[] {
   }
 
   if (modules?.docs !== false) {
-    links.push({ title: t('Docs'), href: '/docs', matchPrefix: true })
+    links.push({ title: t('Docs'), href: '/app/docs', matchPrefix: true })
   }
 
   // About

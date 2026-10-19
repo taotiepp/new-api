@@ -70,9 +70,11 @@ describe('user portal navigation', () => {
 
   test('opens the in-app docs and marks nested doc pages as active', () => {
     const docsItem = USER_PORTAL_TOP_NAV_ITEMS[3]
-    expect(docsItem.href).toBe('/docs')
-    expect(isUserPortalNavActive('/docs', docsItem)).toBe(true)
-    expect(isUserPortalNavActive('/docs/api/openai/http', docsItem)).toBe(true)
+    expect(docsItem.href).toBe('/app/docs')
+    expect(isUserPortalNavActive('/app/docs', docsItem)).toBe(true)
+    expect(isUserPortalNavActive('/app/docs/api/openai/http', docsItem)).toBe(
+      true
+    )
     expect(isUserPortalNavActive('/app', docsItem)).toBe(false)
   })
 })

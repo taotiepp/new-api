@@ -18,20 +18,10 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { createFileRoute, Outlet } from '@tanstack/react-router'
 
-import { PublicLayout } from '@/components/layout'
-
-import { DocsFrame } from '@/features/docs/components/docs-frame'
-
 export const Route = createFileRoute('/docs')({
-  component: DocsLayout,
+  component: DocsRedirectLayout,
 })
 
-function DocsLayout() {
-  return (
-    <PublicLayout showMainContainer={false}>
-      <DocsFrame>
-        <Outlet />
-      </DocsFrame>
-    </PublicLayout>
-  )
+function DocsRedirectLayout() {
+  return <Outlet />
 }
