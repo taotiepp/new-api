@@ -17,7 +17,6 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { Link } from '@tanstack/react-router'
-import { ArrowLeftIcon } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { PricingCurrencySwitch } from '@/components/pricing-currency-switch'
@@ -66,13 +65,13 @@ export function UserPortalHeader() {
           ) : null}
           {isAdmin ? (
             <Button
+              className='h-9 shrink-0 px-3 text-sm font-medium'
               nativeButton={false}
-              render={<Link to='/dashboard' />}
-              size='icon-sm'
-              variant='ghost'
-              aria-label={t('Back to Console')}
+              render={<Link to='/channels' />}
+              size='sm'
+              variant='outline'
             >
-              <ArrowLeftIcon aria-hidden className='size-4' />
+              {t('Legacy console')}
             </Button>
           ) : null}
           <PricingCurrencySwitch />

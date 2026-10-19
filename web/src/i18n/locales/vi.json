@@ -3029,6 +3029,7 @@
     "Leave this empty only for the final fallback split; it catches client models not matched above.": "Chỉ để trống cho nhánh dự phòng cuối cùng; nhánh này nhận các model client chưa khớp ở trên.",
     "Leave": "Rời khỏi",
     "Left to Right": "Trái sang phải",
+    "Legacy console": "Bảng điều khiển cũ",
     "Legacy Format (JSON Object)": "Định dạng cũ (đối tượng JSON)",
     "Legacy format must be a JSON object": "Định dạng cũ phải là đối tượng JSON",
     "Legacy Format Template": "Mẫu định dạng cũ",

@@ -3029,6 +3029,7 @@
     "Leave this empty only for the final fallback split; it catches client models not matched above.": "空にできるのは最後のフォールバック分岐だけです。上の分岐で一致しないクライアントモデルを受けます。",
     "Leave": "退出",
     "Left to Right": "左から右",
+    "Legacy console": "旧コンソール",
     "Legacy Format (JSON Object)": "旧形式（JSONオブジェクト）",
     "Legacy format must be a JSON object": "旧形式はJSONオブジェクトである必要があります",
     "Legacy Format Template": "旧フォーマットテンプレート",

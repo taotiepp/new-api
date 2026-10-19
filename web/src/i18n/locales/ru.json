@@ -3029,6 +3029,7 @@
     "Leave this empty only for the final fallback split; it catches client models not matched above.": "Оставляйте пустым только последнюю резервную ветку; она принимает модели клиента, не совпавшие выше.",
     "Leave": "Выйти",
     "Left to Right": "Слева направо",
+    "Legacy console": "Старая консоль",
     "Legacy Format (JSON Object)": "Старый формат (JSON-объект)",
     "Legacy format must be a JSON object": "Старый формат должен быть JSON-объектом",
     "Legacy Format Template": "Шаблон старого формата",

@@ -3029,6 +3029,7 @@
     "Leave this empty only for the final fallback split; it catches client models not matched above.": "Laissez vide uniquement pour la dernière branche de repli ; elle reçoit les modèles client non associés plus haut.",
     "Leave": "Quitter",
     "Left to Right": "De gauche à droite",
+    "Legacy console": "Ancienne console",
     "Legacy Format (JSON Object)": "Ancien format (objet JSON)",
     "Legacy format must be a JSON object": "L'ancien format doit être un objet JSON",
     "Legacy Format Template": "Modèle ancien format",
