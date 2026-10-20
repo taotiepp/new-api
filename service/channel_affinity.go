@@ -623,6 +623,15 @@ func GetPreferredChannelByAffinity(c *gin.Context, modelName string, usingGroup 
 	return 0, false
 }
 
+// AllowChannelAffinityRetry lets the current request retry after a failure that
+// channel affinity would otherwise keep pinned to the same upstream attempt.
+func AllowChannelAffinityRetry(c *gin.Context) {
+	if c == nil {
+		return
+	}
+	c.Set(ginKeyChannelAffinitySkipRetry, false)
+}
+
 func ShouldSkipRetryAfterChannelAffinityFailure(c *gin.Context) bool {
 	if c == nil {
 		return false

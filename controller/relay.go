@@ -98,6 +98,9 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 			recordTerminalRelayError(c, newAPIError, relayInfo)
 			logger.LogError(c, fmt.Sprintf("relay error: %s", common.LocalLogPreview(newAPIError.Error())))
 			newAPIError.SetMessage(common.MessageWithRequestId(newAPIError.Error(), requestId))
+			if c.Writer != nil && c.Writer.Written() {
+				return
+			}
 			switch relayFormat {
 			case types.RelayFormatOpenAIRealtime:
 				helper.WssError(c, ws, newAPIError.ToOpenAIError())
@@ -225,8 +228,9 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 	relayInfo.RetryIndex = 0
 	relayInfo.LastError = nil
 	encryptedReasoningExtraRetry := 0
+	responsesStreamExtraRetry := 0
 
-	for ; retryParam.GetRetry() <= common.RetryTimes+encryptedReasoningExtraRetry; retryParam.IncreaseRetry() {
+	for ; retryParam.GetRetry() <= common.RetryTimes+encryptedReasoningExtraRetry+responsesStreamExtraRetry; retryParam.IncreaseRetry() {
 		relayInfo.RetryIndex = retryParam.GetRetry()
 		channel, channelErr := getChannel(c, relayInfo, retryParam)
 		if channelErr != nil {
@@ -272,6 +276,21 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		relayInfo.LastError = newAPIError
 
 		processChannelError(c, *types.NewChannelError(channel.Id, channel.Type, channel.Name, channel.ChannelInfo.IsMultiKey, common.GetContextKeyString(c, constant.ContextKeyChannelKey), channel.GetAutoBan()), newAPIError, relayInfo)
+
+		if c.Writer != nil && c.Writer.Written() {
+			break
+		}
+
+		if common.GetContextKeyBool(c, constant.ContextKeyRetryIncompleteResponsesStream) {
+			service.AllowChannelAffinityRetry(c)
+			if common.GetContextKeyBool(c, constant.ContextKeyTokenClearEncryptedContent) && !relayInfo.RetryWithoutEncryptedContent {
+				relayInfo.RetryWithoutEncryptedContent = true
+			}
+			if common.RetryTimes <= 0 && responsesStreamExtraRetry == 0 {
+				responsesStreamExtraRetry = 1
+				continue
+			}
+		}
 
 		if service.AllowEncryptedReasoningRetry(
 			common.GetContextKeyBool(c, constant.ContextKeyTokenClearEncryptedContent),

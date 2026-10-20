@@ -12,6 +12,8 @@ import (
 	"github.com/QuantumNous/new-api/constant"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/relaykit/dto"
+	"github.com/QuantumNous/new-api/relaykit/types"
+	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
@@ -194,7 +196,7 @@ func TestOaiResponsesHandlerIncompleteStatusCommitsZeroImageGeneration(t *testin
 	assert.Equal(t, 0, info.ResponsesUsageInfo.BuiltInTools[dto.BuildInToolImageGeneration].CallCount)
 }
 
-func runResponsesImageBillingStream(t *testing.T, events ...string) *relaycommon.RelayInfo {
+func runResponsesImageBillingStream(t *testing.T, events ...string) (*relaycommon.RelayInfo, *types.NewAPIError, *gin.Context, *httptest.ResponseRecorder) {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 	oldTimeout := constant.StreamingTimeout
@@ -229,39 +231,88 @@ func runResponsesImageBillingStream(t *testing.T, events ...string) *relaycommon
 	}
 
 	_, apiErr := OaiResponsesStreamHandler(c, info, resp)
-	require.Nil(t, apiErr)
 	require.NotNil(t, info.ResponsesUsageInfo)
 	require.Contains(t, info.ResponsesUsageInfo.BuiltInTools, dto.BuildInToolImageGeneration)
-	return info
+	return info, apiErr, c, w
 }
 
 func TestOaiResponsesStreamHandlerDeduplicatesCompletedImageOutput(t *testing.T) {
 	item := `{"type":"image_generation_call","id":"img_1","call_id":"call_1","status":"completed","result":"base64-a"}`
-	info := runResponsesImageBillingStream(
+	info, apiErr, c, w := runResponsesImageBillingStream(
 		t,
 		`{"type":"response.output_item.done","output_index":0,"item":`+item+`}`,
 		`{"type":"response.completed","response":{"status":"completed","output":[`+item+`],"usage":{"input_tokens":1,"output_tokens":1,"total_tokens":2}}}`,
 	)
 
+	require.Nil(t, apiErr)
 	assert.Equal(t, 1, info.ResponsesUsageInfo.BuiltInTools[dto.BuildInToolImageGeneration].CallCount)
+	assert.Contains(t, w.Body.String(), "response.completed")
+	assert.False(t, common.GetContextKeyBool(c, constant.ContextKeyRetryIncompleteResponsesStream))
 }
 
 func TestOaiResponsesStreamHandlerDiscardsImageOutputOnIncomplete(t *testing.T) {
-	info := runResponsesImageBillingStream(
+	info, apiErr, c, w := runResponsesImageBillingStream(
 		t,
 		`{"type":"response.output_item.done","output_index":0,"item":{"type":"image_generation_call","id":"img_1","status":"completed","result":"base64-a"}}`,
 		`{"type":"response.incomplete","response":{"status":"incomplete"}}`,
 	)
 
+	require.NotNil(t, apiErr)
+	assert.Equal(t, http.StatusBadGateway, apiErr.StatusCode)
 	assert.Equal(t, 0, info.ResponsesUsageInfo.BuiltInTools[dto.BuildInToolImageGeneration].CallCount)
+	assert.Empty(t, w.Body.String())
+	assert.True(t, common.GetContextKeyBool(c, constant.ContextKeyRetryIncompleteResponsesStream))
 }
 
 func TestOaiResponsesStreamHandlerDoesNotCountPartialImageEvent(t *testing.T) {
-	info := runResponsesImageBillingStream(
+	info, apiErr, c, w := runResponsesImageBillingStream(
 		t,
 		`{"type":"response.image_generation_call.partial_image","output_index":0,"partial_image_b64":"partial-bytes"}`,
 		`{"type":"response.completed","response":{"status":"completed","output":[]}}`,
 	)
 
+	require.NotNil(t, apiErr)
+	assert.Equal(t, http.StatusBadGateway, apiErr.StatusCode)
+	assert.Contains(t, apiErr.Error(), "without billable usage")
 	assert.Equal(t, 0, info.ResponsesUsageInfo.BuiltInTools[dto.BuildInToolImageGeneration].CallCount)
+	assert.Empty(t, w.Body.String())
+	assert.True(t, common.GetContextKeyBool(c, constant.ContextKeyRetryIncompleteResponsesStream))
+}
+
+func TestOaiResponsesStreamHandlerRejectsEOFWithoutCompletion(t *testing.T) {
+	_, apiErr, c, w := runResponsesImageBillingStream(
+		t,
+		`{"type":"response.created","response":{"id":"resp_1","status":"in_progress"}}`,
+	)
+
+	require.NotNil(t, apiErr)
+	assert.Equal(t, http.StatusBadGateway, apiErr.StatusCode)
+	assert.Contains(t, apiErr.Error(), "without a completed response")
+	assert.Empty(t, w.Body.String())
+	assert.True(t, common.GetContextKeyBool(c, constant.ContextKeyRetryIncompleteResponsesStream))
+}
+
+func TestOaiResponsesStreamHandlerRejectsFailedEvent(t *testing.T) {
+	_, apiErr, c, w := runResponsesImageBillingStream(
+		t,
+		`{"type":"response.failed","response":{"status":"failed","error":{"message":"The encrypted content could not be verified","type":"invalid_request_error"}}}`,
+	)
+
+	require.NotNil(t, apiErr)
+	assert.Equal(t, http.StatusBadGateway, apiErr.StatusCode)
+	assert.Contains(t, apiErr.Error(), "could not be verified")
+	assert.Empty(t, w.Body.String())
+	assert.True(t, common.GetContextKeyBool(c, constant.ContextKeyRetryIncompleteResponsesStream))
+}
+
+func TestOaiResponsesStreamHandlerKeepsStartedOutputOnFailure(t *testing.T) {
+	service.InitTokenEncoders()
+	_, apiErr, c, w := runResponsesImageBillingStream(
+		t,
+		`{"type":"response.output_text.delta","delta":"hello"}`,
+	)
+
+	require.NotNil(t, apiErr)
+	assert.Contains(t, w.Body.String(), "hello")
+	assert.False(t, common.GetContextKeyBool(c, constant.ContextKeyRetryIncompleteResponsesStream))
 }

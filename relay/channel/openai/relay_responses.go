@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/logger"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/relay/helper"
@@ -74,8 +75,34 @@ func OaiResponsesStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp
 
 	var usage = &dto.Usage{}
 	var responseTextBuilder strings.Builder
+	var terminalErr *types.NewAPIError
+	var pendingResponses []dto.ResponsesStreamResponse
+	var pendingData []string
 	imageCounter := &relaycommon.ImageGenerationCallCounter{}
 	imageCommitted := false
+	sawCompleted := false
+	committed := false
+	common.SetContextKey(c, constant.ContextKeyRetryIncompleteResponsesStream, false)
+
+	commitEvents := func() {
+		if committed {
+			return
+		}
+		committed = true
+		for i, pending := range pendingResponses {
+			sendResponsesStreamData(c, pending, pendingData[i])
+		}
+		pendingResponses = nil
+		pendingData = nil
+	}
+	writeEvent := func(streamResponse dto.ResponsesStreamResponse, data string) {
+		if committed {
+			sendResponsesStreamData(c, streamResponse, data)
+			return
+		}
+		pendingResponses = append(pendingResponses, streamResponse)
+		pendingData = append(pendingData, data)
+	}
 
 	helper.StreamScannerHandler(c, resp, info, func(data string, sr *helper.StreamResult) {
 
@@ -86,38 +113,50 @@ func OaiResponsesStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp
 			sr.Error(err)
 			return
 		}
-		sendResponsesStreamData(c, streamResponse, data)
+		writeEvent(streamResponse, data)
 		switch streamResponse.Type {
 		case "response.completed", "response.done":
+			if streamResponse.Response != nil && relaycommon.IsNonBillableResponsesStatus(streamResponse.Response.Status) {
+				if !imageCommitted {
+					imageCounter.Reset()
+					imageCounter.Commit(info)
+					imageCommitted = true
+				}
+				if terminalErr == nil {
+					terminalErr = responsesStreamFailure(streamResponse)
+				}
+				sr.Stop(terminalErr)
+				return
+			}
+			sawCompleted = true
 			if streamResponse.Response != nil {
 				if streamResponse.Response.Usage != nil {
 					incomingUsage := relayconvert.NormalizeResponsesUsage(streamResponse.Response.Usage)
 					usage = dto.MergeUsageNonZero(usage, incomingUsage)
 				}
 				if !imageCommitted {
-					if relaycommon.IsNonBillableResponsesStatus(streamResponse.Response.Status) {
-						imageCounter.Reset()
-						imageCounter.Commit(info)
-						imageCommitted = true
-					} else {
-						for i := range streamResponse.Response.Output {
-							idx := i
-							imageCounter.Observe(&streamResponse.Response.Output[i], &idx)
-						}
-						imageCounter.Commit(info)
-						imageCommitted = true
+					for i := range streamResponse.Response.Output {
+						idx := i
+						imageCounter.Observe(&streamResponse.Response.Output[i], &idx)
 					}
+					imageCounter.Commit(info)
+					imageCommitted = true
 				}
 			} else if !imageCommitted {
 				imageCounter.Commit(info)
 				imageCommitted = true
 			}
-		case "response.failed", "response.incomplete", "response.cancelled", "response.canceled":
+		case "response.failed", "response.error", "response.incomplete", "response.cancelled", "response.canceled":
 			if !imageCommitted {
 				imageCounter.Reset()
 				imageCounter.Commit(info)
 				imageCommitted = true
 			}
+			if terminalErr == nil {
+				terminalErr = responsesStreamFailure(streamResponse)
+			}
+			sr.Stop(terminalErr)
+			return
 		case "response.output_text.delta":
 			// 处理输出文本
 			responseTextBuilder.WriteString(streamResponse.Delta)
@@ -136,6 +175,9 @@ func OaiResponsesStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp
 					}
 				}
 			}
+		}
+		if terminalErr == nil && responsesStreamEventCommitsOutput(streamResponse) {
+			commitEvents()
 		}
 	})
 
@@ -158,5 +200,84 @@ func OaiResponsesStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp
 		usage.BillingUsage = dto.CloneBillingUsageWithEstimatedCompletion(usage.BillingUsage, usage.CompletionTokens)
 	}
 
+	if terminalErr != nil {
+		markIncompleteResponsesStreamForRetry(c, info, committed)
+		return nil, terminalErr
+	}
+	if !sawCompleted || !responsesStreamHasBillableUsage(info, usage) {
+		if sawCompleted && (info.PriceData.FreeModel || info.PriceData.UsePrice) {
+			commitEvents()
+			return usage, nil
+		}
+		message := "upstream responses stream ended without a completed response"
+		if sawCompleted {
+			message = "upstream responses stream completed without billable usage"
+		}
+		markIncompleteResponsesStreamForRetry(c, info, committed)
+		return nil, types.NewOpenAIError(fmt.Errorf("%s", message), types.ErrorCodeBadResponse, http.StatusBadGateway)
+	}
+
+	commitEvents()
 	return usage, nil
+}
+
+func markIncompleteResponsesStreamForRetry(c *gin.Context, info *relaycommon.RelayInfo, committed bool) {
+	if committed {
+		return
+	}
+	if info != nil && info.ResponsesUsageInfo != nil {
+		for _, tool := range info.ResponsesUsageInfo.BuiltInTools {
+			if tool != nil {
+				tool.CallCount = 0
+			}
+		}
+	}
+	common.SetContextKey(c, constant.ContextKeyRetryIncompleteResponsesStream, true)
+}
+
+func responsesStreamEventCommitsOutput(streamResponse dto.ResponsesStreamResponse) bool {
+	switch streamResponse.Type {
+	case "response.output_text.delta":
+		return streamResponse.Delta != ""
+	case "response.output_text.done",
+		"response.function_call_arguments.delta",
+		"response.function_call_arguments.done",
+		"response.content_part.added",
+		"response.content_part.delta",
+		"response.content_part.done":
+		return true
+	default:
+		return false
+	}
+}
+
+func responsesStreamFailure(streamResponse dto.ResponsesStreamResponse) *types.NewAPIError {
+	if streamResponse.Response != nil {
+		if oaiErr := streamResponse.Response.GetOpenAIError(); oaiErr != nil && (oaiErr.Message != "" || oaiErr.Type != "") {
+			return types.WithOpenAIError(*oaiErr, http.StatusBadGateway)
+		}
+	}
+	eventType := streamResponse.Type
+	if eventType == "" {
+		eventType = "eof"
+	}
+	return types.NewOpenAIError(fmt.Errorf("upstream responses stream failed: %s", eventType), types.ErrorCodeBadResponse, http.StatusBadGateway)
+}
+
+func responsesStreamHasBillableUsage(info *relaycommon.RelayInfo, usage *dto.Usage) bool {
+	if info != nil && (info.PriceData.FreeModel || info.PriceData.UsePrice) {
+		return true
+	}
+	if usage != nil && usage.TotalTokens > 0 {
+		return true
+	}
+	if info == nil || info.ResponsesUsageInfo == nil {
+		return false
+	}
+	for _, tool := range info.ResponsesUsageInfo.BuiltInTools {
+		if tool != nil && tool.CallCount > 0 {
+			return true
+		}
+	}
+	return false
 }

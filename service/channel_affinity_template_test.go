@@ -332,3 +332,15 @@ func TestChannelAffinityHitCodexTemplatePassHeadersEffective(t *testing.T) {
 	_, exists = info.RuntimeHeadersOverride["x-codex-turn-metadata"]
 	require.False(t, exists)
 }
+
+func TestAllowChannelAffinityRetryClearsSkip(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	ctx.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", nil)
+	ctx.Set(ginKeyChannelAffinitySkipRetry, true)
+
+	require.True(t, ShouldSkipRetryAfterChannelAffinityFailure(ctx))
+	AllowChannelAffinityRetry(ctx)
+	require.False(t, ShouldSkipRetryAfterChannelAffinityFailure(ctx))
+}
