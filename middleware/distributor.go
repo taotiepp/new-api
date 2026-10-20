@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"mime"
 	"net/http"
 	"slices"
 	"strings"
@@ -24,6 +25,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/tidwall/gjson"
+	"github.com/tidwall/sjson"
 )
 
 type ModelRequest struct {
@@ -44,6 +46,15 @@ func Distribute() func(c *gin.Context) {
 		if err != nil {
 			abortWithOpenAiMessage(c, http.StatusBadRequest, i18n.T(c, i18n.MsgDistributorInvalidRequest, map[string]any{"Error": err.Error()}))
 			return
+		}
+		if groupName, bareModel, ok := selectableGroupModel(c, modelRequest.Model); ok {
+			if err := rewriteGroupPrefixedJSONModel(c, modelRequest.Model, bareModel); err != nil {
+				abortWithOpenAiMessage(c, http.StatusBadRequest, i18n.T(c, i18n.MsgDistributorInvalidRequest, map[string]any{"Error": err.Error()}))
+				return
+			}
+			modelRequest.Model = bareModel
+			common.SetContextKey(c, constant.ContextKeyUsingGroup, groupName)
+			common.SetContextKey(c, constant.ContextKeyTokenGroup, groupName)
 		}
 		if pin, found, overridden := constraints.ResolvedPin(); found {
 			for _, lost := range overridden {
@@ -705,6 +716,59 @@ func SetupContextForSelectedChannel(c *gin.Context, channel *model.Channel, mode
 	case constant.ChannelTypeCoze:
 		c.Set("bot_id", channel.Other)
 	}
+	return nil
+}
+
+// selectableGroupModel treats a leading "group/model" segment as an explicit
+// group selection when that group is one the user may use. Other slashes stay
+// part of the model name.
+func selectableGroupModel(c *gin.Context, modelName string) (string, string, bool) {
+	groupName, bareModel, ok := strings.Cut(modelName, "/")
+	groupName = strings.TrimSpace(groupName)
+	bareModel = strings.TrimSpace(bareModel)
+	if !ok || groupName == "" || bareModel == "" {
+		return "", "", false
+	}
+	if !service.IsUserSelectableGroupFor(
+		common.GetContextKeyString(c, constant.ContextKeyUserGroup),
+		common.GetContextKeyString(c, constant.ContextKeyUserUsableGroups),
+		groupName,
+	) {
+		return "", "", false
+	}
+	return groupName, bareModel, true
+}
+
+func rewriteGroupPrefixedJSONModel(c *gin.Context, from, to string) error {
+	mediaType, _, err := mime.ParseMediaType(c.GetHeader("Content-Type"))
+	if err != nil || (mediaType != "application/json" && !strings.HasSuffix(mediaType, "+json")) {
+		return nil
+	}
+	storage, err := common.GetBodyStorage(c)
+	if err != nil {
+		return err
+	}
+	raw, err := storage.Bytes()
+	if err != nil {
+		return err
+	}
+	current := gjson.GetBytes(raw, "model")
+	if current.Type != gjson.String || current.String() != from {
+		return nil
+	}
+	patched, err := sjson.SetBytes(raw, "model", to)
+	if err != nil {
+		return err
+	}
+	newStorage, err := common.CreateBodyStorage(patched)
+	if err != nil {
+		return err
+	}
+	_ = storage.Close()
+	c.Set(common.KeyBodyStorage, newStorage)
+	c.Set(common.KeyRequestBody, nil)
+	c.Request.Body = io.NopCloser(newStorage)
+	c.Request.ContentLength = int64(len(patched))
 	return nil
 }
 

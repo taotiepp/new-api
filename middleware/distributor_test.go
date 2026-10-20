@@ -4,17 +4,22 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
+	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/i18n"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/pkg/jsplugin"
 	"github.com/QuantumNous/new-api/relaykit/dto"
+	"github.com/QuantumNous/new-api/setting"
 	"github.com/QuantumNous/new-api/setting/model_setting"
+	"github.com/QuantumNous/new-api/setting/ratio_setting"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/tidwall/gjson"
 )
 
 func TestChannelMatchesExpectedTaskPluginUsesGenericChannelSetting(t *testing.T) {
@@ -176,6 +181,44 @@ func TestTokenModelLimitAllowsExemptAtNameByFullName(t *testing.T) {
 
 	baseOnly := map[string]bool{"opaque": true}
 	assert.False(t, tokenModelLimitAllows(baseOnly, "opaque@sha256:deadbeef"))
+}
+
+func TestSelectableGroupModelUsesGroupPrefixAndBillingGroup(t *testing.T) {
+	originalUsableGroups := setting.UserUsableGroups2JSONString()
+	originalGroupRatios := ratio_setting.GroupRatio2JSONString()
+	t.Cleanup(func() {
+		require.NoError(t, setting.UpdateUserUsableGroupsByJSONString(originalUsableGroups))
+		require.NoError(t, ratio_setting.UpdateGroupRatioByJSONString(originalGroupRatios))
+	})
+	require.NoError(t, setting.UpdateUserUsableGroupsByJSONString(`{"default":"Default","aws":"AWS"}`))
+	require.NoError(t, ratio_setting.UpdateGroupRatioByJSONString(`{"default":1,"aws":1.5}`))
+
+	body := `{"model":"aws/claude-opus-5-5","messages":[{"role":"user","content":"hi"}]}`
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(body))
+	c.Request.Header.Set("Content-Type", "application/json")
+	common.SetContextKey(c, constant.ContextKeyUserGroup, "default")
+	common.SetContextKey(c, constant.ContextKeyUsingGroup, "default")
+	common.SetContextKey(c, constant.ContextKeyTokenGroup, "default")
+
+	groupName, bareModel, ok := selectableGroupModel(c, "aws/claude-opus-5-5")
+	require.True(t, ok)
+	assert.Equal(t, "aws", groupName)
+	assert.Equal(t, "claude-opus-5-5", bareModel)
+	require.NoError(t, rewriteGroupPrefixedJSONModel(c, "aws/claude-opus-5-5", bareModel))
+	common.SetContextKey(c, constant.ContextKeyUsingGroup, groupName)
+	common.SetContextKey(c, constant.ContextKeyTokenGroup, groupName)
+
+	stored, err := common.GetBodyStorage(c)
+	require.NoError(t, err)
+	raw, err := stored.Bytes()
+	require.NoError(t, err)
+	assert.Equal(t, "claude-opus-5-5", gjson.GetBytes(raw, "model").String())
+	assert.Equal(t, "aws", common.GetContextKeyString(c, constant.ContextKeyUsingGroup))
+	assert.Equal(t, "aws", common.GetContextKeyString(c, constant.ContextKeyTokenGroup))
+
+	_, _, ok = selectableGroupModel(c, "Qwen/Qwen3-235B")
+	assert.False(t, ok)
 }
 
 func TestNoAvailableChannelMessageNamesClaimingTaskPlugin(t *testing.T) {
