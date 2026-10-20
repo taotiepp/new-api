@@ -68,6 +68,7 @@ export function PortalKeysPanel() {
   const [keyword, setKeyword] = useState('')
   const [page, setPage] = useState(1)
   const [createOpen, setCreateOpen] = useState(false)
+  const [editingKey, setEditingKey] = useState<ApiKey | null>(null)
   const [pendingDelete, setPendingDelete] = useState<ApiKey | null>(null)
   const [deleting, setDeleting] = useState(false)
 
@@ -195,6 +196,14 @@ export function PortalKeysPanel() {
                   <PortalKeySecret id={key.id} masked={`sk-${key.key}`} />
                 </div>
                 <div className='flex shrink-0 flex-wrap gap-2'>
+                  <Button
+                    type='button'
+                    variant='outline'
+                    size='sm'
+                    onClick={() => setEditingKey(key)}
+                  >
+                    {t('Edit')}
+                  </Button>
                   {key.status === API_KEY_STATUS.EXPIRED ||
                   key.status === API_KEY_STATUS.EXHAUSTED ? null : (
                     <Button
@@ -266,11 +275,7 @@ export function PortalKeysPanel() {
             {t('Manage credentials for API access.')}
           </p>
         </div>
-        <Button
-          type='button'
-          size='sm'
-          onClick={() => setCreateOpen(true)}
-        >
+        <Button type='button' size='sm' onClick={() => setCreateOpen(true)}>
           {t('Create API Key')}
         </Button>
       </header>
@@ -312,7 +317,15 @@ export function PortalKeysPanel() {
 
       {body}
 
-      <PortalKeysCreateDialog open={createOpen} onOpenChange={setCreateOpen} />
+      <PortalKeysCreateDialog
+        open={createOpen || editingKey != null}
+        apiKey={editingKey}
+        onOpenChange={(open) => {
+          if (open) return
+          setCreateOpen(false)
+          setEditingKey(null)
+        }}
+      />
       <ConfirmDialog
         open={pendingDelete != null}
         onOpenChange={(open) => {

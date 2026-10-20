@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
@@ -38,6 +38,7 @@ import {
   createApiKey,
   fetchTokenKey,
   getTokenAutoGroups,
+  updateApiKey,
 } from '@/features/keys/api'
 import {
   ApiKeyGroupCombobox,
@@ -47,8 +48,10 @@ import { AutoGroupOrderEditor } from '@/features/keys/components/auto-group-orde
 import { ERROR_MESSAGES, SUCCESS_MESSAGES } from '@/features/keys/constants'
 import {
   getApiKeyFormDefaultValues,
+  transformApiKeyToFormDefaults,
   transformFormDataToPayload,
 } from '@/features/keys/lib'
+import type { ApiKey } from '@/features/keys/types'
 import { useStatus } from '@/hooks/use-status'
 import { getUserGroups } from '@/lib/api'
 import { handleServerError } from '@/lib/handle-server-error'
@@ -57,6 +60,7 @@ import { requireServerSuccess } from '@/lib/server-error-message'
 type PortalKeysCreateDialogProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
+  apiKey?: ApiKey | null
 }
 
 export function PortalKeysCreateDialog(props: PortalKeysCreateDialogProps) {
@@ -83,6 +87,8 @@ export function PortalKeysCreateDialog(props: PortalKeysCreateDialogProps) {
   const [quotaDollars, setQuotaDollars] = useState('10')
   const [submitting, setSubmitting] = useState(false)
   const [createdKey, setCreatedKey] = useState('')
+  const editingKey = props.apiKey ?? null
+  const initializedFor = useRef<string | null>(null)
 
   const groupsQuery = useQuery({
     queryKey: ['user-groups'],
@@ -129,6 +135,9 @@ export function PortalKeysCreateDialog(props: PortalKeysCreateDialogProps) {
 
   useEffect(() => {
     if (!props.open || groups.length === 0) return
+    if (editingKey && initializedFor.current !== `edit:${editingKey.id}`) {
+      return
+    }
     if (group && groups.some((item) => item.value === group)) return
     const fallback =
       defaultUseAutoGroup && groups.some((item) => item.value === 'auto')
@@ -138,7 +147,39 @@ export function PortalKeysCreateDialog(props: PortalKeysCreateDialogProps) {
           '')
     setGroup(fallback)
     setCrossGroupRetry(fallback === 'auto')
-  }, [defaultUseAutoGroup, group, groups, props.open])
+  }, [defaultUseAutoGroup, editingKey, group, groups, props.open])
+
+  useEffect(() => {
+    if (!props.open) {
+      initializedFor.current = null
+      return
+    }
+    if (!editingKey) return
+    if (!groupsQuery.isSuccess || !autoGroupsQuery.isSuccess) return
+    const token = `edit:${editingKey.id}`
+    if (initializedFor.current === token) return
+    initializedFor.current = token
+    const defaults = transformApiKeyToFormDefaults(
+      editingKey,
+      availableAutoGroupNames,
+      maxAutoGroups
+    )
+    setName(editingKey.name)
+    setGroup(defaults.group ?? '')
+    setAutoGroupsMode(defaults.auto_groups_mode)
+    setAutoGroups(defaults.auto_groups)
+    setCrossGroupRetry(defaults.cross_group_retry === true)
+    setClearEncryptedContent(defaults.clear_encrypted_content === true)
+    setUnlimited(defaults.unlimited_quota)
+    setQuotaDollars(String(defaults.remain_quota_dollars ?? 0))
+  }, [
+    autoGroupsQuery.isSuccess,
+    availableAutoGroupNames,
+    editingKey,
+    groupsQuery.isSuccess,
+    maxAutoGroups,
+    props.open,
+  ])
 
   const reset = () => {
     const nextDefaults = getApiKeyFormDefaultValues(defaultUseAutoGroup)
@@ -159,8 +200,8 @@ export function PortalKeysCreateDialog(props: PortalKeysCreateDialogProps) {
     props.onOpenChange(open)
   }
 
-  const handleCreate = async () => {
-    const trimmed = name.trim()
+  const handleSubmit = async () => {
+    const trimmed = editingKey ? editingKey.name : name.trim()
     if (!trimmed) {
       toast.error(t('Please enter a name'))
       return
@@ -171,23 +212,45 @@ export function PortalKeysCreateDialog(props: PortalKeysCreateDialogProps) {
       return
     }
 
+    const base = editingKey
+      ? transformApiKeyToFormDefaults(
+          editingKey,
+          availableAutoGroupNames,
+          maxAutoGroups
+        )
+      : getApiKeyFormDefaultValues(defaultUseAutoGroup)
+    const payload = transformFormDataToPayload({
+      ...base,
+      name: trimmed,
+      group,
+      auto_groups_mode: autoGroupsMode,
+      auto_groups: autoGroups,
+      cross_group_retry: crossGroupRetry,
+      clear_encrypted_content: clearEncryptedContent,
+      unlimited_quota: unlimited,
+      remain_quota_dollars: unlimited
+        ? (base.remain_quota_dollars ?? 10)
+        : parsedQuota,
+    })
+
     setSubmitting(true)
     try {
-      const created = requireServerSuccess(
-        await createApiKey(
-          transformFormDataToPayload({
-            ...getApiKeyFormDefaultValues(defaultUseAutoGroup),
-            name: trimmed,
-            group,
-            auto_groups_mode: autoGroupsMode,
-            auto_groups: autoGroups,
-            cross_group_retry: crossGroupRetry,
-            clear_encrypted_content: clearEncryptedContent,
-            unlimited_quota: unlimited,
-            remain_quota_dollars: unlimited ? 10 : parsedQuota,
+      if (editingKey) {
+        requireServerSuccess(
+          await updateApiKey({
+            ...payload,
+            id: editingKey.id,
           })
         )
-      )
+        await queryClient.invalidateQueries({
+          queryKey: ['user-portal', 'keys'],
+        })
+        toast.success(t(SUCCESS_MESSAGES.API_KEY_UPDATED))
+        handleOpenChange(false)
+        return
+      }
+
+      const created = requireServerSuccess(await createApiKey(payload))
       const id = created.data?.id
       let fullKey = ''
       if (id != null) {
@@ -199,7 +262,14 @@ export function PortalKeysCreateDialog(props: PortalKeysCreateDialogProps) {
       toast.success(t(SUCCESS_MESSAGES.API_KEY_CREATED))
       setCreatedKey(fullKey)
     } catch (error) {
-      handleServerError(error, t(ERROR_MESSAGES.CREATE_FAILED))
+      handleServerError(
+        error,
+        t(
+          editingKey
+            ? ERROR_MESSAGES.UPDATE_FAILED
+            : ERROR_MESSAGES.CREATE_FAILED
+        )
+      )
     } finally {
       setSubmitting(false)
     }
@@ -228,10 +298,7 @@ export function PortalKeysCreateDialog(props: PortalKeysCreateDialogProps) {
               />
             </div>
             <DialogFooter>
-              <Button
-                type='button'
-                onClick={() => handleOpenChange(false)}
-              >
+              <Button type='button' onClick={() => handleOpenChange(false)}>
                 {t('Done')}
               </Button>
             </DialogFooter>
@@ -239,9 +306,13 @@ export function PortalKeysCreateDialog(props: PortalKeysCreateDialogProps) {
         ) : (
           <>
             <DialogHeader>
-              <DialogTitle>{t('Create API Key')}</DialogTitle>
+              <DialogTitle>
+                {editingKey ? t('Update API Key') : t('Create API Key')}
+              </DialogTitle>
               <DialogDescription>
-                {t('Create a key for your app or service')}
+                {editingKey
+                  ? t('Update API token “{{name}}”', { name: editingKey.name })
+                  : t('Create a key for your app or service')}
               </DialogDescription>
             </DialogHeader>
             <div className='space-y-4'>
@@ -252,7 +323,9 @@ export function PortalKeysCreateDialog(props: PortalKeysCreateDialogProps) {
                   value={name}
                   onChange={(event) => setName(event.target.value)}
                   placeholder={t('Name')}
-                  autoFocus
+                  autoFocus={!editingKey}
+                  disabled={editingKey != null}
+                  readOnly={editingKey != null}
                 />
               </div>
               <div className='space-y-2'>
@@ -366,10 +439,10 @@ export function PortalKeysCreateDialog(props: PortalKeysCreateDialogProps) {
                 type='button'
                 disabled={submitting}
                 onClick={() => {
-                  void handleCreate()
+                  void handleSubmit()
                 }}
               >
-                {t('Create')}
+                {editingKey ? t('Save') : t('Create')}
               </Button>
             </DialogFooter>
           </>

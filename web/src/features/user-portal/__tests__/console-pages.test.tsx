@@ -35,6 +35,7 @@ import { PortalLogsPanel } from '../components/portal-logs-panel'
 
 const getApiKeys = vi.hoisted(() => vi.fn())
 const searchApiKeys = vi.hoisted(() => vi.fn())
+const updateApiKey = vi.hoisted(() => vi.fn())
 const getTokenAutoGroups = vi.hoisted(() => vi.fn())
 const getUserGroups = vi.hoisted(() => vi.fn())
 const getUserModels = vi.hoisted(() => vi.fn())
@@ -45,6 +46,7 @@ vi.mock('@/features/keys/api', () => ({
   getApiKeys,
   searchApiKeys,
   createApiKey: vi.fn(),
+  updateApiKey,
   deleteApiKey: vi.fn(),
   updateApiKeyStatus: vi.fn(),
   fetchTokenKey: vi.fn(),
@@ -206,6 +208,76 @@ describe('portal console pages', () => {
     ].map((item) => item.textContent ?? '')
     expect(visibleGroups.some((text) => text.includes('vip'))).toBe(true)
     expect(visibleGroups.some((text) => text.includes('default'))).toBe(false)
+  })
+
+  test('edits a key from the create form without renaming it', async () => {
+    getApiKeys.mockResolvedValue({
+      success: true,
+      data: {
+        items: [
+          apiKeySchema.parse({
+            id: 7,
+            name: 'production',
+            key: 'demo********1234',
+            status: 1,
+            remain_quota: 40_000_000,
+            used_quota: 0,
+            unlimited_quota: false,
+            expired_time: 1_800_000_000,
+            created_time: 1_700_000_000,
+            accessed_time: 0,
+            group: 'default',
+            model_limits_enabled: true,
+            model_limits: 'gpt-4o',
+            allow_ips: '10.0.0.1',
+            clear_encrypted_content: true,
+          }),
+        ],
+        total: 1,
+        page: 1,
+        page_size: 20,
+      },
+    })
+    getUserGroups.mockResolvedValue({
+      success: true,
+      data: {
+        default: { desc: 'User group', ratio: 1 },
+        vip: { desc: 'Priority group', ratio: 3 },
+      },
+    })
+    getTokenAutoGroups.mockResolvedValue({
+      success: true,
+      data: { groups: ['default', 'vip'], max_count: 5 },
+    })
+    updateApiKey.mockResolvedValue({ success: true, data: { id: 7 } })
+
+    const user = userEvent.setup()
+    renderPanel(<PortalKeysPanel />)
+    await user.click(await screen.findByRole('button', { name: 'Edit' }))
+
+    const nameInput = await screen.findByLabelText('Name')
+    expect(nameInput).toBeDisabled()
+    expect(nameInput).toHaveValue('production')
+
+    await user.click(await screen.findByRole('combobox'))
+    const vipItem = [
+      ...document.querySelectorAll<HTMLElement>('[data-slot="command-item"]'),
+    ].find((item) => (item.textContent ?? '').includes('vip'))
+    expect(vipItem).toBeTruthy()
+    fireEvent.click(vipItem as HTMLElement)
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => {
+      expect(updateApiKey).toHaveBeenCalled()
+    })
+    const payload = updateApiKey.mock.calls[0][0]
+    expect(payload.id).toBe(7)
+    expect(payload.name).toBe('production')
+    expect(payload.group).toBe('vip')
+    expect(payload.clear_encrypted_content).toBe(true)
+    expect(payload.model_limits).toBe('gpt-4o')
+    expect(payload.allow_ips).toBe('10.0.0.1')
+    expect(payload.expired_time).toBe(1_800_000_000)
   })
 
   test('renders request logs as a portal table instead of the admin table', async () => {
