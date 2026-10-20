@@ -29,7 +29,7 @@ type Token struct {
 	Group              string  `json:"group" gorm:"default:''"`
 	CrossGroupRetry    bool    `json:"cross_group_retry"` // 跨分组重试，仅auto分组有效
 	// ClearEncryptedContent retries a Responses request once without encrypted
-	// reasoning after upstream reports that the ciphertext could not be verified.
+	// reasoning after upstream rejects the ciphertext or blocks the session.
 	ClearEncryptedContent bool           `json:"clear_encrypted_content"`
 	AutoGroups            string         `json:"-" gorm:"type:text"`
 	DeletedAt             gorm.DeletedAt `gorm:"index"`

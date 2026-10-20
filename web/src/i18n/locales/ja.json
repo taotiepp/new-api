@@ -1456,7 +1456,7 @@
     "Creem products must be a JSON array": "Creem 製品は JSON 配列でなければなりません",
     "Cross-group retry": "グループ横断リトライ",
     "Drop unverified encrypted reasoning": "検証できない暗号化思考を除く",
-    "When encrypted reasoning cannot be verified, remove it and retry the request once.": "暗号化された思考を検証できないときは、その内容を除いて一度だけ再試行します。",
+    "When encrypted reasoning cannot be verified, or the session is blocked by a cyber-security policy, remove it and retry the request once.": "暗号化された思考を検証できないとき、またはセキュリティポリシーでセッションが遮断されたときは、その内容を除いて一度だけ再試行します。",
     "Cross-group": "グループ横断",
     "Currency & Display": "通貨と表示",
     "Currency": "通貨",

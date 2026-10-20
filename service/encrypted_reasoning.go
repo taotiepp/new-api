@@ -13,17 +13,28 @@ import (
 const (
 	encryptedContentVerifyFragment  = "could not be verified"
 	encryptedContentDecryptFragment = "Encrypted content could not be decrypted or parsed"
+	sessionBlockedZhFragment        = "该会话已被网络安全策略屏蔽，请开启新会话"
+	sessionBlockedEnFragment        = "This session is blocked by cyber-security policy, please start a new session"
 )
 
-// AllowEncryptedReasoningRetry reports whether this 400 is the one encrypted
-// reasoning verification failure that may be retried once with the ciphertext removed.
+// AllowEncryptedReasoningRetry reports whether this failure may be retried once
+// with encrypted reasoning removed. It matches only the ciphertext verification
+// 400 and the bilingual session-block 403.
 func AllowEncryptedReasoningRetry(enabled bool, alreadyRetried bool, err *types.NewAPIError) bool {
-	if !enabled || alreadyRetried || err == nil || err.StatusCode != http.StatusBadRequest {
+	if !enabled || alreadyRetried || err == nil {
 		return false
 	}
 	message := err.Error()
-	return strings.Contains(message, encryptedContentVerifyFragment) &&
-		strings.Contains(message, encryptedContentDecryptFragment)
+	switch err.StatusCode {
+	case http.StatusBadRequest:
+		return strings.Contains(message, encryptedContentVerifyFragment) &&
+			strings.Contains(message, encryptedContentDecryptFragment)
+	case http.StatusForbidden:
+		return strings.Contains(message, sessionBlockedZhFragment) &&
+			strings.Contains(message, sessionBlockedEnFragment)
+	default:
+		return false
+	}
 }
 
 // StripEncryptedReasoningInput removes encrypted reasoning ciphertext from a

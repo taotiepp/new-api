@@ -1456,7 +1456,7 @@
     "Creem products must be a JSON array": "Продукты Creem должны быть JSON-массивом",
     "Cross-group retry": "Повтор между группами",
     "Drop unverified encrypted reasoning": "Убрать неподтверждённые зашифрованные рассуждения",
-    "When encrypted reasoning cannot be verified, remove it and retry the request once.": "Если зашифрованные рассуждения не проходят проверку, убрать их и повторить запрос один раз.",
+    "When encrypted reasoning cannot be verified, or the session is blocked by a cyber-security policy, remove it and retry the request once.": "Если зашифрованные рассуждения не проходят проверку или сессия заблокирована политикой кибербезопасности, убрать их и повторить запрос один раз.",
     "Cross-group": "Межгрупповой",
     "Currency & Display": "Валюта и отображение",
     "Currency": "Валюта",

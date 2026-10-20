@@ -30,6 +30,31 @@ func TestAllowEncryptedReasoningRetry(t *testing.T) {
 	)
 	other.SetMessage("invalid request")
 	assert.False(t, AllowEncryptedReasoningRetry(true, false, other))
+
+	blocked := types.NewErrorWithStatusCode(
+		assert.AnError,
+		types.ErrorCodeBadResponseStatusCode,
+		http.StatusForbidden,
+	)
+	blocked.SetMessage("该会话已被网络安全策略屏蔽，请开启新会话 / This session is blocked by cyber-security policy, please start a new session")
+	assert.True(t, AllowEncryptedReasoningRetry(true, false, blocked))
+	assert.False(t, AllowEncryptedReasoningRetry(true, true, blocked))
+
+	forbidden := types.NewErrorWithStatusCode(
+		assert.AnError,
+		types.ErrorCodeBadResponseStatusCode,
+		http.StatusForbidden,
+	)
+	forbidden.SetMessage("forbidden")
+	assert.False(t, AllowEncryptedReasoningRetry(true, false, forbidden))
+
+	chineseOnly := types.NewErrorWithStatusCode(
+		assert.AnError,
+		types.ErrorCodeBadResponseStatusCode,
+		http.StatusForbidden,
+	)
+	chineseOnly.SetMessage("该会话已被网络安全策略屏蔽，请开启新会话")
+	assert.False(t, AllowEncryptedReasoningRetry(true, false, chineseOnly))
 }
 
 func TestStripEncryptedReasoningInput(t *testing.T) {

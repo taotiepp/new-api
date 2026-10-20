@@ -1456,7 +1456,7 @@
     "Creem products must be a JSON array": "Creem 产品必须是 JSON 数组",
     "Cross-group retry": "跨分组重试",
     "Drop unverified encrypted reasoning": "去掉无法校验的加密思考",
-    "When encrypted reasoning cannot be verified, remove it and retry the request once.": "上游无法校验加密思考时，去掉这段内容并再试一次。",
+    "When encrypted reasoning cannot be verified, or the session is blocked by a cyber-security policy, remove it and retry the request once.": "上游无法校验加密思考，或会话被网络安全策略屏蔽时，去掉这段内容并再试一次。",
     "Cross-group": "跨分组",
     "Currency & Display": "货币与展示",
     "Currency": "货币",

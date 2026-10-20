@@ -298,7 +298,7 @@ export function PortalKeysCreateDialog(props: PortalKeysCreateDialogProps) {
                   </Label>
                   <p className='text-muted-foreground mt-1 text-xs'>
                     {t(
-                      'When encrypted reasoning cannot be verified, remove it and retry the request once.'
+                      'When encrypted reasoning cannot be verified, or the session is blocked by a cyber-security policy, remove it and retry the request once.'
                     )}
                   </p>
                 </div>

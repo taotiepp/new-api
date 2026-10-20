@@ -497,7 +497,7 @@ export function ApiKeysMutateDrawer({
                       </FormLabel>
                       <FormDescription className='line-clamp-2 text-xs sm:line-clamp-none'>
                         {t(
-                          'When encrypted reasoning cannot be verified, remove it and retry the request once.'
+                          'When encrypted reasoning cannot be verified, or the session is blocked by a cyber-security policy, remove it and retry the request once.'
                         )}
                       </FormDescription>
                     </div>
