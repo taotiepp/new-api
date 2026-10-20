@@ -169,9 +169,12 @@ type RelayInfo struct {
 	IsChannelTest                         bool // channel test request
 	RetryIndex                            int
 	LastError                             *types.NewAPIError
-	RuntimeHeadersOverride                map[string]any
-	UseRuntimeHeadersOverride             bool
-	ParamOverrideAudit                    []string
+	// RetryWithoutEncryptedContent is set after upstream rejects encrypted
+	// reasoning, so the next attempt is sent without that ciphertext.
+	RetryWithoutEncryptedContent bool
+	RuntimeHeadersOverride       map[string]any
+	UseRuntimeHeadersOverride    bool
+	ParamOverrideAudit           []string
 
 	PriceData hosttypes.PriceData
 

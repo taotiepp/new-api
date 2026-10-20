@@ -111,6 +111,8 @@ export function auditFieldLabel(key: string, t: TFunction): string {
       return t('Auto Group Chain')
     case 'cross_group_retry':
       return t('Cross-group retry')
+    case 'clear_encrypted_content':
+      return t('Drop unverified encrypted reasoning')
     case 'sourceId':
       return t('Source ID')
     case 'id':

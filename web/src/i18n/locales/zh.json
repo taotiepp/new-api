@@ -1455,6 +1455,8 @@
     "Creem product ID from your Creem dashboard.": "从您的 Creem 仪表板获取 Creem 产品 ID。",
     "Creem products must be a JSON array": "Creem 产品必须是 JSON 数组",
     "Cross-group retry": "跨分组重试",
+    "Drop unverified encrypted reasoning": "去掉无法校验的加密思考",
+    "When encrypted reasoning cannot be verified, remove it and retry the request once.": "上游无法校验加密思考时，去掉这段内容并再试一次。",
     "Cross-group": "跨分组",
     "Currency & Display": "货币与展示",
     "Currency": "货币",

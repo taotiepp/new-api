@@ -1455,6 +1455,8 @@
     "Creem product ID from your Creem dashboard.": "Creem product ID from your Creem dashboard.",
     "Creem products must be a JSON array": "Creem products must be a JSON array",
     "Cross-group retry": "Cross-group retry",
+    "Drop unverified encrypted reasoning": "Drop unverified encrypted reasoning",
+    "When encrypted reasoning cannot be verified, remove it and retry the request once.": "When encrypted reasoning cannot be verified, remove it and retry the request once.",
     "Cross-group": "Cross-group",
     "Currency & Display": "Currency & Display",
     "Currency": "Currency",

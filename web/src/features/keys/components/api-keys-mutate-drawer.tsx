@@ -486,6 +486,31 @@ export function ApiKeysMutateDrawer({
                 />
               )}
 
+              <FormField
+                control={form.control}
+                name='clear_encrypted_content'
+                render={({ field }) => (
+                  <FormItem className={sideDrawerSwitchItemClassName()}>
+                    <div className='flex flex-col gap-0.5'>
+                      <FormLabel className='text-sm'>
+                        {t('Drop unverified encrypted reasoning')}
+                      </FormLabel>
+                      <FormDescription className='line-clamp-2 text-xs sm:line-clamp-none'>
+                        {t(
+                          'When encrypted reasoning cannot be verified, remove it and retry the request once.'
+                        )}
+                      </FormDescription>
+                    </div>
+                    <FormControl>
+                      <Switch
+                        checked={!!field.value}
+                        onCheckedChange={field.onChange}
+                      />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+
               {selectedGroup === 'auto' && (
                 <FormField
                   control={form.control}

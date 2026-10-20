@@ -361,20 +361,21 @@ func AddToken(c *gin.Context) {
 		return
 	}
 	cleanToken := model.Token{
-		UserId:             c.GetInt("id"),
-		Name:               token.Name,
-		Key:                key,
-		CreatedTime:        common.GetTimestamp(),
-		AccessedTime:       common.GetTimestamp(),
-		ExpiredTime:        token.ExpiredTime,
-		RemainQuota:        token.RemainQuota,
-		UnlimitedQuota:     token.UnlimitedQuota,
-		ModelLimitsEnabled: token.ModelLimitsEnabled,
-		ModelLimits:        token.ModelLimits,
-		AllowIps:           token.AllowIps,
-		Group:              token.Group,
-		CrossGroupRetry:    token.CrossGroupRetry,
-		AutoGroups:         token.AutoGroups,
+		UserId:                c.GetInt("id"),
+		Name:                  token.Name,
+		Key:                   key,
+		CreatedTime:           common.GetTimestamp(),
+		AccessedTime:          common.GetTimestamp(),
+		ExpiredTime:           token.ExpiredTime,
+		RemainQuota:           token.RemainQuota,
+		UnlimitedQuota:        token.UnlimitedQuota,
+		ModelLimitsEnabled:    token.ModelLimitsEnabled,
+		ModelLimits:           token.ModelLimits,
+		AllowIps:              token.AllowIps,
+		Group:                 token.Group,
+		CrossGroupRetry:       token.CrossGroupRetry,
+		ClearEncryptedContent: token.ClearEncryptedContent,
+		AutoGroups:            token.AutoGroups,
 	}
 	err = cleanToken.Insert()
 	if err != nil {
@@ -470,6 +471,7 @@ func UpdateToken(c *gin.Context) {
 		cleanToken.AllowIps = token.AllowIps
 		cleanToken.Group = token.Group
 		cleanToken.CrossGroupRetry = token.CrossGroupRetry
+		cleanToken.ClearEncryptedContent = token.ClearEncryptedContent
 		if token.Group != "auto" {
 			if rejectIfTokenGroupDenied(c, token.Group) {
 				return
@@ -506,6 +508,7 @@ func UpdateToken(c *gin.Context) {
 				(previous.AllowIps != nil && cleanToken.AllowIps != nil && *previous.AllowIps != *cleanToken.AllowIps)},
 			{"group", previous.Group != cleanToken.Group},
 			{"cross_group_retry", previous.CrossGroupRetry != cleanToken.CrossGroupRetry},
+			{"clear_encrypted_content", previous.ClearEncryptedContent != cleanToken.ClearEncryptedContent},
 			{"auto_groups", previous.AutoGroups != cleanToken.AutoGroups},
 		} {
 			if field.changed {

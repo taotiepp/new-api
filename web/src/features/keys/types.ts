@@ -43,6 +43,14 @@ export const apiKeySchema = z.object({
     }, z.boolean())
     .optional()
     .default(false),
+  clear_encrypted_content: z
+    .preprocess((v) => {
+      if (v === 1) return true
+      if (v === 0) return false
+      return v
+    }, z.boolean())
+    .optional()
+    .default(false),
   model_limits_enabled: z.boolean(),
   model_limits: z.string().nullish().default(''),
   allow_ips: z.string().nullish().default(''),
@@ -95,6 +103,7 @@ export interface ApiKeyFormData {
   group: string
   auto_groups: string[]
   cross_group_retry: boolean
+  clear_encrypted_content: boolean
 }
 
 export interface TokenAutoGroupsConfig {

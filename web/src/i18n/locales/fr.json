@@ -1455,6 +1455,8 @@
     "Creem product ID from your Creem dashboard.": "ID du produit Creem depuis votre tableau de bord Creem.",
     "Creem products must be a JSON array": "Les produits Creem doivent être un tableau JSON",
     "Cross-group retry": "Nouvelle tentative inter-groupes",
+    "Drop unverified encrypted reasoning": "Retirer le raisonnement chiffré non vérifié",
+    "When encrypted reasoning cannot be verified, remove it and retry the request once.": "Si le raisonnement chiffré ne peut pas être vérifié, le retirer et réessayer une fois.",
     "Cross-group": "Inter-groupes",
     "Currency & Display": "Devise et affichage",
     "Currency": "Devise",

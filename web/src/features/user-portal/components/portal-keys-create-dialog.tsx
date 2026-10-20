@@ -76,6 +76,9 @@ export function PortalKeysCreateDialog(props: PortalKeysCreateDialogProps) {
   const [crossGroupRetry, setCrossGroupRetry] = useState(
     formDefaults.cross_group_retry === true
   )
+  const [clearEncryptedContent, setClearEncryptedContent] = useState(
+    formDefaults.clear_encrypted_content === true
+  )
   const [unlimited, setUnlimited] = useState(true)
   const [quotaDollars, setQuotaDollars] = useState('10')
   const [submitting, setSubmitting] = useState(false)
@@ -144,6 +147,7 @@ export function PortalKeysCreateDialog(props: PortalKeysCreateDialogProps) {
     setAutoGroupsMode(nextDefaults.auto_groups_mode)
     setAutoGroups(nextDefaults.auto_groups)
     setCrossGroupRetry(nextDefaults.cross_group_retry === true)
+    setClearEncryptedContent(nextDefaults.clear_encrypted_content === true)
     setUnlimited(true)
     setQuotaDollars('10')
     setSubmitting(false)
@@ -178,6 +182,7 @@ export function PortalKeysCreateDialog(props: PortalKeysCreateDialogProps) {
             auto_groups_mode: autoGroupsMode,
             auto_groups: autoGroups,
             cross_group_retry: crossGroupRetry,
+            clear_encrypted_content: clearEncryptedContent,
             unlimited_quota: unlimited,
             remain_quota_dollars: unlimited ? 10 : parsedQuota,
           })
@@ -286,6 +291,25 @@ export function PortalKeysCreateDialog(props: PortalKeysCreateDialogProps) {
                   />
                 </div>
               ) : null}
+              <div className='flex items-center justify-between gap-3'>
+                <div className='min-w-0'>
+                  <Label htmlFor='portal-key-clear-encrypted'>
+                    {t('Drop unverified encrypted reasoning')}
+                  </Label>
+                  <p className='text-muted-foreground mt-1 text-xs'>
+                    {t(
+                      'When encrypted reasoning cannot be verified, remove it and retry the request once.'
+                    )}
+                  </p>
+                </div>
+                <Switch
+                  id='portal-key-clear-encrypted'
+                  checked={clearEncryptedContent}
+                  onCheckedChange={(checked) =>
+                    setClearEncryptedContent(checked === true)
+                  }
+                />
+              </div>
               {group === 'auto' ? (
                 <div className='flex items-center justify-between gap-3'>
                   <div className='min-w-0'>

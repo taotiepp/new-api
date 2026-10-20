@@ -224,8 +224,9 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 	}
 	relayInfo.RetryIndex = 0
 	relayInfo.LastError = nil
+	encryptedReasoningExtraRetry := 0
 
-	for ; retryParam.GetRetry() <= common.RetryTimes; retryParam.IncreaseRetry() {
+	for ; retryParam.GetRetry() <= common.RetryTimes+encryptedReasoningExtraRetry; retryParam.IncreaseRetry() {
 		relayInfo.RetryIndex = retryParam.GetRetry()
 		channel, channelErr := getChannel(c, relayInfo, retryParam)
 		if channelErr != nil {
@@ -271,6 +272,18 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		relayInfo.LastError = newAPIError
 
 		processChannelError(c, *types.NewChannelError(channel.Id, channel.Type, channel.Name, channel.ChannelInfo.IsMultiKey, common.GetContextKeyString(c, constant.ContextKeyChannelKey), channel.GetAutoBan()), newAPIError, relayInfo)
+
+		if service.AllowEncryptedReasoningRetry(
+			common.GetContextKeyBool(c, constant.ContextKeyTokenClearEncryptedContent),
+			relayInfo.RetryWithoutEncryptedContent,
+			newAPIError,
+		) {
+			relayInfo.RetryWithoutEncryptedContent = true
+			if retryParam.GetRetry() >= common.RetryTimes {
+				encryptedReasoningExtraRetry = 1
+			}
+			continue
+		}
 
 		if !shouldRetry(c, newAPIError, common.RetryTimes-retryParam.GetRetry()) {
 			break

@@ -1455,6 +1455,8 @@
     "Creem product ID from your Creem dashboard.": "ID sản phẩm Creem từ bảng điều khiển Creem của bạn.",
     "Creem products must be a JSON array": "Sản phẩm Creem phải là mảng JSON",
     "Cross-group retry": "Thử lại liên nhóm",
+    "Drop unverified encrypted reasoning": "Bỏ phần suy luận mã hóa không xác minh được",
+    "When encrypted reasoning cannot be verified, remove it and retry the request once.": "Khi không xác minh được phần suy luận mã hóa, hãy bỏ nó và thử lại một lần.",
     "Cross-group": "Liên nhóm",
     "Currency & Display": "Tiền tệ & hiển thị",
     "Currency": "Tiền tệ",
