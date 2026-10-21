@@ -105,6 +105,93 @@ export function appendSourceModels(
   return { models: next, added, skipped }
 }
 
+export type SourceModelAliases = {
+  source_group: string
+  source_model: string
+  aliases: string[]
+}
+
+export function sourceModelAliases(
+  models: readonly EditorModel[]
+): SourceModelAliases[] {
+  const cards: SourceModelAliases[] = []
+  const index = new Map<string, SourceModelAliases>()
+  for (const model of models) {
+    const key = `${model.source_group}\0${model.source_model}`
+    const existing = index.get(key)
+    if (!existing) {
+      const card: SourceModelAliases = {
+        source_group: model.source_group,
+        source_model: model.source_model,
+        aliases: [model.name],
+      }
+      index.set(key, card)
+      cards.push(card)
+      continue
+    }
+    if (!existing.aliases.includes(model.name)) {
+      existing.aliases.push(model.name)
+    }
+  }
+  return cards
+}
+
+export function setSourceAliases(
+  models: readonly EditorModel[],
+  sourceGroup: string,
+  sourceModel: string,
+  aliases: readonly string[],
+  createId: () => string
+): { models: EditorModel[]; rejected: string[] } {
+  const key = `${sourceGroup}\0${sourceModel}`
+  const usedByOthers = new Set(
+    models
+      .filter((model) => `${model.source_group}\0${model.source_model}` !== key)
+      .map((model) => model.name)
+  )
+  const previous = new Map(
+    models
+      .filter((model) => `${model.source_group}\0${model.source_model}` === key)
+      .map((model) => [model.name, model])
+  )
+  const nextAliases: EditorModel[] = []
+  const seen = new Set<string>()
+  const rejected: string[] = []
+  for (const raw of aliases) {
+    const name = raw.trim()
+    if (name === '' || seen.has(name)) continue
+    if (usedByOthers.has(name)) {
+      rejected.push(name)
+      continue
+    }
+    seen.add(name)
+    nextAliases.push({
+      name,
+      source_group: sourceGroup,
+      source_model: sourceModel,
+      redirect: '',
+      localId: previous.get(name)?.localId ?? createId(),
+    })
+  }
+  if (nextAliases.length === 0 && rejected.length > 0) {
+    return { models: models.map((model) => ({ ...model })), rejected }
+  }
+  const result: EditorModel[] = []
+  let inserted = false
+  for (const model of models) {
+    if (`${model.source_group}\0${model.source_model}` !== key) {
+      result.push({ ...model })
+      continue
+    }
+    if (!inserted) {
+      result.push(...nextAliases)
+      inserted = true
+    }
+  }
+  if (!inserted) result.push(...nextAliases)
+  return { models: result, rejected }
+}
+
 export function commitGroup(
   groups: readonly EditorGroup[],
   session: GroupSession,

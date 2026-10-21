@@ -47,6 +47,8 @@ import { requireServerSuccess } from '@/lib/server-error-message'
 
 import {
   appendSourceModels,
+  setSourceAliases,
+  sourceModelAliases,
   type EditorModel,
   type GroupDraft,
   type GroupSession,
@@ -132,12 +134,24 @@ export function GroupEditorCard(props: {
     setSelectedModels([])
   }
 
-  const updateModel = (localId: string, patch: Partial<EditorModel>) => {
-    setModels((current) =>
-      current.map((model) =>
-        model.localId === localId ? { ...model, ...patch } : model
-      )
+  const cards = sourceModelAliases(models)
+
+  const updateAliases = (
+    sourceGroup: string,
+    sourceModel: string,
+    aliases: string[]
+  ) => {
+    const result = setSourceAliases(
+      models,
+      sourceGroup,
+      sourceModel,
+      aliases,
+      () => crypto.randomUUID()
     )
+    if (result.rejected.length > 0) {
+      toast.error(t('This model is already in the virtual group'))
+    }
+    setModels(result.models)
   }
 
   return (
@@ -226,7 +240,7 @@ export function GroupEditorCard(props: {
                 {t('Models in this group')}
               </h3>
               <Badge variant='secondary'>
-                {t('{{count}} models', { count: models.length })}
+                {t('{{count}} models', { count: cards.length })}
               </Badge>
             </div>
             {models.length === 0 ? (
@@ -235,14 +249,26 @@ export function GroupEditorCard(props: {
               </p>
             ) : (
               <ul className='flex flex-col gap-3'>
-                {models.map((model) => (
+                {cards.map((card) => (
                   <GroupModelEntry
-                    key={model.localId}
-                    model={model}
-                    onChange={(patch) => updateModel(model.localId, patch)}
+                    key={`${card.source_group}/${card.source_model}`}
+                    sourceGroup={card.source_group}
+                    sourceModel={card.source_model}
+                    aliases={card.aliases}
+                    onAliasesChange={(aliases) =>
+                      updateAliases(
+                        card.source_group,
+                        card.source_model,
+                        aliases
+                      )
+                    }
                     onRemove={() =>
                       setModels((current) =>
-                        current.filter((item) => item.localId !== model.localId)
+                        current.filter(
+                          (item) =>
+                            item.source_group !== card.source_group ||
+                            item.source_model !== card.source_model
+                        )
                       )
                     }
                   />

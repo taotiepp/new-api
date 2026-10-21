@@ -18,64 +18,59 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { useTranslation } from 'react-i18next'
 
+import { MultiSelect } from '@/components/multi-select'
 import { Button } from '@/components/ui/button'
-import { Field, FieldLabel } from '@/components/ui/field'
-import { Input } from '@/components/ui/input'
-
-import type { EditorModel } from '../lib/draft'
+import { Field, FieldDescription, FieldLabel } from '@/components/ui/field'
 
 export function GroupModelEntry(props: {
-  model: EditorModel
-  onChange: (patch: Partial<EditorModel>) => void
+  sourceGroup: string
+  sourceModel: string
+  aliases: string[]
+  onAliasesChange: (aliases: string[]) => void
   onRemove: () => void
 }) {
   const { t } = useTranslation()
+  const aliasFieldId = `aliases-${props.sourceGroup}-${props.sourceModel}`
 
   return (
     <li className='rounded-lg border'>
       <div className='flex items-center justify-between gap-3 border-b px-3 py-2'>
         <p className='min-w-0 truncate text-xs'>
-          <span className='font-medium'>{props.model.source_group}</span>
+          <span className='font-medium'>{props.sourceGroup}</span>
           <span className='text-muted-foreground'>
             {' / '}
-            {props.model.source_model}
+            {props.sourceModel}
           </span>
         </p>
         <Button
           type='button'
           variant='ghost'
           size='sm'
-          aria-label={t('Remove {{name}}', { name: props.model.source_model })}
+          aria-label={t('Remove {{name}}', { name: props.sourceModel })}
           onClick={props.onRemove}
         >
           {t('Remove')}
         </Button>
       </div>
-      <div className='grid gap-3 p-3 sm:grid-cols-2'>
-        <Field>
-          <FieldLabel htmlFor={`public-name-${props.model.localId}`}>
-            {t('Public name')}
-          </FieldLabel>
-          <Input
-            id={`public-name-${props.model.localId}`}
-            value={props.model.name}
-            onChange={(event) => props.onChange({ name: event.target.value })}
-          />
-        </Field>
-        <Field>
-          <FieldLabel htmlFor={`redirect-${props.model.localId}`}>
-            {t('Redirect')}
-          </FieldLabel>
-          <Input
-            id={`redirect-${props.model.localId}`}
-            value={props.model.redirect ?? ''}
-            onChange={(event) =>
-              props.onChange({ redirect: event.target.value })
-            }
-            placeholder={t('Optional upstream model')}
-          />
-        </Field>
-      </div>
+      <Field className='p-3'>
+        <FieldLabel htmlFor={aliasFieldId}>{t('Aliases')}</FieldLabel>
+        <MultiSelect
+          id={aliasFieldId}
+          options={props.aliases.map((alias) => ({
+            value: alias,
+            label: alias,
+          }))}
+          selected={props.aliases}
+          onChange={props.onAliasesChange}
+          allowCreate
+          placeholder={t('Add an alias')}
+        />
+        <FieldDescription>
+          {t('Requests for these names are served as {{model}}', {
+            model: props.sourceModel,
+          })}
+        </FieldDescription>
+      </Field>
     </li>
   )
 }

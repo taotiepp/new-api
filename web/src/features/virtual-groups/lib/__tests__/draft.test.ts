@@ -21,6 +21,7 @@ import { describe, expect, it } from 'vitest'
 import {
   appendSourceModels,
   commitGroup,
+  setSourceAliases,
   type EditorGroup,
   type EditorModel,
 } from '../draft'
@@ -91,6 +92,69 @@ describe('appendSourceModels', () => {
       'gpt-4o',
       'alias',
       'gemini',
+    ])
+  })
+})
+
+describe('setSourceAliases', () => {
+  it('keeps every alias on the same source model and clears upstream redirect', () => {
+    const existing = [
+      model({
+        name: 'deepseek-flash',
+        source_model: 'deepseek-flash',
+        redirect: 'gpt-5.6-luna',
+      }),
+    ]
+
+    const result = setSourceAliases(
+      existing,
+      'default',
+      'deepseek-flash',
+      ['deepseek-flash', 'gpt-5.6-luna', 'gpt-6-luna'],
+      createId
+    )
+
+    expect(result.rejected).toEqual([])
+    expect(result.models).toEqual([
+      expect.objectContaining({
+        name: 'deepseek-flash',
+        source_group: 'default',
+        source_model: 'deepseek-flash',
+        redirect: '',
+      }),
+      expect.objectContaining({
+        name: 'gpt-5.6-luna',
+        source_group: 'default',
+        source_model: 'deepseek-flash',
+        redirect: '',
+      }),
+      expect.objectContaining({
+        name: 'gpt-6-luna',
+        source_group: 'default',
+        source_model: 'deepseek-flash',
+        redirect: '',
+      }),
+    ])
+  })
+
+  it('rejects an alias already used by another source model', () => {
+    const existing = [
+      model({ name: 'gpt-4o', source_model: 'gpt-4o' }),
+      model({ name: 'deepseek-flash', source_model: 'deepseek-flash' }),
+    ]
+
+    const result = setSourceAliases(
+      existing,
+      'default',
+      'deepseek-flash',
+      ['deepseek-flash', 'gpt-4o'],
+      createId
+    )
+
+    expect(result.rejected).toEqual(['gpt-4o'])
+    expect(result.models.map((item) => item.name)).toEqual([
+      'gpt-4o',
+      'deepseek-flash',
     ])
   })
 })

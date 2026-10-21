@@ -96,9 +96,13 @@ describe('virtual groups page', () => {
 
     await userEvent.click(screen.getByRole('button', { name: 'Edit alias' }))
 
-    const publicName = screen.getByRole('textbox', { name: 'Public name' })
-    expect(publicName).toHaveValue('gpt-4o')
-    expect(publicName.closest('.grid')).toHaveClass('sm:grid-cols-2')
+    expect(screen.getByRole('combobox', { name: 'Add an alias' })).toBeVisible()
+    expect(
+      screen.getByText('Requests for these names are served as gpt-4o')
+    ).toBeVisible()
+    expect(
+      screen.queryByRole('textbox', { name: 'Redirect' })
+    ).not.toBeInTheDocument()
     expect(screen.getByText('Edit group')).toBeVisible()
     expect(
       screen.queryByRole('button', { name: 'Edit spare' })
@@ -136,7 +140,7 @@ describe('virtual groups page', () => {
     )
 
     expect(
-      screen.getAllByRole('textbox', { name: 'Public name' })
+      screen.getAllByRole('combobox', { name: 'Add an alias' })
     ).toHaveLength(2)
     expect(
       screen.queryByRole('button', { name: 'Add model' })
@@ -150,7 +154,7 @@ describe('virtual groups page', () => {
     expect(bundle).toHaveTextContent('claude-3')
     expect(bundle).toHaveTextContent('gemini')
     expect(
-      screen.queryByRole('textbox', { name: 'Public name' })
+      screen.queryByRole('combobox', { name: 'Add an alias' })
     ).not.toBeInTheDocument()
   })
 
@@ -202,6 +206,53 @@ describe('virtual groups page', () => {
     expect(
       screen.queryByRole('button', { name: 'Edit spare' })
     ).not.toBeInTheDocument()
+  })
+
+  it('saves several aliases that all use the same source model', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await user.click(await screen.findByRole('button', { name: 'Edit alias' }))
+    const aliasInput = screen.getByRole('combobox', { name: 'Add an alias' })
+    await user.click(aliasInput)
+    await user.type(aliasInput, 'gpt-5.6-luna')
+    await user.click(
+      await screen.findByRole('option', { name: 'Add "gpt-5.6-luna"' })
+    )
+    await user.type(aliasInput, 'gpt-6-luna')
+    await user.click(
+      await screen.findByRole('option', { name: 'Add "gpt-6-luna"' })
+    )
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    await screen.findByRole('button', { name: 'Edit alias' })
+    expect(api.put).toHaveBeenCalledWith(
+      '/api/user/self/virtual-groups',
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: 'alias',
+          models: [
+            expect.objectContaining({
+              name: 'gpt-4o',
+              source_group: 'default',
+              source_model: 'gpt-4o',
+              redirect: '',
+            }),
+            expect.objectContaining({
+              name: 'gpt-5.6-luna',
+              source_group: 'default',
+              source_model: 'gpt-4o',
+              redirect: '',
+            }),
+            expect.objectContaining({
+              name: 'gpt-6-luna',
+              source_group: 'default',
+              source_model: 'gpt-4o',
+              redirect: '',
+            }),
+          ],
+        }),
+      ])
+    )
   })
 
   it('saves the open editor without returning to the list first', async () => {
