@@ -1,11 +1,18 @@
 package service
 
 import (
+	"encoding/json"
 	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 
+	"github.com/QuantumNous/new-api/common"
+	relaycommon "github.com/QuantumNous/new-api/relay/common"
+	"github.com/QuantumNous/new-api/relaykit/dto"
 	"github.com/QuantumNous/new-api/relaykit/types"
 
+	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/tidwall/gjson"
@@ -83,4 +90,157 @@ func TestStripEncryptedReasoningBody(t *testing.T) {
 	assert.Equal(t, "gpt-5", parsed.Get("model").String())
 	require.Equal(t, 1, len(parsed.Get("input").Array()))
 	assert.Equal(t, "message", parsed.Get("input.0.type").String())
+}
+
+func TestReplaceEffectiveSession(t *testing.T) {
+	const body = `{"model":"gpt-5","previous_response_id":"resp_old","prompt_cache_key":"cache-old","input":"hi"}`
+
+	t.Run("session header wins and previous response id is removed", func(t *testing.T) {
+		ctx, info := newSessionRetry(t, body, map[string]string{
+			"session_id":        "sess-old",
+			"session-id":        "sess-old-hyphen",
+			"conversation_id":   "conv-old",
+			"X-Session-Id":      "affinity-old",
+			"X-Conversation-ID": "xconv-old",
+		})
+		ReplaceEffectiveSession(ctx, info)
+
+		sessionID := ctx.Request.Header.Get("session_id")
+		sessionHyphen := ctx.Request.Header.Get("session-id")
+		require.NotEmpty(t, sessionID)
+		assert.NotEqual(t, "sess-old", sessionID)
+		assert.Equal(t, sessionID, sessionHyphen)
+		assert.Equal(t, sessionID, info.RequestHeaders["Session_id"])
+		assert.Equal(t, "conv-old", ctx.Request.Header.Get("conversation_id"))
+		assert.Equal(t, "affinity-old", ctx.Request.Header.Get("X-Session-Id"))
+		assert.Equal(t, "xconv-old", ctx.Request.Header.Get("X-Conversation-ID"))
+
+		stored := storedSessionBody(t, ctx)
+		assert.False(t, stored.Get("previous_response_id").Exists())
+		assert.Equal(t, "cache-old", stored.Get("prompt_cache_key").String())
+		assert.Equal(t, "hi", stored.Get("input").String())
+		assert.Empty(t, info.Request.(*dto.OpenAIResponsesRequest).PreviousResponseID)
+		assert.Equal(t, "cache-old", gjson.ParseBytes(info.Request.(*dto.OpenAIResponsesRequest).PromptCacheKey).String())
+	})
+
+	t.Run("conversation header is next", func(t *testing.T) {
+		ctx, info := newSessionRetry(t, body, map[string]string{
+			"conversation_id":    "conv-old",
+			"X-Session-Affinity": "affinity-old",
+		})
+		ReplaceEffectiveSession(ctx, info)
+
+		next := ctx.Request.Header.Get("conversation_id")
+		assert.NotEqual(t, "conv-old", next)
+		assert.Equal(t, next, info.RequestHeaders["Conversation_id"])
+		assert.Equal(t, "affinity-old", ctx.Request.Header.Get("X-Session-Affinity"))
+		assert.Equal(t, "cache-old", storedSessionBody(t, ctx).Get("prompt_cache_key").String())
+	})
+
+	t.Run("affinity headers change together", func(t *testing.T) {
+		ctx, info := newSessionRetry(t, body, map[string]string{
+			"X-Session-Affinity": "affinity-old",
+			"X-OpenCode-Session": "opencode-old",
+			"X-Conversation-ID":  "xconv-old",
+		})
+		ReplaceEffectiveSession(ctx, info)
+
+		affinity := ctx.Request.Header.Get("X-Session-Affinity")
+		openCode := ctx.Request.Header.Get("X-OpenCode-Session")
+		require.NotEmpty(t, affinity)
+		assert.NotEqual(t, "affinity-old", affinity)
+		assert.Equal(t, affinity, openCode)
+		assert.Equal(t, "xconv-old", ctx.Request.Header.Get("X-Conversation-ID"))
+		assert.Equal(t, "cache-old", storedSessionBody(t, ctx).Get("prompt_cache_key").String())
+		assert.Equal(t, affinity, info.RequestHeaders["X-Session-Affinity"])
+		assert.Equal(t, affinity, info.RequestHeaders["X-Opencode-Session"])
+	})
+
+	t.Run("x conversation id is used when no earlier header exists", func(t *testing.T) {
+		ctx, info := newSessionRetry(t, body, map[string]string{
+			"X-Conversation-ID": "xconv-old",
+		})
+		ReplaceEffectiveSession(ctx, info)
+
+		next := ctx.Request.Header.Get("X-Conversation-ID")
+		assert.NotEqual(t, "xconv-old", next)
+		assert.Equal(t, "cache-old", storedSessionBody(t, ctx).Get("prompt_cache_key").String())
+		assert.Equal(t, next, info.RequestHeaders["X-Conversation-Id"])
+	})
+
+	t.Run("prompt cache key changes only when no session header exists", func(t *testing.T) {
+		ctx, info := newSessionRetry(t, body, nil)
+		ReplaceEffectiveSession(ctx, info)
+
+		stored := storedSessionBody(t, ctx)
+		next := stored.Get("prompt_cache_key").String()
+		assert.NotEqual(t, "cache-old", next)
+		assert.False(t, stored.Get("previous_response_id").Exists())
+		assert.Equal(t, next, gjson.ParseBytes(info.Request.(*dto.OpenAIResponsesRequest).PromptCacheKey).String())
+		assert.Empty(t, info.Request.(*dto.OpenAIResponsesRequest).PreviousResponseID)
+	})
+
+	t.Run("runtime header override is the field in effect", func(t *testing.T) {
+		ctx, info := newSessionRetry(t, body, map[string]string{
+			"X-Conversation-ID": "xconv-old",
+		})
+		info.UseRuntimeHeadersOverride = true
+		info.RuntimeHeadersOverride = map[string]any{
+			"session_id": "override-old",
+		}
+		ReplaceEffectiveSession(ctx, info)
+
+		next, ok := info.RuntimeHeadersOverride["session_id"].(string)
+		require.True(t, ok)
+		assert.NotEqual(t, "override-old", next)
+		assert.Equal(t, "xconv-old", ctx.Request.Header.Get("X-Conversation-ID"))
+		assert.Equal(t, "cache-old", storedSessionBody(t, ctx).Get("prompt_cache_key").String())
+		assert.False(t, storedSessionBody(t, ctx).Get("previous_response_id").Exists())
+	})
+
+	t.Run("compaction request drops previous response id with the cache key", func(t *testing.T) {
+		ctx, info := newSessionRetry(t, body, nil)
+		info.Request = &dto.OpenAIResponsesCompactionRequest{
+			PreviousResponseID: "resp_old",
+			PromptCacheKey:     json.RawMessage(`"cache-old"`),
+		}
+		ReplaceEffectiveSession(ctx, info)
+
+		req := info.Request.(*dto.OpenAIResponsesCompactionRequest)
+		assert.Empty(t, req.PreviousResponseID)
+		assert.Equal(t, storedSessionBody(t, ctx).Get("prompt_cache_key").String(), gjson.ParseBytes(req.PromptCacheKey).String())
+		assert.NotEqual(t, "cache-old", gjson.ParseBytes(req.PromptCacheKey).String())
+	})
+}
+
+func newSessionRetry(t *testing.T, body string, headers map[string]string) (*gin.Context, *relaycommon.RelayInfo) {
+	t.Helper()
+	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
+	ctx.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", strings.NewReader(body))
+	for key, value := range headers {
+		ctx.Request.Header.Set(key, value)
+	}
+	storage, err := common.CreateBodyStorage([]byte(body))
+	require.NoError(t, err)
+	ctx.Set(common.KeyBodyStorage, storage)
+	cloned := make(map[string]string, len(ctx.Request.Header))
+	for key := range ctx.Request.Header {
+		cloned[key] = ctx.Request.Header.Get(key)
+	}
+	return ctx, &relaycommon.RelayInfo{
+		RequestHeaders: cloned,
+		Request: &dto.OpenAIResponsesRequest{
+			PreviousResponseID: "resp_old",
+			PromptCacheKey:     json.RawMessage(`"cache-old"`),
+		},
+	}
+}
+
+func storedSessionBody(t *testing.T, ctx *gin.Context) gjson.Result {
+	t.Helper()
+	storage, err := common.GetBodyStorage(ctx)
+	require.NoError(t, err)
+	raw, err := storage.Bytes()
+	require.NoError(t, err)
+	return gjson.ParseBytes(raw)
 }

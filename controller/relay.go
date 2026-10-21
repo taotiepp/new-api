@@ -285,6 +285,7 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 			service.AllowChannelAffinityRetry(c)
 			if common.GetContextKeyBool(c, constant.ContextKeyTokenClearEncryptedContent) && !relayInfo.RetryWithoutEncryptedContent {
 				relayInfo.RetryWithoutEncryptedContent = true
+				service.ReplaceEffectiveSession(c, relayInfo)
 			}
 			if common.RetryTimes <= 0 && responsesStreamExtraRetry == 0 {
 				responsesStreamExtraRetry = 1
@@ -299,6 +300,7 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 			newAPIError,
 		) {
 			relayInfo.RetryWithoutEncryptedContent = true
+			service.ReplaceEffectiveSession(c, relayInfo)
 			if retryParam.GetRetry() >= common.RetryTimes {
 				encryptedReasoningExtraRetry = 1
 			}

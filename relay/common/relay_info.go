@@ -171,7 +171,8 @@ type RelayInfo struct {
 	LastError                             *types.NewAPIError
 	// RetryWithoutEncryptedContent is set after upstream rejects encrypted
 	// reasoning, or an incomplete Responses stream is retried with the token
-	// switch on, so the next attempt is sent without that ciphertext.
+	// switch on. The next attempt drops that ciphertext, replaces the session
+	// field a downstream account router uses, and removes previous_response_id.
 	RetryWithoutEncryptedContent bool
 	RuntimeHeadersOverride       map[string]any
 	UseRuntimeHeadersOverride    bool

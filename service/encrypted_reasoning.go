@@ -1,14 +1,29 @@
 package service
 
 import (
+	"bytes"
+	"io"
 	"net/http"
 	"strings"
 
 	"github.com/QuantumNous/new-api/common"
+	relaycommon "github.com/QuantumNous/new-api/relay/common"
+	"github.com/QuantumNous/new-api/relaykit/dto"
 	"github.com/QuantumNous/new-api/relaykit/types"
 
+	"github.com/gin-gonic/gin"
 	"github.com/tidwall/gjson"
+	"github.com/tidwall/sjson"
 )
+
+// Downstream account routers bind a request to an account with the first
+// populated session field. Earlier fields win, so a later one is left alone.
+var effectiveSessionHeaderGroups = [][]string{
+	{"session-id", "session_id"},
+	{"conversation_id"},
+	{"X-Session-Affinity", "X-Session-Id", "X-OpenCode-Session"},
+	{"X-Conversation-ID"},
+}
 
 const (
 	encryptedContentVerifyFragment  = "could not be verified"
@@ -145,4 +160,211 @@ func textFromParts(value any) bool {
 		}
 	}
 	return false
+}
+
+// ReplaceEffectiveSession runs with the encrypted-reasoning retry. It replaces
+// the session field a downstream account router actually uses, then removes
+// previous_response_id. That response id outranks the session id and would
+// pin the new session back to the account that owns the old response.
+func ReplaceEffectiveSession(c *gin.Context, info *relaycommon.RelayInfo) {
+	if info == nil {
+		return
+	}
+	newID := common.GetUUID()
+	replacedHeader := replaceFirstSessionHeader(c, info, newID)
+	clearPreviousResponseID(info.Request)
+	if !replacedHeader {
+		setPromptCacheKeyIfPresent(info.Request, newID)
+	}
+	rewriteSessionBody(c, newID, !replacedHeader)
+}
+
+func replaceFirstSessionHeader(c *gin.Context, info *relaycommon.RelayInfo, newID string) bool {
+	for _, group := range effectiveSessionHeaderGroups {
+		var present []string
+		for _, name := range group {
+			if sessionHeaderPresent(c, info, name) {
+				present = append(present, name)
+			}
+		}
+		if len(present) == 0 {
+			continue
+		}
+		for _, name := range present {
+			writeSessionHeader(c, info, name, newID)
+		}
+		return true
+	}
+	return false
+}
+
+func sessionHeaderPresent(c *gin.Context, info *relaycommon.RelayInfo, name string) bool {
+	if c != nil && c.Request != nil && strings.TrimSpace(c.Request.Header.Get(name)) != "" {
+		return true
+	}
+	if info == nil {
+		return false
+	}
+	if headerMapHas(info.RequestHeaders, name) {
+		return true
+	}
+	return info.UseRuntimeHeadersOverride && headerAnyMapHas(info.RuntimeHeadersOverride, name)
+}
+
+func writeSessionHeader(c *gin.Context, info *relaycommon.RelayInfo, name, value string) {
+	live := c != nil && c.Request != nil && strings.TrimSpace(c.Request.Header.Get(name)) != ""
+	if live {
+		c.Request.Header.Set(name, value)
+	}
+	if info == nil {
+		return
+	}
+	foundSnapshot := false
+	if info.RequestHeaders != nil {
+		for key, current := range info.RequestHeaders {
+			if !strings.EqualFold(key, name) || strings.TrimSpace(current) == "" {
+				continue
+			}
+			info.RequestHeaders[key] = value
+			foundSnapshot = true
+		}
+	}
+	if live && !foundSnapshot && c != nil && c.Request != nil {
+		if info.RequestHeaders == nil {
+			info.RequestHeaders = map[string]string{}
+		}
+		for key := range c.Request.Header {
+			if strings.EqualFold(key, name) {
+				info.RequestHeaders[key] = value
+			}
+		}
+	}
+	if !info.UseRuntimeHeadersOverride || info.RuntimeHeadersOverride == nil {
+		return
+	}
+	for key, raw := range info.RuntimeHeadersOverride {
+		text, ok := raw.(string)
+		if !ok || !strings.EqualFold(key, name) || strings.TrimSpace(text) == "" {
+			continue
+		}
+		info.RuntimeHeadersOverride[key] = value
+	}
+}
+
+func headerMapHas(headers map[string]string, name string) bool {
+	for key, value := range headers {
+		if strings.EqualFold(key, name) && strings.TrimSpace(value) != "" {
+			return true
+		}
+	}
+	return false
+}
+
+func headerAnyMapHas(headers map[string]any, name string) bool {
+	for key, raw := range headers {
+		text, ok := raw.(string)
+		if ok && strings.EqualFold(key, name) && strings.TrimSpace(text) != "" {
+			return true
+		}
+	}
+	return false
+}
+
+func clearPreviousResponseID(request dto.Request) {
+	switch req := request.(type) {
+	case *dto.OpenAIResponsesRequest:
+		req.PreviousResponseID = ""
+	case *dto.OpenAIResponsesCompactionRequest:
+		req.PreviousResponseID = ""
+	}
+}
+
+func setPromptCacheKeyIfPresent(request dto.Request, newID string) {
+	encoded, err := common.Marshal(newID)
+	if err != nil {
+		return
+	}
+	switch req := request.(type) {
+	case *dto.OpenAIResponsesRequest:
+		if rawJSONValuePresent(req.PromptCacheKey) {
+			req.PromptCacheKey = encoded
+		}
+	case *dto.OpenAIResponsesCompactionRequest:
+		if rawJSONValuePresent(req.PromptCacheKey) {
+			req.PromptCacheKey = encoded
+		}
+	case *dto.GeneralOpenAIRequest:
+		if strings.TrimSpace(req.PromptCacheKey) != "" {
+			req.PromptCacheKey = newID
+		}
+	}
+}
+
+func rawJSONValuePresent(raw []byte) bool {
+	trimmed := bytes.TrimSpace(raw)
+	if len(trimmed) == 0 {
+		return false
+	}
+	value := gjson.ParseBytes(trimmed)
+	if !value.Exists() || value.Type == gjson.Null {
+		return false
+	}
+	if value.Type == gjson.String {
+		return strings.TrimSpace(value.String()) != ""
+	}
+	return strings.TrimSpace(value.Raw) != ""
+}
+
+func rewriteSessionBody(c *gin.Context, newID string, replaceCacheKey bool) {
+	if c == nil {
+		return
+	}
+	storage, err := common.GetBodyStorage(c)
+	if err != nil {
+		return
+	}
+	raw, err := storage.Bytes()
+	if err != nil || !gjson.ValidBytes(raw) {
+		return
+	}
+	patched := raw
+	if gjson.GetBytes(patched, "previous_response_id").Exists() {
+		next, deleteErr := sjson.DeleteBytes(patched, "previous_response_id")
+		if deleteErr != nil {
+			return
+		}
+		patched = next
+	}
+	if replaceCacheKey && promptCacheKeyPresent(patched) {
+		next, setErr := sjson.SetBytes(patched, "prompt_cache_key", newID)
+		if setErr != nil {
+			return
+		}
+		patched = next
+	}
+	if bytes.Equal(patched, raw) {
+		return
+	}
+	nextStorage, err := common.CreateBodyStorage(patched)
+	if err != nil {
+		return
+	}
+	_ = storage.Close()
+	c.Set(common.KeyBodyStorage, nextStorage)
+	c.Set(common.KeyRequestBody, nil)
+	if c.Request != nil {
+		c.Request.Body = io.NopCloser(nextStorage)
+		c.Request.ContentLength = int64(len(patched))
+	}
+}
+
+func promptCacheKeyPresent(body []byte) bool {
+	value := gjson.GetBytes(body, "prompt_cache_key")
+	if !value.Exists() || value.Type == gjson.Null {
+		return false
+	}
+	if value.Type == gjson.String {
+		return strings.TrimSpace(value.String()) != ""
+	}
+	return strings.TrimSpace(value.Raw) != ""
 }
