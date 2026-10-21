@@ -30,10 +30,12 @@ func GetUserGroups(c *gin.Context) {
 	userGroup, _ = model.GetUserGroup(userId, false)
 	usableGroupsRaw := ""
 	groupDiscountsRaw := ""
+	virtualGroupsRaw := ""
 	if user, err := model.GetUserCache(userId); err == nil && user != nil {
 		userGroup = user.Group
 		usableGroupsRaw = user.UsableGroups
 		groupDiscountsRaw = user.GroupDiscounts
+		virtualGroupsRaw = user.VirtualGroups
 	}
 	userUsableGroups := service.ResolveUserUsableGroups(userGroup, usableGroupsRaw)
 	for groupName := range ratio_setting.GetGroupRatioCopy() {
@@ -50,6 +52,15 @@ func GetUserGroups(c *gin.Context) {
 		usableGroups["auto"] = map[string]any{
 			"ratio": "自动",
 			"desc":  setting.GetUsableGroupDescription("auto"),
+		}
+	}
+	if groups, parseErr := model.ParseVirtualGroups(virtualGroupsRaw); parseErr == nil {
+		for _, group := range groups {
+			usableGroups[group.Name] = map[string]any{
+				"ratio":   "source",
+				"desc":    group.Name,
+				"virtual": true,
+			}
 		}
 	}
 	c.JSON(http.StatusOK, gin.H{

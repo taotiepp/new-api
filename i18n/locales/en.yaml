@@ -50,6 +50,17 @@ token.db_error: "Invalid token, database query error, please contact administrat
 token.auto_groups_too_many: "A token can select at most {{.Max}} Auto groups"
 token.auto_groups_duplicate: "Auto group {{.Group}} is duplicated"
 token.auto_groups_invalid: "Auto group {{.Group}} is unavailable or unauthorized"
+virtual_group.model_missing: "Model {{.Model}} is not in virtual group {{.Group}}"
+virtual_group.name_empty: "Virtual group name is required"
+virtual_group.name_invalid: "Virtual group name {{.Name}} cannot contain spaces or slashes"
+virtual_group.name_taken: "Virtual group name {{.Name}} is duplicated"
+virtual_group.name_reserved: "Virtual group name {{.Name}} conflicts with an existing group"
+virtual_group.too_many: "A user can have at most {{.Max}} virtual groups"
+virtual_group.model_empty: "Virtual group {{.Group}} has a model entry with an empty name"
+virtual_group.model_taken: "Model {{.Model}} is duplicated in virtual group {{.Group}}"
+virtual_group.models_too_many: "Virtual group {{.Group}} can contain at most {{.Max}} models"
+virtual_group.source_denied: "Group {{.Group}} cannot be used as a source group"
+virtual_group.redirect_invalid: "Redirect target for {{.Model}} is too long"
 
 # Redemption messages
 redemption.name_length: "Redemption code name length must be between 1-20"

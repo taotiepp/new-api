@@ -91,17 +91,19 @@ func TestWriteUserCachePersistsUsableGroups(t *testing.T) {
 	const userID = 4203
 	raw := `["svip","vip"]`
 	require.NoError(t, writeUserCache(&UserBase{
-		Id:           userID,
-		Group:        "vip",
-		Username:     "cached",
-		AuthVersion:  1,
-		UsableGroups: raw,
+		Id:            userID,
+		Group:         "vip",
+		Username:      "cached",
+		AuthVersion:   1,
+		UsableGroups:  raw,
+		VirtualGroups: `[{"name":"coding","models":[]}]`,
 	}, true))
 
 	cached, err := cacheGetUserBase(userID)
 	require.NoError(t, err)
 	assert.Equal(t, raw, cached.UsableGroups)
 	assert.Equal(t, "vip", cached.Group)
+	assert.Equal(t, `[{"name":"coding","models":[]}]`, cached.VirtualGroups)
 }
 
 func TestUserAuthFieldUpdateRejectsVersionMismatch(t *testing.T) {

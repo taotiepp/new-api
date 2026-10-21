@@ -248,18 +248,33 @@ func ListModels(c *gin.Context, modelType int) {
 			tokenModelLimit = map[string]bool{}
 		}
 	}
-	models := service.GetGroupsEnabledModels(ownerGroups)
-	for _, modelName := range models {
-		if modelLimitEnable {
-			matchingName := ratio_setting.RoutingMatchModelName(modelName)
-			if !tokenModelLimit[modelName] && !tokenModelLimit[matchingName] {
+	if catalog, ok := model.FindVirtualGroup(common.GetContextKeyString(c, constant.ContextKeyUserVirtualGroups), groups.tokenGroup); ok {
+		for _, entry := range catalog.Models {
+			if modelLimitEnable {
+				matchingName := ratio_setting.RoutingMatchModelName(entry.Name)
+				if !tokenModelLimit[entry.Name] && !tokenModelLimit[matchingName] {
+					continue
+				}
+			}
+			if !acceptUnsetRatioModel && !helper.HasModelBillingConfig(entry.SourceModel) {
 				continue
 			}
+			userModelNames = append(userModelNames, entry.Name)
 		}
-		if !acceptUnsetRatioModel && !helper.HasModelBillingConfig(modelName) {
-			continue
+	} else {
+		models := service.GetGroupsEnabledModels(ownerGroups)
+		for _, modelName := range models {
+			if modelLimitEnable {
+				matchingName := ratio_setting.RoutingMatchModelName(modelName)
+				if !tokenModelLimit[modelName] && !tokenModelLimit[matchingName] {
+					continue
+				}
+			}
+			if !acceptUnsetRatioModel && !helper.HasModelBillingConfig(modelName) {
+				continue
+			}
+			userModelNames = append(userModelNames, modelName)
 		}
-		userModelNames = append(userModelNames, modelName)
 	}
 
 	ownerByModel := map[string]string{}

@@ -81,6 +81,11 @@ func rejectIfTokenGroupDenied(c *gin.Context, group string) bool {
 	if group == "" || group == "auto" {
 		return false
 	}
+	if cached, cacheErr := model.GetUserCache(c.GetInt("id")); cacheErr == nil && cached != nil {
+		if _, virtual := model.FindVirtualGroup(cached.VirtualGroups, group); virtual {
+			return false
+		}
+	}
 	userGroup, usableGroupsRaw, err := getTokenRequestUsableGroups(c)
 	if err != nil {
 		common.ApiError(c, err)

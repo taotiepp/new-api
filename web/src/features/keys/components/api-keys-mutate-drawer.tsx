@@ -165,12 +165,16 @@ export function ApiKeysMutateDrawer({
         label: key,
         desc: info.desc || key,
         ratio: info.ratio,
+        virtual: info.virtual,
       })),
     [groupsData]
   )
   const backendHasAuto = groups.some((g) => g.value === 'auto')
   const availableAutoGroupNames = useMemo(
-    () => groups.filter((group) => group.value !== 'auto').map((g) => g.value),
+    () =>
+      groups
+        .filter((group) => group.value !== 'auto' && !group.virtual)
+        .map((g) => g.value),
     [groups]
   )
   const globalAutoGroups = useMemo(() => {

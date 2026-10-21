@@ -104,6 +104,7 @@ type User struct {
 	GroupDiscounts       string                     `json:"group_discounts" gorm:"type:text"`
 	GroupModelDiscounts  string                     `json:"group_model_discounts" gorm:"type:text"`
 	UsableGroups         string                     `json:"usable_groups" gorm:"type:text"`
+	VirtualGroups        string                     `json:"virtual_groups" gorm:"type:text"`
 	AffCode              string                     `json:"aff_code" gorm:"type:varchar(32);column:aff_code;uniqueIndex"`
 	AffCount             int                        `json:"aff_count" gorm:"type:int;default:0;column:aff_count"`
 	AffQuota             int                        `json:"aff_quota" gorm:"type:int;default:0;column:aff_quota"`           // 邀请剩余额度
@@ -135,6 +136,7 @@ func (user *User) ToBaseUser() *UserBase {
 		GroupDiscounts:      user.GroupDiscounts,
 		GroupModelDiscounts: user.GroupModelDiscounts,
 		UsableGroups:        user.UsableGroups,
+		VirtualGroups:       user.VirtualGroups,
 		AuthVersion:         user.AuthVersion,
 		CacheSchema:         userCacheSchemaVersion,
 	}

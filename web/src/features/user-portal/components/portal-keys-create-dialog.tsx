@@ -110,12 +110,15 @@ export function PortalKeysCreateDialog(props: PortalKeysCreateDialogProps) {
         label: key,
         desc: info.desc || key,
         ratio: info.ratio,
+        virtual: info.virtual,
       })),
     [groupsQuery.data]
   )
   const availableAutoGroupNames = useMemo(
     () =>
-      groups.filter((item) => item.value !== 'auto').map((item) => item.value),
+      groups
+        .filter((item) => item.value !== 'auto' && !item.virtual)
+        .map((item) => item.value),
     [groups]
   )
   const globalAutoGroupOptions = useMemo(() => {

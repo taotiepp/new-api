@@ -333,6 +333,21 @@ const (
 	MsgDistributorInvalidParseModel            = "distributor.invalid_request_parse_model"
 )
 
+// Virtual group messages
+const (
+	MsgVirtualGroupModelMissing    = "virtual_group.model_missing"
+	MsgVirtualGroupNameEmpty       = "virtual_group.name_empty"
+	MsgVirtualGroupNameInvalid     = "virtual_group.name_invalid"
+	MsgVirtualGroupNameTaken       = "virtual_group.name_taken"
+	MsgVirtualGroupNameReserved    = "virtual_group.name_reserved"
+	MsgVirtualGroupTooMany         = "virtual_group.too_many"
+	MsgVirtualGroupModelEmpty      = "virtual_group.model_empty"
+	MsgVirtualGroupModelTaken      = "virtual_group.model_taken"
+	MsgVirtualGroupModelsTooMany   = "virtual_group.models_too_many"
+	MsgVirtualGroupSourceDenied    = "virtual_group.source_denied"
+	MsgVirtualGroupRedirectInvalid = "virtual_group.redirect_invalid"
+)
+
 // Custom OAuth provider related messages
 const (
 	MsgCustomOAuthNotFound          = "custom_oauth.not_found"

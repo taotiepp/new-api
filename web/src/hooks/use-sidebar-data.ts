@@ -25,6 +25,7 @@ import {
   FlaskConical,
   Key,
   LayoutDashboard,
+  Layers,
   ListTodo,
   MessageSquare,
   PlugZap,
@@ -87,6 +88,11 @@ export function useSidebarData(): SidebarData {
             title: t('API Keys'),
             url: '/keys',
             icon: Key,
+          },
+          {
+            title: t('Virtual groups'),
+            url: '/virtual-groups',
+            icon: Layers,
           },
           {
             title: t('Usage Logs'),

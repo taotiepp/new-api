@@ -48,19 +48,53 @@ export async function getSelf() {
   return res.data
 }
 
-export async function getUserModels(): Promise<{
+export async function getUserModels(group?: string): Promise<{
   success: boolean
   message?: string
   data?: string[]
 }> {
-  const res = await api.get('/api/user/models')
+  const res = await api.get('/api/user/models', {
+    params: group ? { group } : undefined,
+  })
+  return res.data
+}
+
+export type VirtualGroupModel = {
+  name: string
+  source_group: string
+  source_model: string
+  redirect?: string
+}
+
+export type VirtualGroup = {
+  name: string
+  models: VirtualGroupModel[]
+}
+
+export async function getVirtualGroups(): Promise<{
+  success: boolean
+  message?: string
+  data?: VirtualGroup[]
+}> {
+  const res = await api.get('/api/user/self/virtual-groups')
+  return res.data
+}
+
+export async function updateVirtualGroups(groups: VirtualGroup[]): Promise<{
+  success: boolean
+  message?: string
+}> {
+  const res = await api.put('/api/user/self/virtual-groups', groups)
   return res.data
 }
 
 export async function getUserGroups(): Promise<{
   success: boolean
   message?: string
-  data?: Record<string, { desc: string; ratio: number | string }>
+  data?: Record<
+    string,
+    { desc: string; ratio: number | string; virtual?: boolean }
+  >
 }> {
   const res = await api.get('/api/user/self/groups')
   return res.data

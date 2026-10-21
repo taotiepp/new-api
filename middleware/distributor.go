@@ -56,6 +56,22 @@ func Distribute() func(c *gin.Context) {
 			common.SetContextKey(c, constant.ContextKeyUsingGroup, groupName)
 			common.SetContextKey(c, constant.ContextKeyTokenGroup, groupName)
 		}
+		virtualRaw := common.GetContextKeyString(c, constant.ContextKeyUserVirtualGroups)
+		virtualResolution, virtualFailure := model.ResolveVirtualGroupRequest(virtualRaw, common.GetContextKeyString(c, constant.ContextKeyUsingGroup), modelRequest.Model)
+		if virtualFailure != nil {
+			abortWithOpenAiMessage(c, http.StatusBadRequest, i18n.T(c, virtualFailure.MessageID, virtualFailure.Data))
+			return
+		}
+		limitModel := modelRequest.Model
+		if virtualResolution.Handled {
+			limitModel = virtualResolution.ClientModel
+			if err := applyVirtualGroupResolution(c, modelRequest.Model, virtualResolution); err != nil {
+				abortWithOpenAiMessage(c, http.StatusBadRequest, i18n.T(c, i18n.MsgDistributorInvalidRequest, map[string]any{"Error": err.Error()}))
+				return
+			}
+			modelRequest.Model = virtualResolution.SourceModel
+			common.SetContextKey(c, constant.ContextKeyUsingGroup, virtualResolution.SourceGroup)
+		}
 		if pin, found, overridden := constraints.ResolvedPin(); found {
 			for _, lost := range overridden {
 				logger.LogWarn(c, fmt.Sprintf(
@@ -103,7 +119,7 @@ func Distribute() func(c *gin.Context) {
 				if !ok {
 					tokenModelLimit = map[string]bool{}
 				}
-				if !tokenModelLimitAllows(tokenModelLimit, modelRequest.Model) {
+				if !tokenModelLimitAllows(tokenModelLimit, limitModel) {
 					abortWithOpenAiMessage(c, http.StatusForbidden, i18n.T(c, i18n.MsgDistributorTokenModelForbidden, map[string]any{"Model": modelRequest.Model}))
 					return
 				}
@@ -124,14 +140,30 @@ func Distribute() func(c *gin.Context) {
 						abortWithOpenAiMessage(c, http.StatusBadRequest, i18n.T(c, i18n.MsgDistributorInvalidPlayground, map[string]any{"Error": err.Error()}))
 						return
 					}
-					if playgroundRequest.Group != "" {
+					if playgroundRequest.Group != "" && !virtualResolution.Handled {
 						userGroup := common.GetContextKeyString(c, constant.ContextKeyUserGroup)
 						usableGroupsRaw := common.GetContextKeyString(c, constant.ContextKeyUserUsableGroups)
-						if !service.GroupAllowed(userGroup, usableGroupsRaw, playgroundRequest.Group) {
+						_, playgroundVirtual := model.FindVirtualGroup(virtualRaw, playgroundRequest.Group)
+						if !playgroundVirtual && !service.GroupAllowed(userGroup, usableGroupsRaw, playgroundRequest.Group) {
 							abortWithOpenAiMessage(c, http.StatusForbidden, i18n.T(c, i18n.MsgDistributorGroupAccessDenied))
 							return
 						}
 						usingGroup = playgroundRequest.Group
+						if playgroundVirtual {
+							playgroundResolution, playgroundFailure := model.ResolveVirtualGroupRequest(virtualRaw, usingGroup, modelRequest.Model)
+							if playgroundFailure != nil {
+								abortWithOpenAiMessage(c, http.StatusBadRequest, i18n.T(c, playgroundFailure.MessageID, playgroundFailure.Data))
+								return
+							}
+							if playgroundResolution.Handled {
+								if err := applyVirtualGroupResolution(c, modelRequest.Model, playgroundResolution); err != nil {
+									abortWithOpenAiMessage(c, http.StatusBadRequest, i18n.T(c, i18n.MsgDistributorInvalidRequest, map[string]any{"Error": err.Error()}))
+									return
+								}
+								modelRequest.Model = playgroundResolution.SourceModel
+								usingGroup = playgroundResolution.SourceGroup
+							}
+						}
 						common.SetContextKey(c, constant.ContextKeyUsingGroup, usingGroup)
 					}
 				}
@@ -737,6 +769,18 @@ func selectableGroupModel(c *gin.Context, modelName string) (string, string, boo
 		return "", "", false
 	}
 	return groupName, bareModel, true
+}
+
+func applyVirtualGroupResolution(c *gin.Context, requestedModel string, resolution model.VirtualGroupResolution) error {
+	if resolution.RewriteFrom != resolution.SourceModel {
+		if err := rewriteGroupPrefixedJSONModel(c, requestedModel, resolution.SourceModel); err != nil {
+			return err
+		}
+	}
+	if resolution.Redirect != "" {
+		common.SetContextKey(c, constant.ContextKeyVirtualModelRedirect, resolution.Redirect)
+	}
+	return nil
 }
 
 func rewriteGroupPrefixedJSONModel(c *gin.Context, from, to string) error {

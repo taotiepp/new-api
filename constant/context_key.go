@@ -59,6 +59,8 @@ const (
 	ContextKeyUserGroupDiscounts      ContextKey = "user_group_discounts"
 	ContextKeyUserGroupModelDiscounts ContextKey = "user_group_model_discounts"
 	ContextKeyUserUsableGroups        ContextKey = "user_usable_groups"
+	ContextKeyUserVirtualGroups       ContextKey = "user_virtual_groups"
+	ContextKeyVirtualModelRedirect    ContextKey = "virtual_model_redirect"
 
 	ContextKeyLocalCountTokens ContextKey = "local_count_tokens"
 

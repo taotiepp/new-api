@@ -11,7 +11,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-const userCacheSchemaVersion = 6
+const userCacheSchemaVersion = 7
 
 type UserBase struct {
 	Id                  int      `json:"id"`
@@ -27,6 +27,7 @@ type UserBase struct {
 	GroupDiscounts      string   `json:"group_discounts,omitempty"`
 	GroupModelDiscounts string   `json:"group_model_discounts,omitempty"`
 	UsableGroups        string   `json:"usable_groups,omitempty"`
+	VirtualGroups       string   `json:"virtual_groups,omitempty"`
 	AuthVersion         int64    `json:"-"`
 	CacheSchema         int      `json:"-"`
 }
@@ -43,6 +44,7 @@ func (user *UserBase) WriteContext(c *gin.Context) {
 	common.SetContextKey(c, constant.ContextKeyUserGroupDiscounts, user.GroupDiscounts)
 	common.SetContextKey(c, constant.ContextKeyUserGroupModelDiscounts, user.GroupModelDiscounts)
 	common.SetContextKey(c, constant.ContextKeyUserUsableGroups, user.UsableGroups)
+	common.SetContextKey(c, constant.ContextKeyUserVirtualGroups, user.VirtualGroups)
 }
 
 func (user *UserBase) GetSetting() dto.UserSetting {

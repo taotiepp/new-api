@@ -3,8 +3,10 @@ package helper
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	rootcommon "github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/constant"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/relaykit/dto"
 	hostreasoning "github.com/QuantumNous/new-api/setting/reasoning"
@@ -16,6 +18,11 @@ func ModelMappedHelper(c *gin.Context, info *relaycommon.RelayInfo, request dto.
 		info.ChannelMeta = &relaycommon.ChannelMeta{}
 	}
 
+	if redirect := strings.TrimSpace(c.GetString(string(constant.ContextKeyVirtualModelRedirect))); redirect != "" && redirect != info.OriginModelName {
+		info.UpstreamModelName = redirect
+		info.IsModelMapped = true
+	}
+
 	// map model name
 	modelMapping := c.GetString("model_mapping")
 	if modelMapping != "" && modelMapping != "{}" {
@@ -25,8 +32,11 @@ func ModelMappedHelper(c *gin.Context, info *relaycommon.RelayInfo, request dto.
 			return fmt.Errorf("unmarshal_model_mapping_failed")
 		}
 
-		// 支持链式模型重定向，最终使用链尾的模型
+		// 支持链式模型重定向，最终使用链尾的模型。虚拟分组重定向先替换上游模型名。
 		currentModel := info.OriginModelName
+		if info.IsModelMapped && info.UpstreamModelName != "" {
+			currentModel = info.UpstreamModelName
+		}
 		visitedModels := map[string]bool{
 			currentModel: true,
 		}
