@@ -197,13 +197,14 @@ func GetGroupsEnabledModels(groups []string) []string {
 	return models
 }
 
-// GetUserGroupRatio 获取用户使用某个分组的倍率
-// userGroup 用户分组
-// group 需要获取倍率的分组
-func GetUserGroupRatio(userGroup, group string) float64 {
-	ratio, ok := ratio_setting.GetGroupGroupRatio(userGroup, group)
-	if ok {
-		return ratio
-	}
-	return ratio_setting.GetGroupRatio(group)
+// GetUserGroupRatio is the sell multiplier for one resource group. A discount
+// configured for that group replaces the group's default ratio. Billing uses
+// the same resolution, with a model-specific group discount taking priority
+// when the request names a model.
+func GetUserGroupRatio(userGroup, group, groupDiscountsRaw string) float64 {
+	return ResolveUserDiscount(UserDiscountInput{
+		GroupDiscounts: ParseGroupDiscounts(groupDiscountsRaw),
+		UserGroup:      userGroup,
+		UsingGroup:     group,
+	}).Ratio
 }

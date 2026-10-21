@@ -86,6 +86,24 @@ func TestPendingUserAuthFenceRejectsStaleCacheWrite(t *testing.T) {
 	assert.False(t, server.Exists(getUserCacheKey(userID)))
 }
 
+func TestWriteUserCachePersistsUsableGroups(t *testing.T) {
+	useUserCacheMiniRedis(t)
+	const userID = 4203
+	raw := `["svip","vip"]`
+	require.NoError(t, writeUserCache(&UserBase{
+		Id:           userID,
+		Group:        "vip",
+		Username:     "cached",
+		AuthVersion:  1,
+		UsableGroups: raw,
+	}, true))
+
+	cached, err := cacheGetUserBase(userID)
+	require.NoError(t, err)
+	assert.Equal(t, raw, cached.UsableGroups)
+	assert.Equal(t, "vip", cached.Group)
+}
+
 func TestUserAuthFieldUpdateRejectsVersionMismatch(t *testing.T) {
 	useUserCacheMiniRedis(t)
 	const userID = 4202

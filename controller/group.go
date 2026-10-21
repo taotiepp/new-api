@@ -29,18 +29,21 @@ func GetUserGroups(c *gin.Context) {
 	userId := c.GetInt("id")
 	userGroup, _ = model.GetUserGroup(userId, false)
 	usableGroupsRaw := ""
+	groupDiscountsRaw := ""
 	if user, err := model.GetUserCache(userId); err == nil && user != nil {
 		userGroup = user.Group
 		usableGroupsRaw = user.UsableGroups
+		groupDiscountsRaw = user.GroupDiscounts
 	}
 	userUsableGroups := service.ResolveUserUsableGroups(userGroup, usableGroupsRaw)
-	for groupName, _ := range ratio_setting.GetGroupRatioCopy() {
-		// UserUsableGroups contains the groups that the user can use
-		if desc, ok := userUsableGroups[groupName]; ok {
-			usableGroups[groupName] = map[string]any{
-				"ratio": service.GetUserGroupRatio(userGroup, groupName),
-				"desc":  desc,
-			}
+	for groupName := range ratio_setting.GetGroupRatioCopy() {
+		desc, ok := userUsableGroups[groupName]
+		if !ok {
+			continue
+		}
+		usableGroups[groupName] = map[string]any{
+			"ratio": service.GetUserGroupRatio(userGroup, groupName, groupDiscountsRaw),
+			"desc":  desc,
 		}
 	}
 	if _, ok := userUsableGroups["auto"]; ok {

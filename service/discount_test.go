@@ -115,6 +115,22 @@ func TestResolveUserDiscountPriority(t *testing.T) {
 	assert.Equal(t, 0.7, got.Ratio)
 }
 
+func TestGetUserGroupRatioPrefersConfiguredGroupDiscount(t *testing.T) {
+	originalGroup := ratio_setting.GroupRatio2JSONString()
+	originalSpecial := ratio_setting.GroupGroupRatio2JSONString()
+	t.Cleanup(func() {
+		require.NoError(t, ratio_setting.UpdateGroupRatioByJSONString(originalGroup))
+		require.NoError(t, ratio_setting.UpdateGroupGroupRatioByJSONString(originalSpecial))
+	})
+	require.NoError(t, ratio_setting.UpdateGroupRatioByJSONString(`{"vip":0.7,"svip":1}`))
+	require.NoError(t, ratio_setting.UpdateGroupGroupRatioByJSONString(`{"default":{"vip":0.6}}`))
+
+	assert.Equal(t, 0.5, GetUserGroupRatio("default", "vip", `{"vip":0.5,"svip":0.8}`))
+	assert.Equal(t, 0.8, GetUserGroupRatio("default", "svip", `{"vip":0.5,"svip":0.8}`))
+	assert.Equal(t, 0.6, GetUserGroupRatio("default", "vip", ""))
+	assert.Equal(t, 1.0, GetUserGroupRatio("default", "svip", ""))
+}
+
 func TestResolveChannelDiscountFallback(t *testing.T) {
 	t.Parallel()
 	channelDefault := 0.8
