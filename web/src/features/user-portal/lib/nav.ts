@@ -21,6 +21,7 @@ import {
   BookOpen,
   FileText,
   KeyRound,
+  Layers,
   LayoutDashboard,
   LayoutGrid,
   Receipt,
@@ -72,6 +73,12 @@ export const USER_PORTAL_CONSOLE_NAV_ITEMS: UserPortalNavItem[] = [
     titleKey: 'Key Management',
     href: '/app/keys',
     icon: KeyRound,
+    match: 'prefix',
+  },
+  {
+    titleKey: 'Virtual groups',
+    href: '/app/virtual-groups',
+    icon: Layers,
     match: 'prefix',
   },
   {

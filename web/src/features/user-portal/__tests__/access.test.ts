@@ -71,6 +71,9 @@ describe('user portal access', () => {
 
   test('console path mapping for regular users', () => {
     expect(mapConsolePathToUserPortal('/keys')).toBe('/app/keys')
+    expect(mapConsolePathToUserPortal('/virtual-groups')).toBe(
+      '/app/virtual-groups'
+    )
     expect(mapConsolePathToUserPortal('/usage-logs/common')).toBe('/app/logs')
     expect(mapConsolePathToUserPortal('/channels')).toBe('/app')
     expect(mapConsolePathToUserPortal('/profile')).toBe('/app/settings')

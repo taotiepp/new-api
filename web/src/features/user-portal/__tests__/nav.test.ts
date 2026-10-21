@@ -39,6 +39,7 @@ describe('user portal navigation', () => {
   test('puts key, usage, logs, bills, and settings items in the console sidebar', () => {
     expect(USER_PORTAL_CONSOLE_NAV_ITEMS.map((item) => item.href)).toEqual([
       '/app/keys',
+      '/app/virtual-groups',
       '/app/usage',
       '/app/logs',
       '/app/bills',

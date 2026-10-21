@@ -32,6 +32,7 @@ const CONSOLE_AUTHENTICATED_PREFIXES = [
   '/channels',
   '/users',
   '/keys',
+  '/virtual-groups',
   '/usage-logs',
   '/playground',
   '/models',
@@ -66,6 +67,7 @@ export function isConsoleAuthenticatedPath(pathname: string): boolean {
 export function mapConsolePathToUserPortal(pathname: string): string {
   if (pathname.startsWith('/dashboard')) return '/app/usage'
   if (pathname.startsWith('/keys')) return '/app/keys'
+  if (pathname.startsWith('/virtual-groups')) return '/app/virtual-groups'
   if (pathname.startsWith('/playground')) return '/app/playground'
   if (pathname.startsWith('/usage-logs')) return '/app/logs'
   if (pathname.startsWith('/profile')) return '/app/settings'

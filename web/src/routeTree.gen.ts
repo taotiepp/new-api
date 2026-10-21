@@ -72,6 +72,7 @@ import { Route as AuthenticatedAppPlaygroundIndexRouteImport } from './routes/_a
 import { Route as AuthenticatedAppSecurityIndexRouteImport } from './routes/_authenticated/app/security/index'
 import { Route as AuthenticatedAppSettingsIndexRouteImport } from './routes/_authenticated/app/settings/index'
 import { Route as AuthenticatedAppUsageIndexRouteImport } from './routes/_authenticated/app/usage/index'
+import { Route as AuthenticatedAppVirtualGroupsIndexRouteImport } from './routes/_authenticated/app/virtual-groups/index'
 import { Route as AuthenticatedSystemSettingsAuthIndexRouteImport } from './routes/_authenticated/system-settings/auth/index'
 import { Route as AuthenticatedSystemSettingsAuthSectionRouteImport } from './routes/_authenticated/system-settings/auth/$section'
 import { Route as AuthenticatedSystemSettingsBillingIndexRouteImport } from './routes/_authenticated/system-settings/billing/index'
@@ -431,6 +432,12 @@ const AuthenticatedAppUsageIndexRoute =
     path: '/usage/',
     getParentRoute: () => AuthenticatedAppRouteRoute,
   } as any)
+const AuthenticatedAppVirtualGroupsIndexRoute =
+  AuthenticatedAppVirtualGroupsIndexRouteImport.update({
+    id: '/virtual-groups/',
+    path: '/virtual-groups/',
+    getParentRoute: () => AuthenticatedAppRouteRoute,
+  } as any)
 const AuthenticatedSystemSettingsAuthIndexRoute =
   AuthenticatedSystemSettingsAuthIndexRouteImport.update({
     id: '/auth/',
@@ -591,6 +598,7 @@ export interface FileRoutesByFullPath {
   '/app/security/': typeof AuthenticatedAppSecurityIndexRoute
   '/app/settings/': typeof AuthenticatedAppSettingsIndexRoute
   '/app/usage/': typeof AuthenticatedAppUsageIndexRoute
+  '/app/virtual-groups/': typeof AuthenticatedAppVirtualGroupsIndexRoute
   '/system-settings/auth/': typeof AuthenticatedSystemSettingsAuthIndexRoute
   '/system-settings/billing/': typeof AuthenticatedSystemSettingsBillingIndexRoute
   '/system-settings/content/': typeof AuthenticatedSystemSettingsContentIndexRoute
@@ -665,6 +673,7 @@ export interface FileRoutesByTo {
   '/app/security': typeof AuthenticatedAppSecurityIndexRoute
   '/app/settings': typeof AuthenticatedAppSettingsIndexRoute
   '/app/usage': typeof AuthenticatedAppUsageIndexRoute
+  '/app/virtual-groups': typeof AuthenticatedAppVirtualGroupsIndexRoute
   '/system-settings/auth': typeof AuthenticatedSystemSettingsAuthIndexRoute
   '/system-settings/billing': typeof AuthenticatedSystemSettingsBillingIndexRoute
   '/system-settings/content': typeof AuthenticatedSystemSettingsContentIndexRoute
@@ -746,6 +755,7 @@ export interface FileRoutesById {
   '/_authenticated/app/security/': typeof AuthenticatedAppSecurityIndexRoute
   '/_authenticated/app/settings/': typeof AuthenticatedAppSettingsIndexRoute
   '/_authenticated/app/usage/': typeof AuthenticatedAppUsageIndexRoute
+  '/_authenticated/app/virtual-groups/': typeof AuthenticatedAppVirtualGroupsIndexRoute
   '/_authenticated/system-settings/auth/': typeof AuthenticatedSystemSettingsAuthIndexRoute
   '/_authenticated/system-settings/billing/': typeof AuthenticatedSystemSettingsBillingIndexRoute
   '/_authenticated/system-settings/content/': typeof AuthenticatedSystemSettingsContentIndexRoute
@@ -826,6 +836,7 @@ export interface FileRouteTypes {
     | '/app/security/'
     | '/app/settings/'
     | '/app/usage/'
+    | '/app/virtual-groups/'
     | '/system-settings/auth/'
     | '/system-settings/billing/'
     | '/system-settings/content/'
@@ -900,6 +911,7 @@ export interface FileRouteTypes {
     | '/app/security'
     | '/app/settings'
     | '/app/usage'
+    | '/app/virtual-groups'
     | '/system-settings/auth'
     | '/system-settings/billing'
     | '/system-settings/content'
@@ -980,6 +992,7 @@ export interface FileRouteTypes {
     | '/_authenticated/app/security/'
     | '/_authenticated/app/settings/'
     | '/_authenticated/app/usage/'
+    | '/_authenticated/app/virtual-groups/'
     | '/_authenticated/system-settings/auth/'
     | '/_authenticated/system-settings/billing/'
     | '/_authenticated/system-settings/content/'
@@ -1453,6 +1466,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAppUsageIndexRouteImport
       parentRoute: typeof AuthenticatedAppRouteRoute
     }
+    '/_authenticated/app/virtual-groups/': {
+      id: '/_authenticated/app/virtual-groups/'
+      path: '/virtual-groups'
+      fullPath: '/app/virtual-groups/'
+      preLoaderRoute: typeof AuthenticatedAppVirtualGroupsIndexRouteImport
+      parentRoute: typeof AuthenticatedAppRouteRoute
+    }
     '/_authenticated/system-settings/auth/': {
       id: '/_authenticated/system-settings/auth/'
       path: '/auth'
@@ -1613,6 +1633,7 @@ interface AuthenticatedAppRouteRouteChildren {
   AuthenticatedAppSecurityIndexRoute: typeof AuthenticatedAppSecurityIndexRoute
   AuthenticatedAppSettingsIndexRoute: typeof AuthenticatedAppSettingsIndexRoute
   AuthenticatedAppUsageIndexRoute: typeof AuthenticatedAppUsageIndexRoute
+  AuthenticatedAppVirtualGroupsIndexRoute: typeof AuthenticatedAppVirtualGroupsIndexRoute
   AuthenticatedAppModelsModelIdIndexRoute: typeof AuthenticatedAppModelsModelIdIndexRoute
 }
 
@@ -1626,6 +1647,8 @@ const AuthenticatedAppRouteRouteChildren: AuthenticatedAppRouteRouteChildren = {
   AuthenticatedAppSecurityIndexRoute: AuthenticatedAppSecurityIndexRoute,
   AuthenticatedAppSettingsIndexRoute: AuthenticatedAppSettingsIndexRoute,
   AuthenticatedAppUsageIndexRoute: AuthenticatedAppUsageIndexRoute,
+  AuthenticatedAppVirtualGroupsIndexRoute:
+    AuthenticatedAppVirtualGroupsIndexRoute,
   AuthenticatedAppModelsModelIdIndexRoute:
     AuthenticatedAppModelsModelIdIndexRoute,
 }

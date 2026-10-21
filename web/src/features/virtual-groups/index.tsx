@@ -62,7 +62,7 @@ function toVirtualGroups(groups: EditorGroup[]): VirtualGroup[] {
   }))
 }
 
-export function VirtualGroupsPage() {
+export function VirtualGroupsPage(props: { embedded?: boolean }) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const [groups, setGroups] = useState<EditorGroup[]>([])
@@ -122,24 +122,25 @@ export function VirtualGroupsPage() {
     setGroupName('')
   }
 
-  return (
-    <SectionPageLayout>
-      <SectionPageLayout.Title>{t('Virtual groups')}</SectionPageLayout.Title>
-      <SectionPageLayout.Actions>
-        <Button
-          onClick={() => saveMutation.mutate()}
-          disabled={saveMutation.isPending || catalogQuery.isLoading}
-        >
-          {t('Save')}
-        </Button>
-      </SectionPageLayout.Actions>
-      <SectionPageLayout.Content>
+  const editor = (
         <div className='flex max-w-5xl flex-col gap-4'>
-          <p className='text-muted-foreground text-sm'>
-            {t(
-              'Add models from groups you can already use. Requests are billed with the source group and source model.'
-            )}
-          </p>
+          {props.embedded ? (
+            <div className='flex justify-end'>
+              <Button
+                onClick={() => saveMutation.mutate()}
+                disabled={saveMutation.isPending || catalogQuery.isLoading}
+              >
+                {t('Save')}
+              </Button>
+            </div>
+          ) : null}
+          {props.embedded ? null : (
+            <p className='text-muted-foreground text-sm'>
+              {t(
+                'Add models from groups you can already use. Requests are billed with the source group and source model.'
+              )}
+            </p>
+          )}
           <div className='flex flex-wrap items-end gap-2'>
             <div className='flex min-w-56 flex-col gap-1.5'>
               <Label htmlFor='virtual-group-name'>{t('Group name')}</Label>
@@ -183,7 +184,22 @@ export function VirtualGroupsPage() {
             ))
           )}
         </div>
-      </SectionPageLayout.Content>
+  )
+
+  if (props.embedded) return editor
+
+  return (
+    <SectionPageLayout>
+      <SectionPageLayout.Title>{t('Virtual groups')}</SectionPageLayout.Title>
+      <SectionPageLayout.Actions>
+        <Button
+          onClick={() => saveMutation.mutate()}
+          disabled={saveMutation.isPending || catalogQuery.isLoading}
+        >
+          {t('Save')}
+        </Button>
+      </SectionPageLayout.Actions>
+      <SectionPageLayout.Content>{editor}</SectionPageLayout.Content>
     </SectionPageLayout>
   )
 }
