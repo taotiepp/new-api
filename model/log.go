@@ -139,12 +139,22 @@ func FormatRootLogs(logs []*Log) {
 	}
 }
 
+// LogOtherAdminRetriedKey marks an error log whose attempt was retried.
+// User-facing log queries hide rows whose stored other JSON contains the compact true value.
+const LogOtherAdminRetriedKey = "retried"
+
+func excludeRetriedAttemptLogs(tx *gorm.DB, column string) *gorm.DB {
+	marker := `"` + LogOtherAdminRetriedKey + `":true`
+	return tx.Where("("+column+" IS NULL OR "+column+" NOT LIKE ?)", "%"+marker+"%")
+}
+
 func GetLogByTokenId(tokenId int) (logs []*Log, err error) {
 	order := "id desc"
 	if common.UsingLogDatabase(common.DatabaseTypeClickHouse) {
 		order = clickHouseLogOrder("")
 	}
-	err = LOG_DB.Model(&Log{}).Where("token_id = ?", tokenId).Order(order).Limit(common.MaxRecentItems).Find(&logs).Error
+	tx := excludeRetriedAttemptLogs(LOG_DB.Model(&Log{}).Where("token_id = ?", tokenId), "other")
+	err = tx.Order(order).Limit(common.MaxRecentItems).Find(&logs).Error
 	formatUserLogs(logs, 0)
 	return logs, err
 }
@@ -590,6 +600,7 @@ func GetUserLogs(userId int, logType int, startTimestamp int64, endTimestamp int
 	if group != "" {
 		tx = tx.Where("logs."+logGroupCol+" = ?", group)
 	}
+	tx = excludeRetriedAttemptLogs(tx, "logs.other")
 	err = tx.Model(&Log{}).Limit(logSearchCountLimit).Count(&total).Error
 	if err != nil {
 		common.SysError("failed to count user logs: " + err.Error())

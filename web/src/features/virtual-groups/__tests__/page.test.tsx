@@ -1,0 +1,235 @@
+/*
+Copyright (C) 2023-2026 QuantumNous
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+For commercial licensing, please contact support@quantumnous.com
+*/
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { render, screen, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { Toaster } from 'sonner'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+import { api } from '@/lib/api'
+
+import { VirtualGroupsPage } from '../index'
+
+const catalog = [
+  {
+    name: 'alias',
+    models: [
+      {
+        name: 'gpt-4o',
+        source_group: 'default',
+        source_model: 'gpt-4o',
+        redirect: '',
+      },
+    ],
+  },
+  { name: 'spare', models: [] },
+]
+
+function renderPage() {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  })
+  return render(
+    <QueryClientProvider client={client}>
+      <VirtualGroupsPage />
+      <Toaster />
+    </QueryClientProvider>
+  )
+}
+
+describe('virtual groups page', () => {
+  beforeEach(() => {
+    vi.spyOn(api, 'get').mockImplementation(async (url) => {
+      if (url === '/api/user/self/virtual-groups') {
+        return { data: { success: true, data: catalog } }
+      }
+      if (url === '/api/user/self/groups') {
+        return {
+          data: {
+            success: true,
+            data: {
+              default: { desc: 'Default', ratio: 1 },
+              auto: { desc: 'Auto', ratio: 1 },
+              mirrored: { desc: 'Mirror', ratio: 1, virtual: true },
+            },
+          },
+        }
+      }
+      if (url === '/api/user/models') {
+        return {
+          data: { success: true, data: ['gpt-4o', 'claude-3', 'gemini'] },
+        }
+      }
+      throw new Error(`unexpected ${String(url)}`)
+    })
+    vi.spyOn(api, 'put').mockResolvedValue({ data: { success: true } })
+  })
+
+  it('shows the saved groups as a list until one is opened', async () => {
+    renderPage()
+
+    expect(await screen.findByText('alias')).toBeVisible()
+    expect(screen.getByText('spare')).toBeVisible()
+    expect(screen.getByText('gpt-4o')).toBeVisible()
+    expect(
+      screen.queryByRole('textbox', { name: 'Public name' })
+    ).not.toBeInTheDocument()
+    const rows = screen.getAllByRole('listitem')
+    expect(rows[0]).toHaveClass('sm:flex-row')
+    expect(within(rows[0]).getByText('alias')).toBeVisible()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Edit alias' }))
+
+    const publicName = screen.getByRole('textbox', { name: 'Public name' })
+    expect(publicName).toHaveValue('gpt-4o')
+    expect(publicName.closest('.grid')).toHaveClass('sm:grid-cols-2')
+    expect(screen.getByText('Edit group')).toBeVisible()
+    expect(
+      screen.queryByRole('button', { name: 'Edit spare' })
+    ).not.toBeInTheDocument()
+  })
+
+  it('adds every selected source model from one action and returns to the list', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await screen.findByRole('button', { name: 'Edit alias' })
+    await user.click(screen.getByRole('button', { name: 'Add group' }))
+
+    await user.click(screen.getByRole('combobox', { name: 'Source group' }))
+    expect(
+      await screen.findByRole('option', { name: 'default · Default' })
+    ).toBeVisible()
+    expect(
+      screen.queryByRole('option', { name: /auto/ })
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('option', { name: /mirrored/ })
+    ).not.toBeInTheDocument()
+    await user.keyboard('{Escape}')
+
+    await user.type(
+      screen.getByRole('textbox', { name: 'Group name' }),
+      'bundle'
+    )
+    await user.click(screen.getByRole('combobox', { name: 'Select models' }))
+    await user.click(await screen.findByRole('option', { name: 'claude-3' }))
+    await user.click(await screen.findByRole('option', { name: 'gemini' }))
+    await user.keyboard('{Escape}')
+    await user.click(
+      screen.getByRole('button', { name: 'Add selected models' })
+    )
+
+    expect(
+      screen.getAllByRole('textbox', { name: 'Public name' })
+    ).toHaveLength(2)
+    expect(
+      screen.queryByRole('button', { name: 'Add model' })
+    ).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Add group' }))
+
+    const bundle = (
+      await screen.findByRole('button', { name: 'Edit bundle' })
+    ).closest('li')
+    expect(bundle).toHaveTextContent('claude-3')
+    expect(bundle).toHaveTextContent('gemini')
+    expect(
+      screen.queryByRole('textbox', { name: 'Public name' })
+    ).not.toBeInTheDocument()
+  })
+
+  it('discards a new group when the card is cancelled', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await screen.findByRole('button', { name: 'Add group' })
+    await user.click(screen.getByRole('button', { name: 'Add group' }))
+    await user.type(
+      screen.getByRole('textbox', { name: 'Group name' }),
+      'bundle'
+    )
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
+
+    expect(screen.queryByText('bundle')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Edit alias' })).toBeVisible()
+  })
+
+  it('asks before removing a group from the list', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await user.click(
+      await screen.findByRole('button', { name: 'Remove spare' })
+    )
+    expect(screen.getByText('Remove virtual group')).toBeVisible()
+    await user.click(screen.getByRole('button', { name: 'Remove' }))
+
+    expect(screen.queryByText('spare')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Edit alias' })).toBeVisible()
+  })
+
+  it('keeps the open card when the group name is duplicated', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await screen.findByRole('button', { name: 'Edit alias' })
+    await user.click(screen.getByRole('button', { name: 'Add group' }))
+    await user.type(
+      await screen.findByRole('textbox', { name: 'Group name' }),
+      'alias'
+    )
+    await user.click(screen.getByRole('button', { name: 'Add group' }))
+
+    expect(
+      await screen.findByText('Virtual group name is duplicated')
+    ).toBeVisible()
+    expect(screen.getByRole('textbox', { name: 'Group name' })).toHaveValue(
+      'alias'
+    )
+    expect(
+      screen.queryByRole('button', { name: 'Edit spare' })
+    ).not.toBeInTheDocument()
+  })
+
+  it('saves the open editor without returning to the list first', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await user.click(await screen.findByRole('button', { name: 'Edit alias' }))
+    const name = screen.getByRole('textbox', { name: 'Group name' })
+    await user.clear(name)
+    await user.type(name, 'alias-2')
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    expect(
+      await screen.findByRole('button', { name: 'Edit alias-2' })
+    ).toBeVisible()
+    expect(api.put).toHaveBeenCalledWith(
+      '/api/user/self/virtual-groups',
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: 'alias-2',
+          models: [
+            expect.objectContaining({
+              name: 'gpt-4o',
+              source_group: 'default',
+              source_model: 'gpt-4o',
+            }),
+          ],
+        }),
+      ])
+    )
+  })
+})

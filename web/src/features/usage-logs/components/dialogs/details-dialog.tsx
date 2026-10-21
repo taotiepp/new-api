@@ -759,6 +759,18 @@ export function DetailsDialog(props: DetailsDialogProps) {
                 mono
               />
             ) : null}
+            {props.isAdmin && other?.admin_info?.retried === true ? (
+              <DetailRow
+                label={t('Outcome')}
+                value={t('Intermediate failure')}
+              />
+            ) : null}
+            {props.isAdmin && other?.admin_info?.retried === false ? (
+              <DetailRow
+                label={t('Outcome')}
+                value={t('Final failure')}
+              />
+            ) : null}
             <p className='text-xs wrap-break-word whitespace-pre-wrap'>
               {details}
             </p>

@@ -121,6 +121,11 @@ function buildDetailSegments(
   if (isAdmin && other?.admin_info?.quota_saturation) {
     adminSegments.push({ text: t('Quota clamped'), danger: true })
   }
+  if (isAdmin && other?.admin_info?.retried === true) {
+    adminSegments.push({ text: t('Intermediate failure') })
+  } else if (isAdmin && other?.admin_info?.retried === false && log.type === 5) {
+    adminSegments.push({ text: t('Final failure') })
+  }
   return [...adminSegments, ...segments]
 }
 

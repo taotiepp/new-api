@@ -144,6 +144,8 @@ export interface LogOtherData {
     }
     // Reject / intercept reason (admin only)
     reject_reason?: string
+    // True when this error was retried and was not the failure returned to the user.
+    retried?: boolean
     task_plugin?: TaskPluginInfo
     channel_discount?: number
     channel_discount_source?: string

@@ -70,7 +70,7 @@ func TestProcessChannelErrorUsesSnapshotWithoutLeakingChannelMetadata(t *testing
 	}
 	apiErr := types.NewOpenAIError(errors.New("upstream failed"), types.ErrorCodeBadResponseStatusCode, http.StatusBadGateway)
 
-	processChannelError(ctx, channelSnapshot, apiErr, nil)
+	processChannelError(ctx, channelSnapshot, apiErr, nil, false)
 
 	var stored model.Log
 	require.NoError(t, database.First(&stored).Error)
@@ -84,6 +84,7 @@ func TestProcessChannelErrorUsesSnapshotWithoutLeakingChannelMetadata(t *testing
 	adminInfo, ok := storedOther["admin_info"].(map[string]any)
 	require.True(t, ok)
 	assert.Equal(t, []any{"101"}, adminInfo["use_channel"])
+	assert.Equal(t, false, adminInfo[model.LogOtherAdminRetriedKey])
 
 	logs, total, err := model.GetUserLogs(7, model.LogTypeError, 0, 0, "", "", 0, 10, "", "", "")
 	require.NoError(t, err)
@@ -155,6 +156,9 @@ func TestRecordTerminalRelayErrorPersistsFailureReasonWithoutFlag(t *testing.T) 
 	require.NoError(t, err)
 	assert.Equal(t, float64(http.StatusForbidden), storedOther["status_code"])
 	assert.Equal(t, string(types.ErrorCodeInsufficientUserQuota), storedOther["error_code"])
+	adminInfo, ok := storedOther["admin_info"].(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, false, adminInfo[model.LogOtherAdminRetriedKey])
 
 	logs, total, err := model.GetUserLogs(9, model.LogTypeError, 0, 0, "", "", 0, 10, "", "", "")
 	require.NoError(t, err)
@@ -206,7 +210,7 @@ func TestRecordTerminalRelayErrorSkipsWhenAttemptAlreadyLogged(t *testing.T) {
 	common.SetContextKey(ctx, constant.ContextKeyRequestStartTime, time.Now().Add(-time.Second))
 
 	apiErr := types.NewOpenAIError(errors.New("upstream failed"), types.ErrorCodeBadResponseStatusCode, http.StatusBadGateway)
-	processChannelError(ctx, types.ChannelError{ChannelId: 44}, apiErr, nil)
+	processChannelError(ctx, types.ChannelError{ChannelId: 44}, apiErr, nil, false)
 	recordTerminalRelayError(ctx, apiErr, nil)
 
 	var count int64
@@ -267,4 +271,69 @@ func TestRecordTerminalRelayErrorAllowsRelayInfoWithoutChannelMeta(t *testing.T)
 	require.NoError(t, database.First(&stored).Error)
 	assert.Equal(t, 202, stored.ChannelId)
 	assert.Contains(t, stored.Content, "sensitive words detected")
+}
+
+func TestRetriedAttemptErrorLogIsHiddenFromUserLogs(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	previousDB, previousLogDB := model.DB, model.LOG_DB
+	previousRedisEnabled := common.RedisEnabled
+	previousMainDatabaseType := common.MainDatabaseType()
+	previousLogDatabaseType := common.LogDatabaseType()
+	previousErrorLogEnabled := constant.ErrorLogEnabled
+
+	database, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	require.NoError(t, err)
+	sqlDB, err := database.DB()
+	require.NoError(t, err)
+	sqlDB.SetMaxOpenConns(1)
+	require.NoError(t, database.AutoMigrate(&model.User{}, &model.Log{}))
+	model.DB, model.LOG_DB = database, database
+	common.RedisEnabled = false
+	common.SetDatabaseTypes(common.DatabaseTypeSQLite, common.DatabaseTypeSQLite)
+	constant.ErrorLogEnabled = true
+	t.Cleanup(func() {
+		model.DB, model.LOG_DB = previousDB, previousLogDB
+		common.RedisEnabled = previousRedisEnabled
+		common.SetDatabaseTypes(previousMainDatabaseType, previousLogDatabaseType)
+		constant.ErrorLogEnabled = previousErrorLogEnabled
+		require.NoError(t, sqlDB.Close())
+	})
+
+	require.NoError(t, database.Create(&model.User{Id: 12, Username: "retry-owner", Group: "default"}).Error)
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	ctx.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", nil)
+	ctx.Set("id", 12)
+	ctx.Set("username", "retry-owner")
+	ctx.Set("token_name", "retry-token")
+	ctx.Set("token_id", 61)
+	ctx.Set("original_model", "gpt-test")
+	ctx.Set("group", "default")
+	common.SetContextKey(ctx, constant.ContextKeyRequestStartTime, time.Now().Add(-time.Second))
+
+	apiErr := types.NewOpenAIError(errors.New("upstream failed"), types.ErrorCodeBadResponseStatusCode, http.StatusBadGateway)
+	processChannelError(ctx, types.ChannelError{}, apiErr, nil, true)
+
+	var stored model.Log
+	require.NoError(t, database.First(&stored).Error)
+	assert.Contains(t, stored.Other, `"retried":true`)
+
+	logs, total, err := model.GetUserLogs(12, model.LogTypeError, 0, 0, "", "", 0, 10, "", "", "")
+	require.NoError(t, err)
+	assert.Equal(t, int64(0), total)
+	assert.Empty(t, logs)
+
+	tokenLogs, err := model.GetLogByTokenId(61)
+	require.NoError(t, err)
+	assert.Empty(t, tokenLogs)
+
+	adminLogs, adminTotal, err := model.GetAllLogs(model.LogTypeError, 0, 0, "", "", "", 0, 10, 0, "", "", "")
+	require.NoError(t, err)
+	require.Equal(t, int64(1), adminTotal)
+	require.Len(t, adminLogs, 1)
+	adminOther, err := common.StrToMap(adminLogs[0].Other)
+	require.NoError(t, err)
+	adminInfo, ok := adminOther["admin_info"].(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, true, adminInfo[model.LogOtherAdminRetriedKey])
 }

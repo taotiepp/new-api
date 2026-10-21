@@ -274,10 +274,10 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 
 		newAPIError = service.NormalizeViolationFeeError(newAPIError)
 		relayInfo.LastError = newAPIError
-
-		processChannelError(c, *types.NewChannelError(channel.Id, channel.Type, channel.Name, channel.ChannelInfo.IsMultiKey, common.GetContextKeyString(c, constant.ContextKeyChannelKey), channel.GetAutoBan()), newAPIError, relayInfo)
+		channelError := *types.NewChannelError(channel.Id, channel.Type, channel.Name, channel.ChannelInfo.IsMultiKey, common.GetContextKeyString(c, constant.ContextKeyChannelKey), channel.GetAutoBan())
 
 		if c.Writer != nil && c.Writer.Written() {
+			processChannelError(c, channelError, newAPIError, relayInfo, false)
 			break
 		}
 
@@ -288,6 +288,7 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 			}
 			if common.RetryTimes <= 0 && responsesStreamExtraRetry == 0 {
 				responsesStreamExtraRetry = 1
+				processChannelError(c, channelError, newAPIError, relayInfo, true)
 				continue
 			}
 		}
@@ -301,12 +302,15 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 			if retryParam.GetRetry() >= common.RetryTimes {
 				encryptedReasoningExtraRetry = 1
 			}
+			processChannelError(c, channelError, newAPIError, relayInfo, true)
 			continue
 		}
 
 		if !shouldRetry(c, newAPIError, common.RetryTimes-retryParam.GetRetry()) {
+			processChannelError(c, channelError, newAPIError, relayInfo, false)
 			break
 		}
+		processChannelError(c, channelError, newAPIError, relayInfo, true)
 	}
 
 	useChannel := c.GetStringSlice("use_channel")
@@ -494,7 +498,7 @@ func shouldRetry(c *gin.Context, openaiErr *types.NewAPIError, retryTimes int) b
 	return operation_setting.ShouldRetryByStatusCode(code)
 }
 
-func processChannelError(c *gin.Context, channelError types.ChannelError, err *types.NewAPIError, relayInfo *relaycommon.RelayInfo) {
+func processChannelError(c *gin.Context, channelError types.ChannelError, err *types.NewAPIError, relayInfo *relaycommon.RelayInfo, retried bool) {
 	logger.LogError(c, fmt.Sprintf("channel error (channel #%d, status code: %d): %s", channelError.ChannelId, err.StatusCode, common.LocalLogPreview(err.Error())))
 	// 不要使用context获取渠道信息，异步处理时可能会出现渠道信息不一致的情况
 	// do not use context to get channel info, there may be inconsistent channel info when processing asynchronously
@@ -505,7 +509,7 @@ func processChannelError(c *gin.Context, channelError types.ChannelError, err *t
 	}
 
 	if constant.ErrorLogEnabled && types.IsRecordErrorLog(err) {
-		recordRelayErrorLog(c, err, channelError.ChannelId, relayInfo)
+		recordRelayErrorLog(c, err, channelError.ChannelId, relayInfo, retried)
 		c.Set(contextKeyErrorLogRecorded, true)
 	}
 
@@ -523,10 +527,10 @@ func recordTerminalRelayError(c *gin.Context, err *types.NewAPIError, relayInfo 
 	} else {
 		channelId = c.GetInt("channel_id")
 	}
-	recordRelayErrorLog(c, err, channelId, relayInfo)
+	recordRelayErrorLog(c, err, channelId, relayInfo, false)
 }
 
-func recordRelayErrorLog(c *gin.Context, err *types.NewAPIError, channelId int, relayInfo *relaycommon.RelayInfo) {
+func recordRelayErrorLog(c *gin.Context, err *types.NewAPIError, channelId int, relayInfo *relaycommon.RelayInfo, retried bool) {
 	if c == nil || err == nil {
 		return
 	}
@@ -548,6 +552,7 @@ func recordRelayErrorLog(c *gin.Context, err *types.NewAPIError, channelId int, 
 	other.SetPublic("error_type", err.GetErrorType())
 	other.SetPublic("error_code", err.GetErrorCode())
 	other.SetPublic("status_code", err.StatusCode)
+	other.SetAdmin(model.LogOtherAdminRetriedKey, retried)
 	service.AppendRelayLogAdminInfo(c, relayInfo, other)
 	service.AppendTaskPluginContextAuditInfo(c, other)
 	startTime := common.GetContextKeyTime(c, constant.ContextKeyRequestStartTime)
@@ -808,15 +813,14 @@ func executeTaskSubmissionWith(
 			break
 		}
 
+		willRetry := shouldRetryTaskRelay(c, channel.Id, taskErr, common.RetryTimes-retryParam.GetRetry())
 		if !taskErr.LocalError {
 			processChannelError(c,
 				*types.NewChannelError(channel.Id, channel.Type, channel.Name, channel.ChannelInfo.IsMultiKey,
 					common.GetContextKeyString(c, constant.ContextKeyChannelKey), channel.GetAutoBan()),
 				types.NewOpenAIError(taskErr.Error, types.ErrorCodeBadResponseStatusCode, taskErr.StatusCode),
-				relayInfo)
+				relayInfo, willRetry)
 		}
-
-		willRetry := shouldRetryTaskRelay(c, channel.Id, taskErr, common.RetryTimes-retryParam.GetRetry())
 		diagnostics.attemptFailed(retryParam.GetRetry()+1, channel, taskErr, willRetry)
 		if !willRetry {
 			break
