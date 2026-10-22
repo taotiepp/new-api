@@ -68,13 +68,16 @@ func OaiResponsesHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http
 func OaiResponsesStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Response) (*dto.Usage, *types.NewAPIError) {
 	if resp == nil || resp.Body == nil {
 		logger.LogError(c, "invalid response or response body")
-		return nil, types.NewError(fmt.Errorf("invalid response"), types.ErrorCodeBadResponse)
+		err := types.NewError(fmt.Errorf("invalid response"), types.ErrorCodeBadResponse)
+		err.SetUpstreamBody("")
+		return nil, err
 	}
 
 	defer service.CloseResponseBodyGracefully(resp)
 
 	var usage = &dto.Usage{}
 	var responseTextBuilder strings.Builder
+	var received strings.Builder
 	var terminalErr *types.NewAPIError
 	var pendingResponses []dto.ResponsesStreamResponse
 	var pendingData []string
@@ -105,6 +108,10 @@ func OaiResponsesStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp
 	}
 
 	helper.StreamScannerHandler(c, resp, info, func(data string, sr *helper.StreamResult) {
+		if received.Len() > 0 {
+			received.WriteByte('\n')
+		}
+		received.WriteString(data)
 
 		// 检查当前数据是否包含 completed 状态和 usage 信息
 		var streamResponse dto.ResponsesStreamResponse
@@ -202,6 +209,7 @@ func OaiResponsesStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp
 
 	if terminalErr != nil {
 		markIncompleteResponsesStreamForRetry(c, info, committed)
+		terminalErr.SetUpstreamBody(received.String())
 		return nil, terminalErr
 	}
 	if !sawCompleted || !responsesStreamHasBillableUsage(info, usage) {
@@ -214,7 +222,9 @@ func OaiResponsesStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp
 			message = "upstream responses stream completed without billable usage"
 		}
 		markIncompleteResponsesStreamForRetry(c, info, committed)
-		return nil, types.NewOpenAIError(fmt.Errorf("%s", message), types.ErrorCodeBadResponse, http.StatusBadGateway)
+		err := types.NewOpenAIError(fmt.Errorf("%s", message), types.ErrorCodeBadResponse, http.StatusBadGateway)
+		err.SetUpstreamBody(received.String())
+		return nil, err
 	}
 
 	commitEvents()

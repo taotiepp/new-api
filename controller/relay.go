@@ -501,7 +501,7 @@ func shouldRetry(c *gin.Context, openaiErr *types.NewAPIError, retryTimes int) b
 }
 
 func processChannelError(c *gin.Context, channelError types.ChannelError, err *types.NewAPIError, relayInfo *relaycommon.RelayInfo, retried bool) {
-	logger.LogError(c, fmt.Sprintf("channel error (channel #%d, status code: %d): %s", channelError.ChannelId, err.StatusCode, common.LocalLogPreview(err.Error())))
+	logger.LogError(c, fmt.Sprintf("channel error (channel #%d, status code: %d): %s", channelError.ChannelId, err.StatusCode, common.LocalLogPreview(relayErrorServerLog(err))))
 	// 不要使用context获取渠道信息，异步处理时可能会出现渠道信息不一致的情况
 	// do not use context to get channel info, there may be inconsistent channel info when processing asynchronously
 	if service.ShouldDisableChannel(err) && channelError.AutoBan {
@@ -555,6 +555,9 @@ func recordRelayErrorLog(c *gin.Context, err *types.NewAPIError, channelId int, 
 	other.SetPublic("error_code", err.GetErrorCode())
 	other.SetPublic("status_code", err.StatusCode)
 	other.SetAdmin(model.LogOtherAdminRetriedKey, retried)
+	if err.HasUpstreamBody() {
+		other.SetAdmin(model.LogOtherAdminUpstreamBodyKey, err.UpstreamBody())
+	}
 	service.AppendRelayLogAdminInfo(c, relayInfo, other)
 	service.AppendTaskPluginContextAuditInfo(c, other)
 	startTime := common.GetContextKeyTime(c, constant.ContextKeyRequestStartTime)
@@ -567,6 +570,19 @@ func recordRelayErrorLog(c *gin.Context, err *types.NewAPIError, channelId int, 
 		isStream = relayInfo.IsStream
 	}
 	model.RecordErrorLog(c, userId, channelId, modelName, tokenName, err.MaskSensitiveErrorWithStatusCode(), tokenId, useTimeSeconds, isStream, userGroup, other)
+}
+
+// relayErrorServerLog is the process log line. The stored error content stays
+// the status message; the captured upstream response is logged beside it.
+func relayErrorServerLog(err *types.NewAPIError) string {
+	if err == nil {
+		return ""
+	}
+	content := err.MaskSensitiveErrorWithStatusCode()
+	if !err.HasUpstreamBody() {
+		return content
+	}
+	return content + "\nupstream_body: " + err.UpstreamBody()
 }
 
 func RelayMidjourney(c *gin.Context) {

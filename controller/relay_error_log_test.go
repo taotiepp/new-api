@@ -69,12 +69,16 @@ func TestProcessChannelErrorUsesSnapshotWithoutLeakingChannelMetadata(t *testing
 		AutoBan:     false,
 	}
 	apiErr := types.NewOpenAIError(errors.New("upstream failed"), types.ErrorCodeBadResponseStatusCode, http.StatusBadGateway)
+	apiErr.SetUpstreamBody(`{"error":{"message":"original upstream failure"}}`)
 
 	processChannelError(ctx, channelSnapshot, apiErr, nil, false)
 
 	var stored model.Log
 	require.NoError(t, database.First(&stored).Error)
 	assert.Equal(t, channelSnapshot.ChannelId, stored.ChannelId)
+	assert.Contains(t, stored.Content, "upstream failed")
+	assert.NotContains(t, stored.Content, "upstream_body")
+	assert.NotContains(t, stored.Content, "original upstream failure")
 	storedOther, err := common.StrToMap(stored.Other)
 	require.NoError(t, err)
 	assert.Equal(t, float64(http.StatusBadGateway), storedOther["status_code"])
@@ -85,6 +89,7 @@ func TestProcessChannelErrorUsesSnapshotWithoutLeakingChannelMetadata(t *testing
 	require.True(t, ok)
 	assert.Equal(t, []any{"101"}, adminInfo["use_channel"])
 	assert.Equal(t, false, adminInfo[model.LogOtherAdminRetriedKey])
+	assert.Equal(t, `{"error":{"message":"original upstream failure"}}`, adminInfo[model.LogOtherAdminUpstreamBodyKey])
 
 	logs, total, err := model.GetUserLogs(7, model.LogTypeError, 0, 0, "", "", 0, 10, "", "", "")
 	require.NoError(t, err)

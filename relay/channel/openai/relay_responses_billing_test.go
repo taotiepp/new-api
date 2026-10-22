@@ -288,8 +288,18 @@ func TestOaiResponsesStreamHandlerRejectsEOFWithoutCompletion(t *testing.T) {
 	require.NotNil(t, apiErr)
 	assert.Equal(t, http.StatusBadGateway, apiErr.StatusCode)
 	assert.Contains(t, apiErr.Error(), "without a completed response")
+	assert.True(t, apiErr.HasUpstreamBody())
+	assert.Contains(t, apiErr.UpstreamBody(), `"type":"response.created"`)
 	assert.Empty(t, w.Body.String())
 	assert.True(t, common.GetContextKeyBool(c, constant.ContextKeyRetryIncompleteResponsesStream))
+}
+
+func TestOaiResponsesStreamHandlerRecordsEmptyUpstreamBody(t *testing.T) {
+	_, apiErr, _, _ := runResponsesImageBillingStream(t)
+
+	require.NotNil(t, apiErr)
+	assert.True(t, apiErr.HasUpstreamBody())
+	assert.Empty(t, apiErr.UpstreamBody())
 }
 
 func TestOaiResponsesStreamHandlerRejectsFailedEvent(t *testing.T) {
@@ -301,6 +311,8 @@ func TestOaiResponsesStreamHandlerRejectsFailedEvent(t *testing.T) {
 	require.NotNil(t, apiErr)
 	assert.Equal(t, http.StatusBadGateway, apiErr.StatusCode)
 	assert.Contains(t, apiErr.Error(), "could not be verified")
+	assert.True(t, apiErr.HasUpstreamBody())
+	assert.Contains(t, apiErr.UpstreamBody(), "could not be verified")
 	assert.Empty(t, w.Body.String())
 	assert.True(t, common.GetContextKeyBool(c, constant.ContextKeyRetryIncompleteResponsesStream))
 }
@@ -313,6 +325,8 @@ func TestOaiResponsesStreamHandlerKeepsStartedOutputOnFailure(t *testing.T) {
 	)
 
 	require.NotNil(t, apiErr)
+	assert.True(t, apiErr.HasUpstreamBody())
+	assert.Contains(t, apiErr.UpstreamBody(), `"delta":"hello"`)
 	assert.Contains(t, w.Body.String(), "hello")
 	assert.False(t, common.GetContextKeyBool(c, constant.ContextKeyRetryIncompleteResponsesStream))
 }

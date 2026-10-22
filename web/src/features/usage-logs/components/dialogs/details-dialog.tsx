@@ -496,6 +496,7 @@ export function DetailsDialog(props: DetailsDialogProps) {
     (model) => model.model_name === props.log.model_name
   )?.billing_usage_schema
   const hasAudioTokens = other?.ws || other?.audio
+  const upstreamBody = other?.admin_info?.upstream_body
   const showTiming = isTimingLogType(props.log.type)
   const showAdminIp =
     !!props.log.ip && (showTiming || (props.isAdmin && isTopup))
@@ -774,6 +775,14 @@ export function DetailsDialog(props: DetailsDialogProps) {
             <p className='text-xs wrap-break-word whitespace-pre-wrap'>
               {details}
             </p>
+            {props.isAdmin && upstreamBody !== undefined ? (
+              <pre className='bg-background/60 mt-2 max-h-80 overflow-y-auto rounded border p-2 font-mono text-[11px] leading-relaxed wrap-break-word whitespace-pre-wrap'>
+                <span className='text-muted-foreground mb-1 block font-sans'>
+                  {t('Upstream response')}
+                </span>
+                {upstreamBody}
+              </pre>
+            ) : null}
           </DetailSection>
         ) : null}
 

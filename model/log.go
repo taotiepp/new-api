@@ -143,6 +143,10 @@ func FormatRootLogs(logs []*Log) {
 // User-facing log queries hide rows whose stored other JSON contains the compact true value.
 const LogOtherAdminRetriedKey = "retried"
 
+// LogOtherAdminUpstreamBodyKey stores the upstream response captured for an error log.
+// An empty string means the failure was read and the response was empty.
+const LogOtherAdminUpstreamBodyKey = "upstream_body"
+
 func excludeRetriedAttemptLogs(tx *gorm.DB, column string) *gorm.DB {
 	marker := `"` + LogOtherAdminRetriedKey + `":true`
 	return tx.Where("("+column+" IS NULL OR "+column+" NOT LIKE ?)", "%"+marker+"%")

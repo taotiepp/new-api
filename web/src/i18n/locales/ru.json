@@ -6052,6 +6052,7 @@
     "Upstream protocol plan": "Схема протокола поставщика",
     "Upstream ratios fetched successfully": "Коэффициенты upstream успешно получены",
     "Upstream Request ID": "ID вышестоящего запроса",
+    "Upstream response": "Ответ вышестоящего сервиса",
     "Upstream Response": "Ответ Upstream",
     "Upstream Response (billing-usage-anthropic-estimated)": "Ответ upstream (billing-usage-anthropic-estimated)",
     "Upstream Response (billing-usage-anthropic)": "Ответ upstream (billing-usage-anthropic)",

@@ -96,6 +96,11 @@ type NewAPIError struct {
 	errorCode      ErrorCode
 	StatusCode     int
 	Metadata       json.RawMessage
+	// upstreamBody is the raw upstream response captured for failure logs.
+	// It is not part of the error returned to the client.
+	// upstreamBodySet stays true when the captured response is empty.
+	upstreamBody    string
+	upstreamBodySet bool
 }
 
 // Unwrap enables errors.Is / errors.As to work with NewAPIError by exposing the underlying error.
@@ -175,6 +180,32 @@ func (e *NewAPIError) MaskSensitiveErrorWithStatusCode() string {
 
 func (e *NewAPIError) SetMessage(message string) {
 	e.Err = errors.New(message)
+}
+
+// SetUpstreamBody keeps the raw upstream response for failure logs.
+// An empty body still counts as captured.
+func (e *NewAPIError) SetUpstreamBody(body string) {
+	if e == nil {
+		return
+	}
+	e.upstreamBody = body
+	e.upstreamBodySet = true
+}
+
+// HasUpstreamBody reports whether this failure captured an upstream response.
+func (e *NewAPIError) HasUpstreamBody() bool {
+	if e == nil {
+		return false
+	}
+	return e.upstreamBodySet
+}
+
+// UpstreamBody returns the raw upstream response captured when this failure was read.
+func (e *NewAPIError) UpstreamBody() string {
+	if e == nil {
+		return ""
+	}
+	return e.upstreamBody
 }
 
 func (e *NewAPIError) ToOpenAIError() OpenAIError {

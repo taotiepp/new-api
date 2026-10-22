@@ -105,4 +105,45 @@ describe('usage log reject reason', () => {
     expect(screen.getByText('Failure reason')).toBeInTheDocument()
     expect(screen.getByText('request rejected')).toBeInTheDocument()
   })
+
+  test('shows the captured upstream response only to admins', () => {
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    })
+    queryClients.push(queryClient)
+    const log = makeLog({
+      admin_info: {
+        upstream_body: '',
+      },
+    })
+
+    const { unmount } = render(
+      <QueryClientProvider client={queryClient}>
+        <DetailsDialog
+          log={log}
+          isAdmin
+          isRoot={false}
+          open
+          onOpenChange={() => undefined}
+        />
+      </QueryClientProvider>
+    )
+
+    expect(screen.getByText('Upstream response')).toBeInTheDocument()
+    unmount()
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <DetailsDialog
+          log={log}
+          isAdmin={false}
+          isRoot={false}
+          open
+          onOpenChange={() => undefined}
+        />
+      </QueryClientProvider>
+    )
+
+    expect(screen.queryByText('Upstream response')).toBeNull()
+  })
 })
