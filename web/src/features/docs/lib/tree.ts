@@ -33,3 +33,39 @@ export function docPathFromLocation(pathname: string): string {
   if (!pathname.startsWith(prefix)) return ''
   return decodeURIComponent(pathname.slice(prefix.length))
 }
+
+// docPathFromHref resolves a markdown link against the current page.
+// Links outside the docs site return null. The docs index returns an empty path.
+export function docPathFromHref(href: string, base: string): string | null {
+  if (href.startsWith('#')) return null
+  let url: URL
+  try {
+    url = new URL(href, base)
+  } catch {
+    return null
+  }
+  let baseUrl: URL
+  try {
+    baseUrl = new URL(base)
+  } catch {
+    return null
+  }
+  if (url.origin !== baseUrl.origin) return null
+  if (url.pathname === '/app/docs' || url.pathname === '/app/docs/') return ''
+  const prefix = '/app/docs/'
+  if (!url.pathname.startsWith(prefix)) return null
+  const path = decodeURIComponent(url.pathname.slice(prefix.length)).replace(
+    /\/+$/,
+    ''
+  )
+  const segments = path.split('/')
+  if (
+    path === '' ||
+    segments.some(
+      (segment) => segment === '' || segment === '.' || segment === '..'
+    )
+  ) {
+    return null
+  }
+  return path
+}

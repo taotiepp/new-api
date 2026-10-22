@@ -18,7 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { describe, expect, test } from 'vitest'
 
-import { docPathFromLocation, firstDocPath } from '../lib/tree'
+import { docPathFromHref, docPathFromLocation, firstDocPath } from '../lib/tree'
 import type { DocNode } from '../types'
 
 const tree: DocNode[] = [
@@ -53,5 +53,22 @@ describe('doc tree helpers', () => {
       'api/openai/http guide'
     )
     expect(docPathFromLocation('/pricing')).toBe('')
+  })
+
+  test('resolves links that stay inside the docs site', () => {
+    const base = 'https://gateway.example/app/docs/model-calling'
+    expect(docPathFromHref('/app/docs/virtual-groups', base)).toBe(
+      'virtual-groups'
+    )
+    expect(docPathFromHref('virtual-groups', base)).toBe('virtual-groups')
+    expect(docPathFromHref('/app/docs/api/openai/http', base)).toBe(
+      'api/openai/http'
+    )
+    expect(docPathFromHref('/app/docs', base)).toBe('')
+    expect(docPathFromHref('https://example.com/app/docs/virtual-groups', base)).toBe(
+      null
+    )
+    expect(docPathFromHref('/pricing', base)).toBe(null)
+    expect(docPathFromHref('#section', base)).toBe(null)
   })
 })

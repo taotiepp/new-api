@@ -17,6 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { useQuery } from '@tanstack/react-query'
+import { useNavigate } from '@tanstack/react-router'
 import { isAxiosError } from 'axios'
 import { useTranslation } from 'react-i18next'
 
@@ -25,9 +26,11 @@ import { LoadingState } from '@/components/loading-state'
 import { RichContent } from '@/components/rich-content'
 
 import { getDocPage } from '../api'
+import { docPathFromHref } from '../lib/tree'
 
 export function DocsArticle(props: { path: string }) {
   const { t } = useTranslation()
+  const navigate = useNavigate()
   const pageQuery = useQuery({
     queryKey: ['doc-site', 'page', props.path],
     queryFn: () => getDocPage(props.path),
@@ -61,7 +64,34 @@ export function DocsArticle(props: { path: string }) {
   }
 
   return (
-    <article className='min-w-0'>
+    <article
+      className='min-w-0'
+      onClick={(event) => {
+        if (
+          event.defaultPrevented ||
+          event.button !== 0 ||
+          event.metaKey ||
+          event.ctrlKey ||
+          event.shiftKey ||
+          event.altKey
+        ) {
+          return
+        }
+        const anchor = (event.target as Element | null)?.closest('a')
+        if (!anchor || !event.currentTarget.contains(anchor)) return
+        if (anchor.target === '_blank') return
+        const href = anchor.getAttribute('href')
+        if (!href || href.startsWith('#')) return
+        const docPath = docPathFromHref(href, window.location.href)
+        if (docPath === null) return
+        event.preventDefault()
+        if (docPath === '') {
+          void navigate({ to: '/app/docs' })
+          return
+        }
+        void navigate({ to: '/app/docs/$', params: { _splat: docPath } })
+      }}
+    >
       <RichContent content={pageQuery.data.data.content} />
     </article>
   )

@@ -718,6 +718,15 @@ const markdownParser = new Marked({
 
 markdownParser.use(...markdownExtensions)
 
+function isExternalHref(href: string): boolean {
+  try {
+    const url = new URL(href, window.location.href)
+    return url.origin !== window.location.origin
+  } catch {
+    return false
+  }
+}
+
 function addExternalLinkAttributes(html: string): string {
   if (typeof window === 'undefined') {
     return html
@@ -727,6 +736,8 @@ function addExternalLinkAttributes(html: string): string {
   template.innerHTML = html
 
   template.content.querySelectorAll('a[href]').forEach((link) => {
+    const href = link.getAttribute('href')
+    if (!href || !isExternalHref(href)) return
     link.setAttribute('target', '_blank')
     link.setAttribute('rel', 'noopener noreferrer')
   })
