@@ -160,6 +160,8 @@ describe('portal invoice history', () => {
     const user = userEvent.setup()
     renderPanel(<PortalBillPanel />)
 
+    expect(await screen.findByText('Exportable balance')).toBeInTheDocument()
+    expect(screen.getByText('Export records')).toBeInTheDocument()
     expect(await screen.findByText('INV-2026-10-0007-01')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Export invoice' }))
 

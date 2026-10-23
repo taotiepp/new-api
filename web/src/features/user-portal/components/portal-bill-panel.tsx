@@ -37,6 +37,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { issueUserInvoice, type UserInvoice } from '@/features/dashboard/api'
 import { usePricingCurrency } from '@/lib/currency'
 import dayjs from '@/lib/dayjs'
+import { formatNumber } from '@/lib/format'
 import { handleServerError } from '@/lib/handle-server-error'
 import { requireServerSuccess } from '@/lib/server-error-message'
 import { dateToUnixTimestamp } from '@/lib/time'
@@ -114,6 +115,23 @@ export function PortalBillPanel() {
     (uninvoiced?.count ?? 0) === 0 &&
     (uninvoiced?.token_used ?? 0) === 0
   const history = invoices.data?.invoices ?? []
+  let exportableBalance = (
+    <>
+      {formatQuota(uninvoiced?.quota ?? 0)}
+      <span className='text-muted-foreground ml-2 text-sm font-medium'>
+        {catalogCurrency}
+      </span>
+    </>
+  )
+  if (invoices.isLoading) {
+    exportableBalance = <Skeleton className='h-9 w-32' />
+  } else if (invoices.isError) {
+    exportableBalance = (
+      <span className='text-muted-foreground text-base font-medium'>
+        {t('Failed to load bills')}
+      </span>
+    )
+  }
 
   const issueInvoice = async () => {
     setIssuing(true)
@@ -233,7 +251,7 @@ export function PortalBillPanel() {
           : t('Bill overview')}
       </p>
 
-      <div className='grid gap-3 xl:grid-cols-[minmax(16rem,22rem)_minmax(0,1fr)]'>
+      <div className='grid gap-3 xl:grid-cols-[minmax(14rem,18rem)_minmax(14rem,18rem)_minmax(0,1fr)]'>
         <article className='border-b border-[var(--portal-hairline)] py-5'>
           <p className='text-muted-foreground text-sm'>
             {t('{{month}} bill', { month: monthValue })}
@@ -250,15 +268,18 @@ export function PortalBillPanel() {
               </>
             )}
           </p>
-          <p className='text-muted-foreground mt-2 text-sm'>
-            {t('Uninvoiced')}{' '}
-            <span className='text-foreground font-medium tabular-nums'>
-              {invoices.isLoading ? (
-                <Skeleton className='inline-block h-4 w-16 align-middle' />
-              ) : (
-                formatQuota(uninvoiced?.quota ?? 0)
-              )}
-            </span>
+        </article>
+        <article className='border-b border-[var(--portal-hairline)] py-5'>
+          <p className='text-muted-foreground text-sm'>
+            {t('Exportable balance')}
+          </p>
+          <p className='mt-3 text-3xl font-semibold tracking-tight tabular-nums'>
+            {exportableBalance}
+          </p>
+          <p className='text-muted-foreground mt-2 text-sm tabular-nums'>
+            {formatNumber(uninvoiced?.count ?? 0)} {t('Requests')}
+            <span className='mx-2'>·</span>
+            {formatNumber(uninvoiced?.token_used ?? 0)} {t('Tokens')}
           </p>
         </article>
         <PortalBillingChart
@@ -271,11 +292,6 @@ export function PortalBillPanel() {
         />
       </div>
 
-      {bills.isError ? (
-        <ErrorState className='min-h-48' title={t('Failed to load bills')} />
-      ) : (
-        <PortalBillModelChart shares={shares} loading={bills.isLoading} />
-      )}
       <PortalInvoiceHistory
         loading={invoices.isLoading}
         error={invoices.isError}
@@ -290,6 +306,11 @@ export function PortalBillPanel() {
           setInvoiceOpen(true)
         }}
       />
+      {bills.isError ? (
+        <ErrorState className='min-h-48' title={t('Failed to load bills')} />
+      ) : (
+        <PortalBillModelChart shares={shares} loading={bills.isLoading} />
+      )}
       <PortalBillInvoiceDialog
         open={invoiceOpen}
         onOpenChange={setInvoiceOpen}

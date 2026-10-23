@@ -76,7 +76,9 @@ export function PortalInvoiceHistory(props: PortalInvoiceHistoryProps) {
   } else if (props.invoices.length === 0) {
     body = (
       <p className='text-muted-foreground mt-4 text-sm'>
-        {props.loading ? t('Loading...') : t('No invoices for this period.')}
+        {props.loading
+          ? t('Loading...')
+          : t('No export records for this period.')}
       </p>
     )
   }
@@ -84,10 +86,10 @@ export function PortalInvoiceHistory(props: PortalInvoiceHistoryProps) {
   return (
     <section className='border-t border-[var(--portal-hairline)] pt-5'>
       <h2 className='text-sm font-semibold text-[var(--portal-ink)]'>
-        {t('Invoice history')}
+        {t('Export records')}
       </h2>
       <p className='text-muted-foreground mt-1 text-sm'>
-        {t('Each invoice covers only usage since the previous one.')}
+        {t('Each export covers only usage since the previous one.')}
       </p>
       {body}
     </section>
