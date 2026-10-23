@@ -2,12 +2,14 @@ package model
 
 import (
 	"cmp"
+	"context"
 	"errors"
 	"fmt"
 	"slices"
 	"time"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // ErrNothingToInvoice means every quota row in the period is already covered.
@@ -71,13 +73,32 @@ func formatUserInvoiceNumber(period string, userId int, sequence int) string {
 	return fmt.Sprintf("INV-%s-%04d-%02d", period, userId, sequence)
 }
 
+// invoiceQuery starts a new statement on db. lockForUpdate returns a session
+// GORM will not clone, so a second query would keep quota_data as its table.
+// A row lock on that session is applied again to the new statement.
+func invoiceQuery(db *gorm.DB) *gorm.DB {
+	ctx := context.Background()
+	locked := false
+	if db != nil && db.Statement != nil {
+		if db.Statement.Context != nil {
+			ctx = db.Statement.Context
+		}
+		_, locked = db.Statement.Clauses["FOR"]
+	}
+	session := db.Session(&gorm.Session{NewDB: true, Context: ctx})
+	if locked {
+		return session.Clauses(clause.Locking{Strength: "UPDATE"})
+	}
+	return session
+}
+
 func collectInvoiceDeltas(db *gorm.DB, userId int, period string) ([]invoiceDelta, error) {
 	start, end, ok := ParseBillPeriod(period)
 	if !ok {
 		return nil, fmt.Errorf("invalid period")
 	}
 	var rows []QuotaData
-	if err := db.Where("user_id = ? AND created_at >= ? AND created_at <= ?", userId, start.Unix(), end.Unix()).
+	if err := invoiceQuery(db).Where("user_id = ? AND created_at >= ? AND created_at <= ?", userId, start.Unix(), end.Unix()).
 		Find(&rows).Error; err != nil {
 		return nil, err
 	}
@@ -94,7 +115,7 @@ func collectInvoiceDeltas(db *gorm.DB, userId int, period string) ([]invoiceDelt
 	allocated := map[int]UserInvoiceAllocation{}
 	if len(ids) > 0 {
 		var existing []UserInvoiceAllocation
-		if err := db.Where("user_id = ? AND quota_data_id IN ?", userId, ids).Find(&existing).Error; err != nil {
+		if err := invoiceQuery(db).Where("user_id = ? AND quota_data_id IN ?", userId, ids).Find(&existing).Error; err != nil {
 			return nil, err
 		}
 		for _, item := range existing {
@@ -243,7 +264,7 @@ func IssueUserInvoice(userId int, period string, now time.Time) (*UserInvoice, e
 		}
 		for _, delta := range deltas {
 			var current UserInvoiceAllocation
-			err := tx.Where("user_id = ? AND quota_data_id = ?", userId, delta.row.Id).
+			err := invoiceQuery(tx).Where("user_id = ? AND quota_data_id = ?", userId, delta.row.Id).
 				Limit(1).
 				Find(&current).Error
 			if err != nil {
