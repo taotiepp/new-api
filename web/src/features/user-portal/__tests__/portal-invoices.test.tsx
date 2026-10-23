@@ -154,6 +154,28 @@ describe('portal invoice history', () => {
         items: [
           { model_name: 'gpt-a', quota: 50, count: 1, token_used: 15 },
         ],
+        issuer: {
+          name: 'Cursor',
+          line1: '801 West End Avenue',
+          line2: '',
+          city: 'New York',
+          region: 'New York',
+          postal_code: '10025',
+          country: 'United States',
+          phone: '+1 831-425-9504',
+          email: 'hi@cursor.com',
+        },
+        bill_to: {
+          name: 'Ada Zhang',
+          line1: 'zhongguandonglu',
+          line2: 'haidian',
+          city: 'Beijing',
+          region: '',
+          postal_code: '100010',
+          country: 'China',
+          phone: '',
+          email: 'ada@example.com',
+        },
       },
     })
 
@@ -166,6 +188,8 @@ describe('portal invoice history', () => {
     await user.click(screen.getByRole('button', { name: 'Export invoice' }))
 
     expect(await screen.findByText('INV-2026-10-0007-02')).toBeInTheDocument()
+    expect(screen.getByText('Ada Zhang')).toBeInTheDocument()
+    expect(screen.getByText(/hi@cursor.com/)).toBeInTheDocument()
     expect(screen.getByText('INV-2026-10-0007-01')).toBeInTheDocument()
     await waitFor(() => {
       expect(issueUserInvoice).toHaveBeenCalledWith(
@@ -214,6 +238,47 @@ describe('portal invoice history', () => {
     renderPanel(<PortalBillPanel />)
 
     expect(await screen.findByText('INV-2026-10-0007-01')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Export invoice' })).toBeDisabled()
+    expect(issueUserInvoice).not.toHaveBeenCalled()
+  })
+
+  test('links to billing details when the invoice profile is missing', async () => {
+    useAuthStore.getState().auth.setUser({
+      id: 7,
+      username: 'ada',
+      role: ROLE.USER,
+    })
+    getUserBills.mockResolvedValue({
+      success: true,
+      data: {
+        period: '2026-10',
+        quota: 20,
+        count: 1,
+        token_used: 4,
+        items: [],
+        trend: [],
+      },
+    })
+    listUserInvoices.mockResolvedValue({
+      success: true,
+      data: {
+        invoices: [],
+        uninvoiced: { quota: 20, count: 1, token_used: 4, items: [] },
+        bill_to_ready: false,
+      },
+    })
+
+    renderPanel(<PortalBillPanel />)
+
+    expect(
+      await screen.findByText(
+        'Set your billing details before exporting an invoice.'
+      )
+    ).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Set billing details' })).toHaveAttribute(
+      'href',
+      '/app/settings'
+    )
     expect(screen.getByRole('button', { name: 'Export invoice' })).toBeDisabled()
     expect(issueUserInvoice).not.toHaveBeenCalled()
   })

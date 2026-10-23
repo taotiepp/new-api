@@ -114,6 +114,8 @@ export function PortalBillPanel() {
     (uninvoiced?.quota ?? 0) === 0 &&
     (uninvoiced?.count ?? 0) === 0 &&
     (uninvoiced?.token_used ?? 0) === 0
+  const needsBillingDetails =
+    invoices.isSuccess && invoices.data.bill_to_ready === false
   const history = invoices.data?.invoices ?? []
   let exportableBalance = (
     <>
@@ -153,6 +155,15 @@ export function PortalBillPanel() {
         error.message === 'nothing new to invoice'
       ) {
         toast.error(t('Nothing new to invoice'))
+        return
+      }
+      if (
+        error instanceof Error &&
+        error.message === 'invoice profile required'
+      ) {
+        toast.error(
+          t('Set your billing details before exporting an invoice.')
+        )
         return
       }
       handleServerError(error)
@@ -226,7 +237,8 @@ export function PortalBillPanel() {
               bills.isError ||
               invoices.isLoading ||
               issuing ||
-              nothingNew
+              nothingNew ||
+              needsBillingDetails
             }
           >
             <Download className='size-3.5' />
@@ -244,6 +256,22 @@ export function PortalBillPanel() {
           </Link>
         </div>
       </header>
+
+      {needsBillingDetails ? (
+        <p className='text-sm text-[var(--portal-ink)]'>
+          {subjectUser.subject
+            ? t('This account has not set billing details.')
+            : t('Set your billing details before exporting an invoice.')}{' '}
+          {subjectUser.subject ? null : (
+            <Link
+              to='/app/settings'
+              className='underline underline-offset-2'
+            >
+              {t('Set billing details')}
+            </Link>
+          )}
+        </p>
+      ) : null}
 
       <p className='text-muted-foreground border-t border-[var(--portal-hairline)] pt-4 text-sm'>
         {isCurrentMonth
@@ -315,7 +343,8 @@ export function PortalBillPanel() {
         open={invoiceOpen}
         onOpenChange={setInvoiceOpen}
         invoice={activeInvoice}
-        subjectUser={subjectUser.subject}
+        issuer={invoices.data?.issuer}
+        billTo={invoices.data?.bill_to}
       />
     </div>
   )

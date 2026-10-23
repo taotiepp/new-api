@@ -17,6 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { api } from '@/lib/api'
+import type { InvoiceParty } from '@/features/profile/types'
 
 import type {
   FlowQuotaDataItem,
@@ -97,6 +98,8 @@ export type UserInvoice = {
   token_used: number
   created_at: number
   items: UserInvoiceItem[]
+  issuer?: InvoiceParty
+  bill_to?: InvoiceParty
 }
 
 export type UserInvoiceHistory = {
@@ -107,6 +110,9 @@ export type UserInvoiceHistory = {
     token_used: number
     items: UserInvoiceItem[]
   }
+  issuer?: InvoiceParty
+  bill_to?: InvoiceParty
+  bill_to_ready?: boolean
 }
 
 export async function listUserInvoices(params: {

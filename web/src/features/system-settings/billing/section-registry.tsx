@@ -28,6 +28,7 @@ import { PaymentSettingsSection } from '../integrations/payment-settings-section
 import { RatioSettingsCard } from '../models/ratio-settings-card'
 import type { BillingSettings } from '../types'
 import { createSectionRegistry } from '../utils/section-registry'
+import { InvoiceIssuerSection } from './invoice-issuer-section'
 
 const getModelDefaults = (settings: BillingSettings) => ({
   ModelPrice: settings.ModelPrice,
@@ -190,6 +191,25 @@ const BILLING_SECTIONS = [
             settings['payment_setting.compliance_terms_version'] ?? '',
           confirmedAt: settings['payment_setting.compliance_confirmed_at'] ?? 0,
           confirmedBy: settings['payment_setting.compliance_confirmed_by'] ?? 0,
+        }}
+      />
+    ),
+  },
+  {
+    id: 'invoice-issuer',
+    titleKey: 'Invoice issuer',
+    build: (settings: BillingSettings) => (
+      <InvoiceIssuerSection
+        defaultValues={{
+          name: settings['invoice_setting.name'] ?? '',
+          line1: settings['invoice_setting.line1'] ?? '',
+          line2: settings['invoice_setting.line2'] ?? '',
+          city: settings['invoice_setting.city'] ?? '',
+          region: settings['invoice_setting.region'] ?? '',
+          postal_code: settings['invoice_setting.postal_code'] ?? '',
+          country: settings['invoice_setting.country'] ?? '',
+          phone: settings['invoice_setting.phone'] ?? '',
+          email: settings['invoice_setting.email'] ?? '',
         }}
       />
     ),

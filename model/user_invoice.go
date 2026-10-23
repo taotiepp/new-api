@@ -8,6 +8,9 @@ import (
 	"slices"
 	"time"
 
+	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/relaykit/dto"
+
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -18,16 +21,20 @@ var ErrNothingToInvoice = errors.New("nothing new to invoice")
 // UserInvoice is one issued statement. Later invoices for the same month
 // cover only quota that was not on an earlier invoice.
 type UserInvoice struct {
-	Id        int               `json:"id"`
-	UserId    int               `json:"user_id" gorm:"uniqueIndex:uk_user_invoice_seq,priority:1"`
-	Period    string            `json:"period" gorm:"size:7;uniqueIndex:uk_user_invoice_seq,priority:2"`
-	Sequence  int               `json:"sequence" gorm:"uniqueIndex:uk_user_invoice_seq,priority:3"`
-	Number    string            `json:"number" gorm:"size:64;uniqueIndex"`
-	Quota     int               `json:"quota"`
-	Count     int               `json:"count"`
-	TokenUsed int               `json:"token_used"`
-	CreatedAt int64             `json:"created_at"`
-	Items     []UserInvoiceItem `json:"items" gorm:"-"`
+	Id             int               `json:"id"`
+	UserId         int               `json:"user_id" gorm:"uniqueIndex:uk_user_invoice_seq,priority:1"`
+	Period         string            `json:"period" gorm:"size:7;uniqueIndex:uk_user_invoice_seq,priority:2"`
+	Sequence       int               `json:"sequence" gorm:"uniqueIndex:uk_user_invoice_seq,priority:3"`
+	Number         string            `json:"number" gorm:"size:64;uniqueIndex"`
+	Quota          int               `json:"quota"`
+	Count          int               `json:"count"`
+	TokenUsed      int               `json:"token_used"`
+	CreatedAt      int64             `json:"created_at"`
+	IssuerSnapshot string            `json:"-" gorm:"column:issuer;type:text"`
+	BillToSnapshot string            `json:"-" gorm:"column:bill_to;type:text"`
+	Items          []UserInvoiceItem `json:"items" gorm:"-"`
+	Issuer         dto.InvoiceParty  `json:"issuer" gorm:"-"`
+	BillTo         dto.InvoiceParty  `json:"bill_to" gorm:"-"`
 }
 
 type UserInvoiceItem struct {
@@ -51,8 +58,11 @@ type UserInvoiceAllocation struct {
 }
 
 type UserInvoiceHistory struct {
-	Invoices   []UserInvoice    `json:"invoices"`
-	Uninvoiced UserInvoiceSlice `json:"uninvoiced"`
+	Invoices    []UserInvoice    `json:"invoices"`
+	Uninvoiced  UserInvoiceSlice `json:"uninvoiced"`
+	Issuer      dto.InvoiceParty `json:"issuer"`
+	BillTo      dto.InvoiceParty `json:"bill_to"`
+	BillToReady bool             `json:"bill_to_ready"`
 }
 
 type UserInvoiceSlice struct {
@@ -206,6 +216,10 @@ func ListUserInvoices(userId int, period string) (*UserInvoiceHistory, error) {
 	if err := attachInvoiceItems(DB, invoices); err != nil {
 		return nil, err
 	}
+	for i := range invoices {
+		invoices[i].Issuer = decodeInvoiceParty(invoices[i].IssuerSnapshot)
+		invoices[i].BillTo = decodeInvoiceParty(invoices[i].BillToSnapshot)
+	}
 	deltas, err := collectInvoiceDeltas(DB, userId, period)
 	if err != nil {
 		return nil, err
@@ -216,7 +230,7 @@ func ListUserInvoices(userId int, period string) (*UserInvoiceHistory, error) {
 	}, nil
 }
 
-func IssueUserInvoice(userId int, period string, now time.Time) (*UserInvoice, error) {
+func IssueUserInvoice(userId int, period string, now time.Time, issuer dto.InvoiceParty, billTo dto.InvoiceParty) (*UserInvoice, error) {
 	if _, _, ok := ParseBillPeriod(period); !ok {
 		return nil, fmt.Errorf("invalid period")
 	}
@@ -243,15 +257,29 @@ func IssueUserInvoice(userId int, period string, now time.Time) (*UserInvoice, e
 		if last.Id > 0 {
 			sequence = last.Sequence + 1
 		}
+		issuer = issuer.Normalized()
+		billTo = billTo.Normalized()
+		issuerRaw, err := common.Marshal(issuer)
+		if err != nil {
+			return err
+		}
+		billToRaw, err := common.Marshal(billTo)
+		if err != nil {
+			return err
+		}
 		invoice := &UserInvoice{
-			UserId:    userId,
-			Period:    period,
-			Sequence:  sequence,
-			Number:    formatUserInvoiceNumber(period, userId, sequence),
-			Quota:     summary.Quota,
-			Count:     summary.Count,
-			TokenUsed: summary.TokenUsed,
-			CreatedAt: now.Unix(),
+			UserId:         userId,
+			Period:         period,
+			Sequence:       sequence,
+			Number:         formatUserInvoiceNumber(period, userId, sequence),
+			Quota:          summary.Quota,
+			Count:          summary.Count,
+			TokenUsed:      summary.TokenUsed,
+			CreatedAt:      now.Unix(),
+			IssuerSnapshot: string(issuerRaw),
+			BillToSnapshot: string(billToRaw),
+			Issuer:         issuer,
+			BillTo:         billTo,
 		}
 		if err := tx.Create(invoice).Error; err != nil {
 			return err
@@ -299,4 +327,15 @@ func IssueUserInvoice(userId int, period string, now time.Time) (*UserInvoice, e
 		return nil, err
 	}
 	return issued, nil
+}
+
+func decodeInvoiceParty(raw string) dto.InvoiceParty {
+	if raw == "" {
+		return dto.InvoiceParty{}
+	}
+	var party dto.InvoiceParty
+	if err := common.UnmarshalJsonStr(raw, &party); err != nil {
+		return dto.InvoiceParty{}
+	}
+	return party.Normalized()
 }

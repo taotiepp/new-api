@@ -24,6 +24,7 @@ import type { LoginSession } from '@/stores/auth-store'
 import { normalizeUserSettings } from './lib/user-settings'
 import type {
   ApiResponse,
+  InvoiceParty,
   UserProfile,
   UpdateUserRequest,
   UpdateUserSettingsRequest,
@@ -102,6 +103,13 @@ export async function updateUserLanguage(
   language: string
 ): Promise<ApiResponse> {
   const res = await api.put('/api/user/self', { language })
+  return res.data
+}
+
+export async function updateUserInvoiceProfile(
+  data: InvoiceParty
+): Promise<ApiResponse> {
+  const res = await api.put('/api/user/invoice-profile', data)
   return res.data
 }
 

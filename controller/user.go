@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"unicode/utf8"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/i18n"
@@ -1443,6 +1444,7 @@ func userSettingFromRequest(user *model.User, req UpdateUserSettingRequest) dto.
 		Language:                         existingSettings.Language,
 		SidebarModules:                   existingSettings.SidebarModules,
 		BillingPreference:                existingSettings.BillingPreference,
+		InvoiceProfile:                   existingSettings.InvoiceProfile,
 	}
 	if req.QuotaWarningType == dto.NotifyTypeWebhook {
 		settings.WebhookUrl = req.WebhookUrl
@@ -1472,4 +1474,84 @@ func userSettingFromRequest(user *model.User, req UpdateUserSettingRequest) dto.
 		}
 	}
 	return settings
+}
+
+func invoiceEmailOK(email string) bool {
+	email = strings.TrimSpace(email)
+	if email == "" || strings.ContainsAny(email, " \t\r\n") {
+		return false
+	}
+	at := strings.IndexByte(email, '@')
+	if at <= 0 || at >= len(email)-1 {
+		return false
+	}
+	return !strings.Contains(email[at+1:], "@")
+}
+
+func validateInvoiceParty(party dto.InvoiceParty, requireComplete bool) (dto.InvoiceParty, string) {
+	party = party.Normalized()
+	limits := []struct {
+		value string
+		max   int
+	}{
+		{party.Name, 80},
+		{party.Line1, 120},
+		{party.Line2, 120},
+		{party.City, 64},
+		{party.Region, 64},
+		{party.PostalCode, 20},
+		{party.Country, 64},
+		{party.Phone, 32},
+		{party.Email, 80},
+	}
+	for _, item := range limits {
+		if utf8.RuneCountInString(item.value) > item.max {
+			return party, "invoice profile is invalid"
+		}
+	}
+	if party.Email != "" && !invoiceEmailOK(party.Email) {
+		return party, "invoice profile is invalid"
+	}
+	if requireComplete && !party.Complete() {
+		return party, "invoice profile required"
+	}
+	return party, ""
+}
+
+func invoicePartiesForUser(userId int) (dto.InvoiceParty, dto.InvoiceParty, string, error) {
+	user, err := model.GetUserById(userId, false)
+	if err != nil {
+		return dto.InvoiceParty{}, dto.InvoiceParty{}, "", err
+	}
+	billTo, message := validateInvoiceParty(user.GetSetting().InvoiceProfile, true)
+	if message != "" {
+		return dto.InvoiceParty{}, dto.InvoiceParty{}, message, nil
+	}
+	return operation_setting.InvoiceIssuer(), billTo, "", nil
+}
+
+func UpdateSelfInvoiceProfile(c *gin.Context) {
+	var party dto.InvoiceParty
+	if err := common.DecodeJson(c.Request.Body, &party); err != nil {
+		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
+		return
+	}
+	party, message := validateInvoiceParty(party, true)
+	if message != "" {
+		common.ApiErrorMsg(c, message)
+		return
+	}
+	userId := c.GetInt("id")
+	user, err := model.GetUserById(userId, false)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	settings := user.GetSetting()
+	settings.InvoiceProfile = party
+	if err := model.UpdateUserSetting(userId, settings); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, party)
 }

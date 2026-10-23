@@ -338,6 +338,15 @@ export type BillingSettings = {
   'checkin_setting.enabled': boolean
   'checkin_setting.min_quota': number
   'checkin_setting.max_quota': number
+  'invoice_setting.name': string
+  'invoice_setting.line1': string
+  'invoice_setting.line2': string
+  'invoice_setting.city': string
+  'invoice_setting.region': string
+  'invoice_setting.postal_code': string
+  'invoice_setting.country': string
+  'invoice_setting.phone': string
+  'invoice_setting.email': string
 }
 
 export type OperationsSettings = {

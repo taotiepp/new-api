@@ -8,6 +8,7 @@ import (
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/model"
+	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"github.com/gin-gonic/gin"
 )
 
@@ -75,6 +76,10 @@ func ListUserInvoices(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
+	if err := fillInvoiceParties(subject.ID, history); err != nil {
+		common.ApiError(c, err)
+		return
+	}
 	common.ApiSuccess(c, history)
 }
 
@@ -87,7 +92,16 @@ func IssueUserInvoice(c *gin.Context) {
 	if !ok {
 		return
 	}
-	invoice, err := model.IssueUserInvoice(subject.ID, period, time.Now())
+	issuer, billTo, message, err := invoicePartiesForUser(subject.ID)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	if message != "" {
+		common.ApiErrorMsg(c, message)
+		return
+	}
+	invoice, err := model.IssueUserInvoice(subject.ID, period, time.Now(), issuer, billTo)
 	if errors.Is(err, model.ErrNothingToInvoice) {
 		common.ApiErrorMsg(c, "nothing new to invoice")
 		return
@@ -97,4 +111,16 @@ func IssueUserInvoice(c *gin.Context) {
 		return
 	}
 	common.ApiSuccess(c, invoice)
+}
+
+func fillInvoiceParties(userId int, history *model.UserInvoiceHistory) error {
+	user, err := model.GetUserById(userId, false)
+	if err != nil {
+		return err
+	}
+	billTo := user.GetSetting().InvoiceProfile.Normalized()
+	history.BillTo = billTo
+	history.BillToReady = billTo.Complete() && invoiceEmailOK(billTo.Email)
+	history.Issuer = operation_setting.InvoiceIssuer()
+	return nil
 }

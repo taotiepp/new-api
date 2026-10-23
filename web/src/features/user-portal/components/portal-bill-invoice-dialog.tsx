@@ -22,13 +22,16 @@ import { useTranslation } from 'react-i18next'
 
 import { Dialog } from '@/components/dialog'
 import { Button } from '@/components/ui/button'
+import type { UserInvoice } from '@/features/dashboard/api'
+import {
+  invoiceAddressLines,
+  readInvoiceParty,
+} from '@/features/profile/lib/invoice-party'
+import type { InvoiceParty } from '@/features/profile/types'
 import { useStatus } from '@/hooks/use-status'
 import dayjs from '@/lib/dayjs'
 import { usePricingCurrency } from '@/lib/currency'
 import { formatNumber } from '@/lib/format'
-import { useAuthStore } from '@/stores/auth-store'
-
-import type { UserInvoice } from '@/features/dashboard/api'
 
 import { buildPortalBillStatementCsv } from '../lib/billing'
 
@@ -36,7 +39,8 @@ type PortalBillInvoiceDialogProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
   invoice: UserInvoice | null
-  subjectUser?: { id: number; username: string } | null
+  issuer?: InvoiceParty
+  billTo?: InvoiceParty
 }
 
 const INVOICE_CSV_LABELS = {
@@ -122,23 +126,26 @@ export function PortalBillInvoiceDialog(props: PortalBillInvoiceDialogProps) {
   const sheetRef = useRef<HTMLElement>(null)
   const { status } = useStatus()
   const { currency: catalogCurrency, formatQuota } = usePricingCurrency()
-  const user = useAuthStore((state) => state.auth.user)
-  const issuer = String(status?.system_name ?? '').trim() || 'New API'
-  const subjectUser = props.subjectUser
   const invoice = props.invoice
   const invoiceNumber = invoice?.number ?? ''
   const invoiceDate = invoice
     ? dayjs.unix(invoice.created_at).format('YYYY-MM-DD')
     : ''
   const items = invoice?.items ?? []
-  let billTo = user?.display_name?.trim() || user?.username?.trim() || 'Unknown'
-  let billUsername = user?.username
-  let billEmail = user?.email
-  if (subjectUser) {
-    billTo = subjectUser.username
-    billUsername = subjectUser.username
-    billEmail = undefined
+  let issuerParty = readInvoiceParty(invoice?.issuer)
+  if (!issuerParty.name) {
+    issuerParty = readInvoiceParty(props.issuer)
   }
+  let billToParty = readInvoiceParty(invoice?.bill_to)
+  if (!billToParty.name) {
+    billToParty = readInvoiceParty(props.billTo)
+  }
+  let issuerName = issuerParty.name
+  if (!issuerName) {
+    issuerName = String(status?.system_name ?? '').trim() || 'New API'
+  }
+  const issuerLines = invoiceAddressLines(issuerParty)
+  const billToLines = invoiceAddressLines(billToParty)
   const totals = items.reduce(
     (acc, item) => ({
       quota: acc.quota + (Number(item.quota) || 0),
@@ -205,9 +212,11 @@ export function PortalBillInvoiceDialog(props: PortalBillInvoiceDialogProps) {
               INVOICE
             </p>
             <h2 className='mt-2 text-2xl font-semibold tracking-tight'>
-              {issuer}
+              {issuerName}
             </h2>
-            <p className='mt-2 text-sm text-neutral-500'>Issued by</p>
+            <p className='mt-2 text-sm whitespace-pre-line text-neutral-600'>
+              {issuerLines.join('\n')}
+            </p>
           </div>
           <dl className='grid gap-2 text-sm sm:text-right'>
             <div>
@@ -229,28 +238,17 @@ export function PortalBillInvoiceDialog(props: PortalBillInvoiceDialogProps) {
           </dl>
         </header>
 
-        <section className='grid gap-6 py-6 sm:grid-cols-2'>
-          <div>
-            <p className='text-xs tracking-wide text-neutral-500 uppercase'>
-              Bill To
-            </p>
-            <p className='mt-2 font-medium'>{billTo}</p>
-            {billUsername && billUsername !== billTo ? (
-              <p className='text-sm text-neutral-500'>{billUsername}</p>
-            ) : null}
-            {billEmail ? (
-              <p className='text-sm text-neutral-500'>{billEmail}</p>
-            ) : null}
-          </div>
-          <div>
-            <p className='text-xs tracking-wide text-neutral-500 uppercase'>
-              Payment
-            </p>
-            <p className='mt-2 text-sm'>Account balance</p>
-            <p className='text-sm text-neutral-500'>
-              Currency: {catalogCurrency}
-            </p>
-          </div>
+        <section className='py-6'>
+          <p className='text-xs tracking-wide text-neutral-500 uppercase'>
+            Bill To
+          </p>
+          <p className='mt-2 font-medium'>{billToParty.name}</p>
+          <p className='text-sm whitespace-pre-line text-neutral-600'>
+            {billToLines.join('\n')}
+          </p>
+          <p className='mt-3 text-sm text-neutral-500'>
+            Currency: {catalogCurrency}
+          </p>
         </section>
 
         <table className='w-full border-collapse text-sm'>

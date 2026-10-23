@@ -3,11 +3,14 @@ package controller
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/model"
+	"github.com/QuantumNous/new-api/relaykit/dto"
+	settingconfig "github.com/QuantumNous/new-api/setting/config"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 )
@@ -354,8 +357,59 @@ func requestIssueInvoice(t *testing.T, userId int, role int, query string) userI
 	return payload
 }
 
+func seedInvoiceUser(t *testing.T) {
+	t.Helper()
+	raw, err := common.Marshal(dto.UserSetting{
+		InvoiceProfile: dto.InvoiceParty{
+			Name:       "Ada Zhang",
+			Line1:      "zhongguandonglu",
+			Line2:      "haidian",
+			City:       "Beijing",
+			PostalCode: "100010",
+			Country:    "China",
+			Email:      "ada@example.com",
+		},
+	})
+	require.NoError(t, err)
+	require.NoError(t, model.DB.Create(&model.User{
+		Id:       1,
+		Username: "alice",
+		Password: "unused-password",
+		Role:     common.RoleCommonUser,
+		Status:   common.UserStatusEnabled,
+		AffCode:  "alice-bill",
+		Setting:  string(raw),
+	}).Error)
+}
+
+func useInvoiceIssuer(t *testing.T) {
+	t.Helper()
+	cfg := settingconfig.GlobalConfig.Get("invoice_setting")
+	require.NotNil(t, cfg)
+	values := map[string]string{
+		"name":        "Cursor",
+		"line1":       "801 West End Avenue",
+		"city":        "New York",
+		"region":      "New York",
+		"postal_code": "10025",
+		"country":     "United States",
+		"phone":       "+1 831-425-9504",
+		"email":       "hi@cursor.com",
+	}
+	require.NoError(t, settingconfig.UpdateConfigFromMap(cfg, values))
+	t.Cleanup(func() {
+		cleared := map[string]string{}
+		for key := range values {
+			cleared[key] = ""
+		}
+		_ = settingconfig.UpdateConfigFromMap(cfg, cleared)
+	})
+}
+
 func TestIssueUserInvoiceKeepsHistoryAndBillsOnlyTheIncrease(t *testing.T) {
 	setupUserBillControllerTestDB(t)
+	seedInvoiceUser(t)
+	useInvoiceIssuer(t)
 
 	now := time.Now()
 	current := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.Local)
@@ -387,6 +441,10 @@ func TestIssueUserInvoiceKeepsHistoryAndBillsOnlyTheIncrease(t *testing.T) {
 	require.Equal(t, 100, first.Data.Quota)
 	require.Equal(t, 2, first.Data.Count)
 	require.Equal(t, 40, first.Data.TokenUsed)
+	require.Equal(t, "Cursor", first.Data.Issuer.Name)
+	require.Equal(t, "hi@cursor.com", first.Data.Issuer.Email)
+	require.Equal(t, "Ada Zhang", first.Data.BillTo.Name)
+	require.Equal(t, "100010", first.Data.BillTo.PostalCode)
 	require.Len(t, first.Data.Items, 1)
 	require.Equal(t, "gpt-a", first.Data.Items[0].ModelName)
 
@@ -421,4 +479,60 @@ func TestIssueUserInvoiceKeepsHistoryAndBillsOnlyTheIncrease(t *testing.T) {
 	require.Zero(t, history.Data.Uninvoiced.Quota)
 	require.Zero(t, history.Data.Uninvoiced.Count)
 	require.Empty(t, history.Data.Uninvoiced.Items)
+	require.True(t, history.Data.BillToReady)
+	require.Equal(t, "Cursor", history.Data.Issuer.Name)
+	require.Equal(t, "Ada Zhang", history.Data.Invoices[0].BillTo.Name)
+}
+
+func TestIssueUserInvoiceRequiresBillingDetails(t *testing.T) {
+	setupUserBillControllerTestDB(t)
+	seedInvoiceUser(t)
+	require.NoError(t, model.DB.Model(&model.User{}).Where("id = ?", 1).Update("setting", "{}").Error)
+	require.NoError(t, model.DB.Create(&model.QuotaData{
+		UserID:    1,
+		Username:  "alice",
+		ModelName: "gpt-a",
+		CreatedAt: time.Now().Unix(),
+		Count:     1,
+		Quota:     10,
+		TokenUsed: 4,
+	}).Error)
+
+	payload := requestIssueInvoice(t, 1, common.RoleCommonUser, "")
+	require.False(t, payload.Success)
+	require.Equal(t, "invoice profile required", payload.Message)
+}
+
+func TestUpdateSelfInvoiceProfileStoresTheBillToParty(t *testing.T) {
+	setupUserBillControllerTestDB(t)
+	seedInvoiceUser(t)
+
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	ctx.Set("id", 1)
+	ctx.Request = httptest.NewRequest(http.MethodPut, "/api/user/invoice-profile", strings.NewReader(`{"name":"Ada","email":"ada@example.com"}`))
+	ctx.Request.Header.Set("Content-Type", "application/json")
+	UpdateSelfInvoiceProfile(ctx)
+	require.Equal(t, http.StatusOK, recorder.Code)
+	var rejected userBillResponse
+	require.NoError(t, common.Unmarshal(recorder.Body.Bytes(), &rejected))
+	require.False(t, rejected.Success)
+	require.Equal(t, "invoice profile required", rejected.Message)
+
+	body := `{"name":"Ada Zhang","line1":"zhongguandonglu","line2":"haidian","city":"Beijing","postal_code":"100010","country":"China","email":"it@baichuan-inc.com"}`
+	saved := httptest.NewRecorder()
+	savedCtx, _ := gin.CreateTestContext(saved)
+	savedCtx.Set("id", 1)
+	savedCtx.Request = httptest.NewRequest(http.MethodPut, "/api/user/invoice-profile", strings.NewReader(body))
+	savedCtx.Request.Header.Set("Content-Type", "application/json")
+	UpdateSelfInvoiceProfile(savedCtx)
+	require.Equal(t, http.StatusOK, saved.Code)
+	var accepted userBillResponse
+	require.NoError(t, common.Unmarshal(saved.Body.Bytes(), &accepted))
+	require.True(t, accepted.Success, accepted.Message)
+
+	user, err := model.GetUserById(1, false)
+	require.NoError(t, err)
+	require.Equal(t, "it@baichuan-inc.com", user.GetSetting().InvoiceProfile.Email)
+	require.Equal(t, "haidian", user.GetSetting().InvoiceProfile.Line2)
 }

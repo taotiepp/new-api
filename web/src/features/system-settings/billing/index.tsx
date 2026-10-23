@@ -107,6 +107,15 @@ const defaultBillingSettings: BillingSettings = {
   'checkin_setting.enabled': false,
   'checkin_setting.min_quota': 1000,
   'checkin_setting.max_quota': 10000,
+  'invoice_setting.name': '',
+  'invoice_setting.line1': '',
+  'invoice_setting.line2': '',
+  'invoice_setting.city': '',
+  'invoice_setting.region': '',
+  'invoice_setting.postal_code': '',
+  'invoice_setting.country': '',
+  'invoice_setting.phone': '',
+  'invoice_setting.email': '',
 }
 
 export function BillingSettings() {

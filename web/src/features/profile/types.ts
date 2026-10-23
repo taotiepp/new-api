@@ -92,6 +92,19 @@ export interface UserProfile {
  */
 export type NotifyType = 'email' | 'webhook' | 'bark' | 'gotify' | 'feishu'
 
+/** Address block printed on an invoice for the payee or the bill-to party. */
+export interface InvoiceParty {
+  name: string
+  line1: string
+  line2: string
+  city: string
+  region: string
+  postal_code: string
+  country: string
+  phone: string
+  email: string
+}
+
 /**
  * Parsed user settings
  */
@@ -126,6 +139,8 @@ export interface UserSettings {
   upstream_model_update_notify_enabled?: boolean
   /** Preferred interface/API response language */
   language?: string
+  /** Billing details printed on invoices */
+  invoice_profile?: InvoiceParty
 }
 
 /**

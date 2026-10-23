@@ -26,6 +26,7 @@ import { usePricingCurrency } from '@/lib/currency'
 import { requireServerSuccess } from '@/lib/server-error-message'
 
 import { PortalSettingsAccount } from './portal-settings-account'
+import { PortalSettingsInvoice } from './portal-settings-invoice'
 import { PortalSettingsLanguage } from './portal-settings-language'
 import { PortalSettingsNotifications } from './portal-settings-notifications'
 
@@ -76,6 +77,7 @@ export function PortalSettingsPanel() {
           usage={formatQuota(profile.used_quota)}
         />
         <PortalSettingsLanguage profile={profile} onSaved={refresh} />
+        <PortalSettingsInvoice profile={profile} onSaved={refresh} />
         <PortalSettingsNotifications profile={profile} onSaved={refresh} />
       </>
     )
@@ -88,7 +90,7 @@ export function PortalSettingsPanel() {
           {t('System Settings')}
         </h1>
         <p className='text-muted-foreground text-sm'>
-          {t('Account, balance, notifications, and language.')}
+          {t('Account, balance, billing details, notifications, and language.')}
         </p>
       </header>
       {body}
