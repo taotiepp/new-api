@@ -70,6 +70,27 @@ func TestEmbeddedAPIDocsUseTheSiteAddress(t *testing.T) {
 	tree, err := List()
 	require.NoError(t, err)
 	require.NotEmpty(t, tree)
+	titles := map[string]string{}
+	var walk func([]Node)
+	walk = func(nodes []Node) {
+		for _, node := range nodes {
+			if node.Path != "" {
+				titles[node.Path] = node.Title
+			}
+			walk(node.Children)
+		}
+	}
+	walk(tree)
+	for _, item := range []struct{ path, title string }{
+		{"api", "API访问说明"},
+		{"api/openai", "OpenAI协议"},
+		{"api/claude", "Claude协议"},
+		{"api/gemini", "Gemini协议"},
+		{"model-calling", "模型调用"},
+		{"virtual-groups", "虚拟分组"},
+	} {
+		assert.Equal(t, item.title, titles[item.path], item.path)
+	}
 
 	address := "https://gateway.example"
 	pages := []struct {
@@ -97,11 +118,11 @@ func TestEmbeddedAPIDocsUseTheSiteAddress(t *testing.T) {
 
 func sampleFS() fs.FS {
 	return fstest.MapFS{
-		"api/_index.md":         &fstest.MapFile{Data: []byte("---\ntitle: API\norder: 1\n---\n# API\n")},
-		"api/earlier/_index.md": &fstest.MapFile{Data: []byte("---\ntitle: Earlier\norder: 2\n---\n# Earlier\n")},
-		"api/later/_index.md":   &fstest.MapFile{Data: []byte("---\ntitle: Later\norder: 1\n---\n# Later\n")},
-		"api/later/http.md":     &fstest.MapFile{Data: []byte("---\ntitle: API calls\norder: 1\n---\n# API calls\n\nPOST {{server_address}}/v1/chat/completions\n")},
-		"api/later/sdk.md":      &fstest.MapFile{Data: []byte("---\ntitle: SDK calls\norder: 2\n---\n# SDK calls\n")},
-		"notes.txt":             &fstest.MapFile{Data: []byte("ignore")},
+		"api/index.md":         &fstest.MapFile{Data: []byte("---\ntitle: API\norder: 1\n---\n# API\n")},
+		"api/earlier/index.md": &fstest.MapFile{Data: []byte("---\ntitle: Earlier\norder: 2\n---\n# Earlier\n")},
+		"api/later/index.md":   &fstest.MapFile{Data: []byte("---\ntitle: Later\norder: 1\n---\n# Later\n")},
+		"api/later/http.md":    &fstest.MapFile{Data: []byte("---\ntitle: API calls\norder: 1\n---\n# API calls\n\nPOST {{server_address}}/v1/chat/completions\n")},
+		"api/later/sdk.md":     &fstest.MapFile{Data: []byte("---\ntitle: SDK calls\norder: 2\n---\n# SDK calls\n")},
+		"notes.txt":            &fstest.MapFile{Data: []byte("ignore")},
 	}
 }

@@ -10,3 +10,5 @@ docs
 /web/node_modules
 /web/dist
 !THIRD-PARTY-LICENSES.md
+# Compiled into the binary by service/docsite //go:embed.
+!service/docsite/content/**/*.md

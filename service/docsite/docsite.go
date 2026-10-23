@@ -30,10 +30,12 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// Pages live in content/. A directory is a menu group; _index.md is that
+// Pages live in content/. A directory is a menu group; index.md is that
 // group's page, and every other .md file is a page. {{server_address}} in the
 // body is replaced when the page is read.
 
+// index.md is the directory page. go:embed omits file names that start with "_" or ".".
+//
 //go:embed content
 var contentFS embed.FS
 
@@ -105,7 +107,7 @@ func readFrom(fsys fs.FS, root, docPath, serverAddress string) (Page, error) {
 	filePath := path.Join(root, rel+".md")
 	data, err := fs.ReadFile(fsys, filePath)
 	if errors.Is(err, fs.ErrNotExist) {
-		filePath = path.Join(root, rel, "_index.md")
+		filePath = path.Join(root, rel, "index.md")
 		data, err = fs.ReadFile(fsys, filePath)
 	}
 	if err != nil {
@@ -148,7 +150,7 @@ func readLevel(fsys fs.FS, dir, publicPath string) ([]Node, error) {
 			if err != nil {
 				return nil, err
 			}
-			meta, body, found, err := readOptional(fsys, path.Join(full, "_index.md"))
+			meta, body, found, err := readOptional(fsys, path.Join(full, "index.md"))
 			if err != nil {
 				return nil, err
 			}
@@ -173,7 +175,7 @@ func readLevel(fsys fs.FS, dir, publicPath string) ([]Node, error) {
 			})
 			continue
 		}
-		if !strings.HasSuffix(name, ".md") || name == "_index.md" || strings.HasPrefix(name, "_") {
+		if !strings.HasSuffix(name, ".md") || name == "index.md" || strings.HasPrefix(name, "_") {
 			continue
 		}
 		meta, body, err := readMarkdownFile(fsys, full)
