@@ -174,9 +174,18 @@ type RelayInfo struct {
 	// switch on. The next attempt drops that ciphertext, replaces the session
 	// field a downstream account router uses, and removes previous_response_id.
 	RetryWithoutEncryptedContent bool
-	RuntimeHeadersOverride       map[string]any
-	UseRuntimeHeadersOverride    bool
-	ParamOverrideAudit           []string
+	// BlockedSessionRewritten is set when this request already replaced a
+	// session blocked by cyber-security policy. A second block stops.
+	BlockedSessionRewritten bool
+	// BlockedSessionExhausted is set when that replacement was blocked again.
+	// A later request that still presents the old id is rejected without
+	// another rotation.
+	BlockedSessionExhausted bool
+	// BlockedSessionKeys are the client session ids recorded for that block.
+	BlockedSessionKeys        []string
+	RuntimeHeadersOverride    map[string]any
+	UseRuntimeHeadersOverride bool
+	ParamOverrideAudit        []string
 
 	PriceData hosttypes.PriceData
 

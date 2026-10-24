@@ -229,6 +229,13 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 	relayInfo.LastError = nil
 	encryptedReasoningExtraRetry := 0
 	responsesStreamExtraRetry := 0
+	if common.GetContextKeyBool(c, constant.ContextKeyTokenClearEncryptedContent) {
+		service.PrepareBlockedSessionRetry(c, relayInfo)
+		if relayInfo.BlockedSessionExhausted {
+			newAPIError = service.BlockedSessionError()
+			return
+		}
+	}
 
 	for ; retryParam.GetRetry() <= common.RetryTimes+encryptedReasoningExtraRetry+responsesStreamExtraRetry; retryParam.IncreaseRetry() {
 		relayInfo.RetryIndex = retryParam.GetRetry()
@@ -277,8 +284,26 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		channelError := *types.NewChannelError(channel.Id, channel.Type, channel.Name, channel.ChannelInfo.IsMultiKey, common.GetContextKeyString(c, constant.ContextKeyChannelKey), channel.GetAutoBan())
 
 		if c.Writer != nil && c.Writer.Written() {
+			if common.GetContextKeyBool(c, constant.ContextKeyTokenClearEncryptedContent) && service.SessionPolicyBlocked(newAPIError) {
+				service.NoteBlockedSession(c, relayInfo)
+			}
 			processChannelError(c, channelError, newAPIError, relayInfo, false)
 			break
+		}
+
+		if common.GetContextKeyBool(c, constant.ContextKeyTokenClearEncryptedContent) && service.SessionPolicyBlocked(newAPIError) {
+			if relayInfo.BlockedSessionRewritten {
+				service.NoteBlockedSession(c, relayInfo)
+				processChannelError(c, channelError, newAPIError, relayInfo, false)
+				break
+			}
+			service.AllowChannelAffinityRetry(c)
+			service.RotateBlockedSession(c, relayInfo)
+			if retryParam.GetRetry() >= common.RetryTimes {
+				encryptedReasoningExtraRetry = 1
+			}
+			processChannelError(c, channelError, newAPIError, relayInfo, true)
+			continue
 		}
 
 		if common.GetContextKeyBool(c, constant.ContextKeyRetryIncompleteResponsesStream) {

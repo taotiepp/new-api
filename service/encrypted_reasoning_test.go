@@ -44,8 +44,9 @@ func TestAllowEncryptedReasoningRetry(t *testing.T) {
 		http.StatusForbidden,
 	)
 	blocked.SetMessage("该会话已被网络安全策略屏蔽，请开启新会话 / This session is blocked by cyber-security policy, please start a new session")
-	assert.True(t, AllowEncryptedReasoningRetry(true, false, blocked))
-	assert.False(t, AllowEncryptedReasoningRetry(true, true, blocked))
+	assert.False(t, AllowEncryptedReasoningRetry(true, false, blocked))
+	assert.True(t, SessionPolicyBlocked(blocked))
+	assert.False(t, SessionPolicyBlocked(err))
 
 	forbidden := types.NewErrorWithStatusCode(
 		assert.AnError,
@@ -53,7 +54,7 @@ func TestAllowEncryptedReasoningRetry(t *testing.T) {
 		http.StatusForbidden,
 	)
 	forbidden.SetMessage("forbidden")
-	assert.False(t, AllowEncryptedReasoningRetry(true, false, forbidden))
+	assert.False(t, SessionPolicyBlocked(forbidden))
 
 	chineseOnly := types.NewErrorWithStatusCode(
 		assert.AnError,
@@ -61,7 +62,7 @@ func TestAllowEncryptedReasoningRetry(t *testing.T) {
 		http.StatusForbidden,
 	)
 	chineseOnly.SetMessage("该会话已被网络安全策略屏蔽，请开启新会话")
-	assert.False(t, AllowEncryptedReasoningRetry(true, false, chineseOnly))
+	assert.False(t, SessionPolicyBlocked(chineseOnly))
 }
 
 func TestStripEncryptedReasoningInput(t *testing.T) {
@@ -211,6 +212,88 @@ func TestReplaceEffectiveSession(t *testing.T) {
 		assert.Equal(t, storedSessionBody(t, ctx).Get("prompt_cache_key").String(), gjson.ParseBytes(req.PromptCacheKey).String())
 		assert.NotEqual(t, "cache-old", gjson.ParseBytes(req.PromptCacheKey).String())
 	})
+}
+
+func TestRotateBlockedSession(t *testing.T) {
+	require.NoError(t, blockedSessionCache().Purge())
+	t.Cleanup(func() {
+		require.NoError(t, blockedSessionCache().Purge())
+	})
+
+	const userID = 42
+	headers := map[string]string{
+		"session_id":         "sess-old",
+		"conversation_id":    "conv-old",
+		"X-Session-Affinity": "affinity-old",
+		"X-Conversation-ID":  "xconv-old",
+	}
+	ctx, info := newSessionRetry(t, `{"model":"gpt-5","previous_response_id":"resp_old","prompt_cache_key":"cache-old","input":"hi"}`, headers)
+	ctx.Set("id", userID)
+	RotateBlockedSession(ctx, info)
+
+	replacement := ctx.Request.Header.Get("session_id")
+	require.NotEmpty(t, replacement)
+	assert.NotEqual(t, "sess-old", replacement)
+	assert.Equal(t, replacement, ctx.Request.Header.Get("conversation_id"))
+	assert.Equal(t, replacement, ctx.Request.Header.Get("X-Session-Affinity"))
+	assert.Equal(t, replacement, ctx.Request.Header.Get("X-Conversation-ID"))
+	assert.Equal(t, replacement, info.RequestHeaders["Session_id"])
+	assert.Equal(t, replacement, info.RequestHeaders["Conversation_id"])
+	stored := storedSessionBody(t, ctx)
+	assert.False(t, stored.Get("previous_response_id").Exists())
+	assert.Equal(t, replacement, stored.Get("prompt_cache_key").String())
+	assert.Equal(t, replacement, gjson.ParseBytes(info.Request.(*dto.OpenAIResponsesRequest).PromptCacheKey).String())
+	assert.Empty(t, info.Request.(*dto.OpenAIResponsesRequest).PreviousResponseID)
+	assert.True(t, info.BlockedSessionRewritten)
+	assert.True(t, info.RetryWithoutEncryptedContent)
+
+	nextCtx, nextInfo := newSessionRetry(t, `{"model":"gpt-5","previous_response_id":"resp_old","prompt_cache_key":"cache-old","input":"hi"}`, headers)
+	nextCtx.Set("id", userID)
+	PrepareBlockedSessionRetry(nextCtx, nextInfo)
+	assert.Equal(t, replacement, nextCtx.Request.Header.Get("session_id"))
+	assert.Equal(t, replacement, nextCtx.Request.Header.Get("conversation_id"))
+	assert.Equal(t, replacement, nextCtx.Request.Header.Get("X-Session-Affinity"))
+	assert.Equal(t, replacement, storedSessionBody(t, nextCtx).Get("prompt_cache_key").String())
+	assert.False(t, storedSessionBody(t, nextCtx).Get("previous_response_id").Exists())
+	assert.True(t, nextInfo.BlockedSessionRewritten)
+	assert.False(t, nextInfo.BlockedSessionExhausted)
+
+	NoteBlockedSession(nextCtx, nextInfo)
+	assert.True(t, nextInfo.BlockedSessionExhausted)
+
+	againCtx, againInfo := newSessionRetry(t, `{"model":"gpt-5","previous_response_id":"resp_old","prompt_cache_key":"cache-old","input":"hi"}`, headers)
+	againCtx.Set("id", userID)
+	PrepareBlockedSessionRetry(againCtx, againInfo)
+	assert.Equal(t, "sess-old", againCtx.Request.Header.Get("session_id"))
+	assert.Equal(t, "cache-old", storedSessionBody(t, againCtx).Get("prompt_cache_key").String())
+	assert.True(t, againInfo.BlockedSessionExhausted)
+	assert.False(t, againInfo.BlockedSessionRewritten)
+
+	otherCtx, otherInfo := newSessionRetry(t, `{"model":"gpt-5","previous_response_id":"resp_old","prompt_cache_key":"cache-old","input":"hi"}`, headers)
+	otherCtx.Set("id", userID+1)
+	PrepareBlockedSessionRetry(otherCtx, otherInfo)
+	assert.False(t, otherInfo.BlockedSessionExhausted)
+	assert.False(t, otherInfo.BlockedSessionRewritten)
+	assert.Equal(t, "sess-old", otherCtx.Request.Header.Get("session_id"))
+
+	notedCtx, notedInfo := newSessionRetry(t, `{"model":"gpt-5","previous_response_id":"resp_old","prompt_cache_key":"cache-noted","input":"hi"}`, map[string]string{
+		"session_id": "sess-noted",
+	})
+	notedInfo.Request.(*dto.OpenAIResponsesRequest).PromptCacheKey = json.RawMessage(`"cache-noted"`)
+	notedCtx.Set("id", userID+2)
+	NoteBlockedSession(notedCtx, notedInfo)
+	assert.Equal(t, "sess-noted", notedCtx.Request.Header.Get("session_id"))
+	followCtx, followInfo := newSessionRetry(t, `{"model":"gpt-5","previous_response_id":"resp_old","prompt_cache_key":"cache-noted","input":"hi"}`, map[string]string{
+		"session_id": "sess-noted",
+	})
+	followInfo.Request.(*dto.OpenAIResponsesRequest).PromptCacheKey = json.RawMessage(`"cache-noted"`)
+	followCtx.Set("id", userID+2)
+	PrepareBlockedSessionRetry(followCtx, followInfo)
+	notedReplacement := followCtx.Request.Header.Get("session_id")
+	require.NotEmpty(t, notedReplacement)
+	assert.NotEqual(t, "sess-noted", notedReplacement)
+	assert.Equal(t, notedReplacement, storedSessionBody(t, followCtx).Get("prompt_cache_key").String())
+	assert.True(t, followInfo.BlockedSessionRewritten)
 }
 
 func newSessionRetry(t *testing.T, body string, headers map[string]string) (*gin.Context, *relaycommon.RelayInfo) {
