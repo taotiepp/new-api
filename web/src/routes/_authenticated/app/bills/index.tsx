@@ -19,7 +19,24 @@ For commercial licensing, please contact support@quantumnous.com
 import { createFileRoute } from '@tanstack/react-router'
 
 import { UserPortalBills } from '@/features/user-portal/components/user-portal-bills'
+import { appBillsSearchSchema } from '@/features/user-portal/lib/search-schemas'
 
 export const Route = createFileRoute('/_authenticated/app/bills/')({
-  component: UserPortalBills,
+  validateSearch: appBillsSearchSchema,
+  component: UserPortalBillsPage,
 })
+
+function UserPortalBillsPage() {
+  const search = Route.useSearch()
+  const subject =
+    search.userId != null
+      ? { id: search.userId, username: search.username ?? '' }
+      : undefined
+  return (
+    <UserPortalBills
+      key={`${search.userId ?? 0}:${search.period ?? ''}`}
+      period={search.period}
+      subject={subject}
+    />
+  )
+}

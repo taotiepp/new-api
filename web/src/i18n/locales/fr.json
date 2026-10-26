@@ -6326,6 +6326,7 @@
     "View API token key": "Consulter la clé d’un jeton API",
     "View API token keys in batch": "Consulter les clés de jetons API par lot",
     "View audit records from user and admin roles. Root records are always excluded.": "Consulter les audits des rôles user et admin. Les événements du rôle root sont toujours exclus.",
+    "View bill": "Voir la facture",
     "View channel lists and details without secrets.": "Afficher les listes et détails des canaux sans secrets.",
     "View channel secrets": "Voir les secrets des canaux",
     "View daily usage": "Voir l’usage quotidien",

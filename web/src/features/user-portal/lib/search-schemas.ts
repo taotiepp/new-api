@@ -35,6 +35,12 @@ export const appPlaygroundSearchSchema = z.object({
   model: z.string().optional(),
 })
 
+export const appBillsSearchSchema = z.object({
+  userId: z.number().optional(),
+  username: z.string().optional(),
+  period: z.string().optional(),
+})
+
 export const appUsageSearchSchema = z.object({
   startTime: z.number().optional(),
   endTime: z.number().optional(),

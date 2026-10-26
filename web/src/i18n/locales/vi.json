@@ -6326,6 +6326,7 @@
     "View API token key": "Xem khóa mã thông báo API",
     "View API token keys in batch": "Xem hàng loạt khóa mã thông báo API",
     "View audit records from user and admin roles. Root records are always excluded.": "Xem bản ghi kiểm toán của vai trò user và admin. Luôn loại trừ bản ghi của vai trò root.",
+    "View bill": "Xem hóa đơn",
     "View channel lists and details without secrets.": "Xem danh sách và chi tiết kênh không chứa bí mật.",
     "View channel secrets": "Xem bí mật kênh",
     "View daily usage": "Xem mức dùng theo ngày",

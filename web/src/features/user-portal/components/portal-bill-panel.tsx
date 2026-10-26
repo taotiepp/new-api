@@ -46,7 +46,10 @@ import {
   usePortalBills,
   usePortalInvoices,
 } from '../hooks/use-portal-billing-data'
-import { usePortalSubjectUser } from '../hooks/use-portal-subject-user'
+import {
+  usePortalSubjectUser,
+  type PortalSubjectUser,
+} from '../hooks/use-portal-subject-user'
 import {
   buildPortalCostTrend,
   createPortalBillMonthRange,
@@ -59,16 +62,25 @@ import { PortalBillModelChart } from './portal-bill-model-chart'
 import { PortalBillingChart } from './portal-billing-chart'
 import { PortalSubjectUserPicker } from './portal-subject-user-picker'
 
-export function PortalBillPanel() {
+type PortalBillPanelProps = {
+  initialSubject?: PortalSubjectUser | null
+  initialPeriod?: string
+}
+
+export function PortalBillPanel(props: PortalBillPanelProps) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const { currency: catalogCurrency, formatQuota } = usePricingCurrency()
   const months = useMemo(() => listPortalBillMonths(), [])
-  const [monthValue, setMonthValue] = useState(months[0]?.value ?? '')
+  const [monthValue, setMonthValue] = useState(
+    months.some((month) => month.value === props.initialPeriod)
+      ? (props.initialPeriod ?? '')
+      : (months[0]?.value ?? '')
+  )
   const [invoiceOpen, setInvoiceOpen] = useState(false)
   const [activeInvoice, setActiveInvoice] = useState<UserInvoice | null>(null)
   const [issuing, setIssuing] = useState(false)
-  const subjectUser = usePortalSubjectUser()
+  const subjectUser = usePortalSubjectUser(props.initialSubject)
   const selectedMonth =
     months.find((month) => month.value === monthValue) ?? months[0]
   const range = useMemo(

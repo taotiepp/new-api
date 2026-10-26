@@ -6326,6 +6326,7 @@
     "View API token key": "API トークンキーを表示",
     "View API token keys in batch": "API トークンキーを一括表示",
     "View audit records from user and admin roles. Root records are always excluded.": "user と admin ロールの監査記録を表示します。root ロールの記録は常に除外されます。",
+    "View bill": "請求を見る",
     "View channel lists and details without secrets.": "シークレットを含まないチャネル一覧と詳細を表示します。",
     "View channel secrets": "チャンネルシークレットを表示",
     "View daily usage": "日次の利用を見る",

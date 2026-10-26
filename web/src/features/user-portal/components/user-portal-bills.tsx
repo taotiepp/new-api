@@ -16,13 +16,22 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import type { PortalSubjectUser } from '../hooks/use-portal-subject-user'
 import { PortalBillPanel } from './portal-bill-panel'
 import { UserPortalPage } from './user-portal-page'
 
-export function UserPortalBills() {
+type UserPortalBillsProps = {
+  subject?: PortalSubjectUser
+  period?: string
+}
+
+export function UserPortalBills(props: UserPortalBillsProps) {
   return (
     <UserPortalPage framed={false}>
-      <PortalBillPanel />
+      <PortalBillPanel
+        initialPeriod={props.period}
+        initialSubject={props.subject}
+      />
     </UserPortalPage>
   )
 }

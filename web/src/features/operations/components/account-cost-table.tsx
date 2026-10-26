@@ -20,6 +20,7 @@ import { Link } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 
 import { StaticDataTable } from '@/components/data-table'
+import { Button } from '@/components/ui/button'
 import { usePricingCurrency } from '@/lib/currency'
 import { formatNumber } from '@/lib/format'
 import { dateToUnixTimestamp } from '@/lib/time'
@@ -28,6 +29,7 @@ import type { AccountMonthCost } from '../types'
 
 type AccountCostTableProps = {
   accounts: AccountMonthCost[]
+  period: string
   start: Date
   end: Date
 }
@@ -58,6 +60,28 @@ export function AccountCostTable(props: AccountCostTableProps) {
             >
               {account.username}
             </Link>
+          ),
+        },
+        {
+          id: 'bill',
+          header: t('View bill'),
+          cell: (account) => (
+            <Button
+              size='sm'
+              variant='outline'
+              render={
+                <Link
+                  to='/app/bills'
+                  search={{
+                    userId: account.user_id,
+                    username: account.username,
+                    period: props.period,
+                  }}
+                />
+              }
+            >
+              {t('View bill')}
+            </Button>
           ),
         },
         {

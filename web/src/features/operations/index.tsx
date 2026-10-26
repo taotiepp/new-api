@@ -130,7 +130,12 @@ export function OperationsPage() {
         />
       ) : null}
       {costs.isSuccess && items.length > 0 ? (
-        <AccountCostTable accounts={items} start={range.start} end={range.end} />
+        <AccountCostTable
+          accounts={items}
+          period={monthValue}
+          start={range.start}
+          end={range.end}
+        />
       ) : null}
       {total > pageSize ? (
         <div className='flex items-center justify-end gap-2'>

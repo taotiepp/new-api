@@ -24,6 +24,7 @@ import type { ReactElement, ReactNode } from 'react'
 import { I18nextProvider, initReactI18next } from 'react-i18next'
 import { afterEach, describe, expect, test, vi } from 'vitest'
 
+import dayjs from '@/lib/dayjs'
 import { ROLE } from '@/lib/roles'
 import { useAuthStore } from '@/stores/auth-store'
 
@@ -257,6 +258,43 @@ describe('portal subject user', () => {
     await waitFor(() => {
       expect(getUserBills).toHaveBeenCalledWith(
         expect.objectContaining({ user_id: 2 })
+      )
+    })
+  })
+
+  test('opens the billed month for the account in the address', async () => {
+    signIn(ROLE.ADMIN)
+    const period = dayjs().format('YYYY-MM')
+    listUserInvoices.mockResolvedValue({
+      success: true,
+      data: {
+        invoices: [],
+        uninvoiced: { quota: 0, count: 0, token_used: 0, items: [] },
+      },
+    })
+    getUserBills.mockResolvedValue({
+      success: true,
+      data: {
+        period,
+        quota: 80,
+        count: 4,
+        token_used: 8,
+        items: [],
+        trend: [],
+      },
+    })
+
+    renderPanel(
+      <PortalBillPanel
+        initialPeriod={period}
+        initialSubject={{ id: 2, username: 'bob' }}
+      />
+    )
+
+    expect(await screen.findByText('Viewing bob')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(getUserBills).toHaveBeenCalledWith(
+        expect.objectContaining({ period, user_id: 2 })
       )
     })
   })

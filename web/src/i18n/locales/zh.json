@@ -6326,6 +6326,7 @@
     "View API token key": "查看 API 令牌密钥",
     "View API token keys in batch": "批量查看 API 令牌密钥",
     "View audit records from user and admin roles. Root records are always excluded.": "查看 user 和 admin 角色的审计记录，始终排除 root 级别记录。",
+    "View bill": "查看账单",
     "View channel lists and details without secrets.": "查看不含密钥的渠道列表和详情。",
     "View channel secrets": "查看渠道密钥",
     "View daily usage": "查看每日用量",

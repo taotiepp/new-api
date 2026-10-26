@@ -55,10 +55,18 @@ describe('account cost table', () => {
             token_used: 14,
           },
         ]}
+        period='2026-10'
         start={new Date('2026-10-01T00:00:00')}
         end={new Date('2026-10-31T23:59:59')}
       />
     )
+
+    const bill = screen.getByRole('link', { name: 'View bill' })
+    const billHref = bill.getAttribute('href') ?? ''
+    expect(billHref).toContain('/app/bills?')
+    expect(billHref).toContain('userId=2')
+    expect(billHref).toContain('username=bob')
+    expect(billHref).toContain('period=2026-10')
 
     const link = screen.getByRole('link', { name: 'bob' })
     const href = link.getAttribute('href') ?? ''
