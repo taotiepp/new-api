@@ -1,3 +1,4 @@
+import type { InvoiceParty } from '@/features/profile/types'
 /*
 Copyright (C) 2023-2026 QuantumNous
 
@@ -17,10 +18,10 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { api } from '@/lib/api'
-import type { InvoiceParty } from '@/features/profile/types'
 
 import type {
   FlowQuotaDataItem,
+  KeyQuotaItem,
   QuotaDataItem,
   UptimeGroupResult,
 } from './types'
@@ -48,6 +49,18 @@ export async function getUserQuotaDates(
   const endpoint = isAdmin ? '/api/data' : '/api/data/self'
   const res = await api.get<{ success: boolean; data: QuotaDataItem[] }>(
     endpoint,
+    { params }
+  )
+  return res.data
+}
+
+export async function getUserKeyQuota(params: {
+  start_timestamp: number
+  end_timestamp: number
+  user_id?: number
+}) {
+  const res = await api.get<{ success: boolean; data: KeyQuotaItem[] }>(
+    '/api/data/self/keys',
     { params }
   )
   return res.data

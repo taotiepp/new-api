@@ -25,6 +25,17 @@ type QuotaData struct {
 	Quota     int    `json:"quota" gorm:"default:0"`
 }
 
+// KeyQuotaUsage is one user's usage for a selected time range, split by API key and model.
+// TokenName is filled only for keys that still belong to that user.
+type KeyQuotaUsage struct {
+	TokenID   int    `json:"token_id" gorm:"column:token_id"`
+	TokenName string `json:"token_name" gorm:"-"`
+	ModelName string `json:"model_name" gorm:"column:model_name"`
+	TokenUsed int    `json:"token_used" gorm:"column:token_used"`
+	Count     int    `json:"count" gorm:"column:count"`
+	Quota     int    `json:"quota" gorm:"column:quota"`
+}
+
 type QuotaDataLogParams struct {
 	UserID    int
 	Username  string
@@ -147,6 +158,54 @@ func GetQuotaDataByUsername(username string, startTime int64, endTime int64) (qu
 		Group("user_id, username, model_name, created_at").
 		Find(&quotaDatas).Error
 	return quotaDatas, err
+}
+
+func ListUserKeyQuota(userId int, startTime int64, endTime int64) ([]KeyQuotaUsage, error) {
+	rows := make([]KeyQuotaUsage, 0)
+	err := DB.Table("quota_data").
+		Select("token_id, model_name, sum(count) as count, sum(quota) as quota, sum(token_used) as token_used").
+		Where("user_id = ? and created_at >= ? and created_at <= ?", userId, startTime, endTime).
+		Group("token_id, model_name").
+		Order("quota DESC, token_id ASC").
+		Find(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+
+	seen := make(map[int]struct{}, len(rows))
+	tokenIDs := make([]int, 0, len(rows))
+	for _, row := range rows {
+		if row.TokenID <= 0 {
+			continue
+		}
+		if _, ok := seen[row.TokenID]; ok {
+			continue
+		}
+		seen[row.TokenID] = struct{}{}
+		tokenIDs = append(tokenIDs, row.TokenID)
+	}
+	if len(tokenIDs) == 0 {
+		return rows, nil
+	}
+
+	var tokens []struct {
+		Id   int
+		Name string
+	}
+	if err := DB.Model(&Token{}).
+		Select("id, name").
+		Where("user_id = ? AND id IN ?", userId, tokenIDs).
+		Find(&tokens).Error; err != nil {
+		return nil, err
+	}
+	names := make(map[int]string, len(tokens))
+	for _, token := range tokens {
+		names[token.Id] = token.Name
+	}
+	for i := range rows {
+		rows[i].TokenName = names[rows[i].TokenID]
+	}
+	return rows, nil
 }
 
 func GetQuotaDataByUserId(userId int, startTime int64, endTime int64) (quotaData []*QuotaData, err error) {

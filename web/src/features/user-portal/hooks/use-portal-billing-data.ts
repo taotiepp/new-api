@@ -20,9 +20,11 @@ import { useQuery } from '@tanstack/react-query'
 
 import {
   getUserBills,
+  getUserKeyQuota,
   getUserQuotaDates,
   listUserInvoices,
 } from '@/features/dashboard/api'
+import type { KeyQuotaItem } from '@/features/dashboard/types'
 import { requireServerSuccess } from '@/lib/server-error-message'
 import { computeTimeRange } from '@/lib/time'
 
@@ -65,6 +67,39 @@ export function usePortalBillingData(
     quotaRows: quotaQuery.data ?? [],
     isLoading: !rangeTooLong && quotaQuery.isLoading,
     isError: quotaQuery.isError,
+  }
+}
+
+export function usePortalKeyUsage(
+  start: Date,
+  end: Date,
+  maxRangeSeconds = PORTAL_BILLING_MAX_RANGE_SECONDS,
+  userId?: number
+) {
+  const rangeTooLong = isPortalBillingRangeTooLong(start, end, maxRangeSeconds)
+  const timeRange = computeTimeRange(1, start, end)
+
+  const keyQuery = useQuery({
+    queryKey: ['user-portal', 'billing', 'keys', timeRange, userId ?? 0],
+    enabled: !rangeTooLong,
+    queryFn: async () => {
+      const result = requireServerSuccess(
+        await getUserKeyQuota({
+          start_timestamp: timeRange.start_timestamp,
+          end_timestamp: timeRange.end_timestamp,
+          user_id: userId,
+        })
+      )
+      return (result.data ?? []) as KeyQuotaItem[]
+    },
+  })
+
+  return {
+    rangeTooLong,
+    rows: keyQuery.data ?? [],
+    isLoading: !rangeTooLong && keyQuery.isLoading,
+    isError: keyQuery.isError,
+    refetch: keyQuery.refetch,
   }
 }
 

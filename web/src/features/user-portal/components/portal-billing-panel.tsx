@@ -54,7 +54,10 @@ import { requireServerSuccess } from '@/lib/server-error-message'
 import { getEndOfDay, getStartOfDay } from '@/lib/time'
 import { useAuthStore } from '@/stores/auth-store'
 
-import { usePortalBillingData } from '../hooks/use-portal-billing-data'
+import {
+  usePortalBillingData,
+  usePortalKeyUsage,
+} from '../hooks/use-portal-billing-data'
 import {
   usePortalSubjectUser,
   type PortalSubjectUser,
@@ -70,9 +73,11 @@ import {
   isDefaultPortalBillingRange,
   isPortalBillingRangeTooLong,
   listPortalBillingModels,
+  summarizePortalBillingByKey,
   sumPortalBillingStats,
 } from '../lib/billing'
 import { PortalBillingChart } from './portal-billing-chart'
+import { PortalKeyUsageTable } from './portal-key-usage-table'
 import { PortalSubjectUserPicker } from './portal-subject-user-picker'
 
 type PortalBillingPanelProps = {
@@ -94,7 +99,11 @@ export function PortalBillingPanel(props: PortalBillingPanelProps) {
   const user = useAuthStore((state) => state.auth.user)
   const subjectUser = usePortalSubjectUser(props.initialSubject)
   const subjectAccount = useQuery({
-    queryKey: ['user-portal', 'subject-account', subjectUser.subjectUserId ?? 0],
+    queryKey: [
+      'user-portal',
+      'subject-account',
+      subjectUser.subjectUserId ?? 0,
+    ],
     enabled: subjectUser.subjectUserId != null,
     queryFn: async () =>
       requireServerSuccess(await getUser(subjectUser.subjectUserId ?? 0)).data,
@@ -105,7 +114,7 @@ export function PortalBillingPanel(props: PortalBillingPanelProps) {
     !isPortalBillingRangeTooLong(
       props.initialStart,
       props.initialEnd,
-      PORTAL_BILL_MAX_RANGE_SECONDS,
+      PORTAL_BILL_MAX_RANGE_SECONDS
     )
       ? {
           start: getStartOfDay(props.initialStart),
@@ -122,13 +131,18 @@ export function PortalBillingPanel(props: PortalBillingPanelProps) {
   const [modelName, setModelName] = useState(PORTAL_BILLING_ALL_MODELS)
   const [rangeOpen, setRangeOpen] = useState(false)
 
+  const rangeLimit = seededFromBill ? PORTAL_BILL_MAX_RANGE_SECONDS : undefined
   const billing = usePortalBillingData(
     start,
     end,
-    seededFromBill
-      ? PORTAL_BILL_MAX_RANGE_SECONDS
-      : undefined,
-    subjectUser.subjectUserId,
+    rangeLimit,
+    subjectUser.subjectUserId
+  )
+  const keys = usePortalKeyUsage(
+    start,
+    end,
+    rangeLimit,
+    subjectUser.subjectUserId
   )
   const unknownModel = t('Unknown model')
   const selectedModelName =
@@ -145,6 +159,15 @@ export function PortalBillingPanel(props: PortalBillingPanelProps) {
   )
 
   const stats = useMemo(() => sumPortalBillingStats(quotaRows), [quotaRows])
+  const keyUsage = useMemo(
+    () =>
+      summarizePortalBillingByKey(
+        filterRowsByModelName(keys.rows, selectedModelName, unknownModel),
+        t('Unknown key'),
+        (id) => t('Deleted key #{{id}}', { id })
+      ),
+    [keys.rows, selectedModelName, t, unknownModel]
+  )
 
   const modelItems = useMemo(() => {
     const names = listPortalBillingModels(billing.quotaRows, unknownModel)
@@ -470,11 +493,21 @@ export function PortalBillingPanel(props: PortalBillingPanelProps) {
           {t('Select a range of at most 30 days.')}
         </p>
       ) : (
-        <PortalBillingChart
-          points={points}
-          totalQuota={stats.quota}
-          loading={billing.isLoading}
-        />
+        <>
+          <PortalBillingChart
+            points={points}
+            totalQuota={stats.quota}
+            loading={billing.isLoading}
+          />
+          <PortalKeyUsageTable
+            rows={keyUsage}
+            loading={keys.isLoading}
+            error={keys.isError}
+            onRetry={() => {
+              void keys.refetch()
+            }}
+          />
+        </>
       )}
     </div>
   )

@@ -89,6 +89,31 @@ func GetUserQuotaDates(c *gin.Context) {
 	return
 }
 
+func GetUserKeyQuota(c *gin.Context) {
+	subject, ok := resolveScopedUser(c)
+	if !ok {
+		return
+	}
+	startTimestamp, endTimestamp, ok := parseFlowQuotaTimeRange(c)
+	if !ok {
+		return
+	}
+	if endTimestamp-startTimestamp > 32*24*60*60 {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": "时间跨度不能超过 1 个月",
+		})
+		return
+	}
+	rows, err := model.ListUserKeyQuota(subject.ID, startTimestamp, endTimestamp)
+	if err != nil {
+		common.SysError("failed to list key quota: " + err.Error())
+		common.ApiErrorMsg(c, "failed to list key usage")
+		return
+	}
+	common.ApiSuccess(c, rows)
+}
+
 func GetAccountMonthCosts(c *gin.Context) {
 	period := c.Query("period")
 	if period == "" {

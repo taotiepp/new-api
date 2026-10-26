@@ -38,11 +38,104 @@ import {
   isPortalBillingRangeTooLong,
   listPortalBillMonths,
   listPortalBillingModels,
+  summarizePortalBillingByKey,
   summarizePortalBillingByModel,
   sumPortalBillingStats,
 } from '../lib/billing'
 
 describe('portal billing aggregations', () => {
+  test('returns no keys when the selected range has no usage rows', () => {
+    expect(
+      summarizePortalBillingByKey([], 'unknown', (id) => `deleted-${id}`),
+    ).toEqual([])
+  })
+
+  test('sums rows that share a key and orders equal consumption by name', () => {
+    expect(
+      summarizePortalBillingByKey(
+        [
+          {
+            token_id: 2,
+            token_name: 'staging',
+            quota: 10,
+            count: 1,
+            token_used: 2,
+          },
+          {
+            token_id: 1,
+            token_name: 'production',
+            quota: 40,
+            count: 2,
+            token_used: 8,
+          },
+          {
+            token_id: 1,
+            token_name: 'production',
+            quota: 10,
+            count: 1,
+            token_used: 2,
+          },
+          {
+            token_id: 3,
+            token_name: 'alpha',
+            quota: 10,
+            count: 1,
+            token_used: 1,
+          },
+        ],
+        'unknown',
+        (id) => `deleted-${id}`,
+      ),
+    ).toEqual([
+      { tokenId: 1, name: 'production', quota: 50, count: 3, tokens: 10 },
+      { tokenId: 3, name: 'alpha', quota: 10, count: 1, tokens: 1 },
+      { tokenId: 2, name: 'staging', quota: 10, count: 1, tokens: 2 },
+    ])
+  })
+
+  test('labels a removed key by id and usage without a key as unknown', () => {
+    expect(
+      summarizePortalBillingByKey(
+        [
+          { token_id: 4, token_name: '  ', quota: 2, count: 1, token_used: 1 },
+          { token_id: 0, token_name: '', quota: 1, count: 1, token_used: 1 },
+        ],
+        'unknown',
+        (id) => `deleted-${id}`,
+      ),
+    ).toEqual([
+      { tokenId: 4, name: 'deleted-4', quota: 2, count: 1, tokens: 1 },
+      { tokenId: 0, name: 'unknown', quota: 1, count: 1, tokens: 1 },
+    ])
+  })
+
+  test('keeps only the selected model when summarizing key usage', () => {
+    const rows = [
+      {
+        token_id: 1,
+        token_name: 'production',
+        model_name: 'gpt',
+        quota: 40,
+        count: 2,
+        token_used: 8,
+      },
+      {
+        token_id: 1,
+        token_name: 'production',
+        model_name: 'claude',
+        quota: 10,
+        count: 1,
+        token_used: 2,
+      },
+    ]
+    const filtered = filterRowsByModelName(rows, 'gpt', 'Unknown')
+    expect(
+      summarizePortalBillingByKey(filtered, 'unknown', (id) => `deleted-${id}`),
+    ).toEqual([
+      { tokenId: 1, name: 'production', quota: 40, count: 2, tokens: 8 },
+    ])
+  })
+
   test('sums quota, request count, and tokens from empty and mixed rows', () => {
     expect(sumPortalBillingStats([])).toEqual({
       quota: 0,

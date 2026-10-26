@@ -96,10 +96,14 @@ describe('virtual groups page', () => {
 
     await userEvent.click(screen.getByRole('button', { name: 'Edit alias' }))
 
-    expect(screen.getByRole('combobox', { name: 'Add an alias' })).toBeVisible()
+    expect(screen.getByRole('columnheader', { name: 'Alias' })).toBeVisible()
     expect(
-      screen.getByText('Requests for these names are served as gpt-4o')
+      screen.getByRole('columnheader', { name: 'Actual model' })
     ).toBeVisible()
+    expect(
+      screen.getByRole('textbox', { name: /Alias for default/ })
+    ).toHaveValue('gpt-4o')
+    expect(screen.getByText('default / gpt-4o')).toBeVisible()
     expect(
       screen.queryByRole('textbox', { name: 'Redirect' })
     ).not.toBeInTheDocument()
@@ -140,8 +144,13 @@ describe('virtual groups page', () => {
     )
 
     expect(
-      screen.getAllByRole('combobox', { name: 'Add an alias' })
-    ).toHaveLength(2)
+      screen.getByRole('textbox', { name: /Alias for default .* claude-3/ })
+    ).toHaveValue('claude-3')
+    expect(
+      screen.getByRole('textbox', { name: /Alias for default .* gemini/ })
+    ).toHaveValue('gemini')
+    expect(screen.getByText('default / claude-3')).toBeVisible()
+    expect(screen.getByText('default / gemini')).toBeVisible()
     expect(
       screen.queryByRole('button', { name: 'Add model' })
     ).not.toBeInTheDocument()
@@ -154,7 +163,7 @@ describe('virtual groups page', () => {
     expect(bundle).toHaveTextContent('claude-3')
     expect(bundle).toHaveTextContent('gemini')
     expect(
-      screen.queryByRole('combobox', { name: 'Add an alias' })
+      screen.queryByRole('columnheader', { name: 'Alias' })
     ).not.toBeInTheDocument()
     expect(api.put).toHaveBeenCalledWith(
       '/api/user/self/virtual-groups',
@@ -233,16 +242,24 @@ describe('virtual groups page', () => {
     const user = userEvent.setup()
     renderPage()
     await user.click(await screen.findByRole('button', { name: 'Edit alias' }))
-    const aliasInput = screen.getByRole('combobox', { name: 'Add an alias' })
-    await user.click(aliasInput)
-    await user.type(aliasInput, 'gpt-5.6-luna')
     await user.click(
-      await screen.findByRole('option', { name: 'Add "gpt-5.6-luna"' })
+      screen.getByRole('button', { name: /Add an alias for default/ })
     )
-    await user.type(aliasInput, 'gpt-6-luna')
+    const aliasInputs = screen.getAllByRole('textbox', {
+      name: /Alias for default/,
+    })
+    expect(aliasInputs[1]).toHaveValue('')
+    expect(screen.getAllByText('default / gpt-4o')).toHaveLength(2)
+    await user.type(aliasInputs[1], 'gpt-5.6-luna')
     await user.click(
-      await screen.findByRole('option', { name: 'Add "gpt-6-luna"' })
+      screen.getAllByRole('button', {
+        name: /Add an alias for default/,
+      })[1]
     )
+    const nextInputs = screen.getAllByRole('textbox', {
+      name: /Alias for default/,
+    })
+    await user.type(nextInputs[2], 'gpt-6-luna')
     await user.click(screen.getByRole('button', { name: 'Save' }))
 
     await screen.findByRole('button', { name: 'Edit alias' })
@@ -269,6 +286,36 @@ describe('virtual groups page', () => {
               source_group: 'default',
               source_model: 'gpt-4o',
               redirect: '',
+            }),
+          ],
+        }),
+      ])
+    )
+  })
+
+  it('omits a blank alias row when the group is saved', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await user.click(await screen.findByRole('button', { name: 'Edit alias' }))
+    await user.click(
+      screen.getByRole('button', { name: /Add an alias for default/ })
+    )
+    expect(
+      screen.getAllByRole('textbox', { name: /Alias for default/ })[1]
+    ).toHaveValue('')
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    await screen.findByRole('button', { name: 'Edit alias' })
+    expect(api.put).toHaveBeenCalledWith(
+      '/api/user/self/virtual-groups',
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: 'alias',
+          models: [
+            expect.objectContaining({
+              name: 'gpt-4o',
+              source_group: 'default',
+              source_model: 'gpt-4o',
             }),
           ],
         }),

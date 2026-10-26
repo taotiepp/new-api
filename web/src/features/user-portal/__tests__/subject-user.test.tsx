@@ -36,6 +36,7 @@ const getUserBills = vi.hoisted(() => vi.fn())
 const listUserInvoices = vi.hoisted(() => vi.fn())
 const issueUserInvoice = vi.hoisted(() => vi.fn())
 const getUserQuotaDates = vi.hoisted(() => vi.fn())
+const getUserKeyQuota = vi.hoisted(() => vi.fn())
 const getUserLogs = vi.hoisted(() => vi.fn())
 const getUserLogStats = vi.hoisted(() => vi.fn())
 const getUserModels = vi.hoisted(() => vi.fn())
@@ -64,6 +65,7 @@ vi.mock('@/features/dashboard/api', () => ({
   listUserInvoices,
   issueUserInvoice,
   getUserQuotaDates,
+  getUserKeyQuota,
 }))
 
 vi.mock('@/features/usage-logs/api', () => ({
@@ -302,6 +304,19 @@ describe('portal subject user', () => {
   test('administrator can load another user usage', async () => {
     signIn(ROLE.ADMIN)
     getUserQuotaDates.mockResolvedValue({ success: true, data: [] })
+    getUserKeyQuota.mockResolvedValue({
+      success: true,
+      data: [
+        {
+          token_id: 9,
+          token_name: 'bob-production',
+          model_name: 'gpt',
+          quota: 500000,
+          count: 3,
+          token_used: 12,
+        },
+      ],
+    })
     getUser.mockResolvedValue({
       success: true,
       data: { id: 2, username: 'bob', quota: 10, used_quota: 4 },
@@ -312,10 +327,14 @@ describe('portal subject user', () => {
     )
 
     expect(await screen.findByText('Viewing bob')).toBeInTheDocument()
+    expect(await screen.findByText('bob-production')).toBeInTheDocument()
     await waitFor(() => {
       expect(getUserQuotaDates).toHaveBeenCalledWith(
         expect.objectContaining({ user_id: 2 }),
         false
+      )
+      expect(getUserKeyQuota).toHaveBeenCalledWith(
+        expect.objectContaining({ user_id: 2 })
       )
     })
   })
@@ -323,6 +342,7 @@ describe('portal subject user', () => {
   test('common user cannot open another user usage from the address', async () => {
     signIn(ROLE.USER)
     getUserQuotaDates.mockResolvedValue({ success: true, data: [] })
+    getUserKeyQuota.mockResolvedValue({ success: true, data: [] })
 
     renderPanel(
       <PortalBillingPanel initialSubject={{ id: 2, username: 'bob' }} />
@@ -334,8 +354,12 @@ describe('portal subject user', () => {
     expect(screen.queryByText('Viewing bob')).toBeNull()
     await waitFor(() => {
       expect(getUserQuotaDates).toHaveBeenCalled()
+      expect(getUserKeyQuota).toHaveBeenCalled()
     })
     expect(getUserQuotaDates.mock.calls[0]?.[0]).not.toEqual(
+      expect.objectContaining({ user_id: expect.any(Number) })
+    )
+    expect(getUserKeyQuota.mock.calls[0]?.[0]).not.toEqual(
       expect.objectContaining({ user_id: expect.any(Number) })
     )
   })

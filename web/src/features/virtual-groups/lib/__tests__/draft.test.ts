@@ -21,7 +21,9 @@ import { describe, expect, it } from 'vitest'
 import {
   appendSourceModels,
   commitGroup,
-  setSourceAliases,
+  insertModelAlias,
+  modelsForSave,
+  renameModelAlias,
   type EditorGroup,
   type EditorModel,
 } from '../draft'
@@ -96,65 +98,87 @@ describe('appendSourceModels', () => {
   })
 })
 
-describe('setSourceAliases', () => {
-  it('keeps every alias on the same source model and clears upstream redirect', () => {
+describe('insertModelAlias', () => {
+  it('inserts a blank alias row for the clicked actual model', () => {
     const existing = [
       model({
-        name: 'deepseek-flash',
-        source_model: 'deepseek-flash',
-        redirect: 'gpt-5.6-luna',
+        name: 'gpt-4o',
+        localId: 'row-a',
+        source_group: 'codex',
+        source_model: 'gpt-5.6-sol',
       }),
+      model({ name: 'other', localId: 'row-b', source_model: 'other' }),
     ]
 
-    const result = setSourceAliases(
-      existing,
-      'default',
-      'deepseek-flash',
-      ['deepseek-flash', 'gpt-5.6-luna', 'gpt-6-luna'],
-      createId
-    )
+    const result = insertModelAlias(existing, 'row-a', createId)
 
-    expect(result.rejected).toEqual([])
-    expect(result.models).toEqual([
-      expect.objectContaining({
-        name: 'deepseek-flash',
-        source_group: 'default',
-        source_model: 'deepseek-flash',
-        redirect: '',
-      }),
-      expect.objectContaining({
-        name: 'gpt-5.6-luna',
-        source_group: 'default',
-        source_model: 'deepseek-flash',
-        redirect: '',
-      }),
-      expect.objectContaining({
-        name: 'gpt-6-luna',
-        source_group: 'default',
-        source_model: 'deepseek-flash',
-        redirect: '',
-      }),
+    expect(result.localId).toBe(result.models[1]?.localId)
+    expect(result.localId).not.toBe('row-a')
+    expect(result.models.map((item) => item.name)).toEqual([
+      'gpt-4o',
+      '',
+      'other',
     ])
+    expect(result.models[1]).toMatchObject({
+      source_group: 'codex',
+      source_model: 'gpt-5.6-sol',
+      redirect: '',
+    })
+    expect(existing).toHaveLength(2)
   })
+})
 
-  it('rejects an alias already used by another source model', () => {
+describe('renameModelAlias', () => {
+  it('rejects an alias already used by another row', () => {
     const existing = [
-      model({ name: 'gpt-4o', source_model: 'gpt-4o' }),
-      model({ name: 'deepseek-flash', source_model: 'deepseek-flash' }),
+      model({ name: 'gpt-4o', localId: 'row-a', source_model: 'gpt-4o' }),
+      model({
+        name: 'deepseek-flash',
+        localId: 'row-b',
+        source_model: 'deepseek-flash',
+      }),
     ]
 
-    const result = setSourceAliases(
-      existing,
-      'default',
-      'deepseek-flash',
-      ['deepseek-flash', 'gpt-4o'],
-      createId
-    )
+    const result = renameModelAlias(existing, 'row-b', 'gpt-4o')
 
-    expect(result.rejected).toEqual(['gpt-4o'])
+    expect(result.rejected).toBe(true)
     expect(result.models.map((item) => item.name)).toEqual([
       'gpt-4o',
       'deepseek-flash',
+    ])
+  })
+})
+
+describe('modelsForSave', () => {
+  it('drops blank aliases, trims names, and clears redirects', () => {
+    const result = modelsForSave([
+      model({
+        name: ' gpt-4o ',
+        localId: 'row-a',
+        redirect: 'gpt-5.6-luna',
+      }),
+      model({
+        name: ' ',
+        localId: 'row-b',
+        source_model: 'gpt-4o',
+      }),
+      model({
+        name: 'luna',
+        localId: 'row-c',
+        source_model: 'gpt-4o',
+      }),
+    ])
+
+    expect(result).toEqual([
+      expect.objectContaining({
+        name: 'gpt-4o',
+        redirect: '',
+      }),
+      expect.objectContaining({
+        name: 'luna',
+        source_model: 'gpt-4o',
+        redirect: '',
+      }),
     ])
   })
 })

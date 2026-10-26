@@ -273,7 +273,7 @@ function HomeLandingStats(props: {
           <p className='portal-stat-value'>
             {props.isLoading ? '—' : props.vendorCount}
           </p>
-          <p className='home-landing-stat-label'>{t('Providers')}</p>
+          <p className='home-landing-stat-label'>{t('Model types')}</p>
         </div>
         <div className='portal-card px-3 py-4'>
           <p className='portal-stat-value'>1</p>
@@ -327,9 +327,9 @@ function HomeLandingFeatured(props: {
         <div>
           <h2 className='home-landing-section-title'>{t('Featured Models')}</h2>
           <p className='home-landing-section-sub'>
-            {t('{{modelCount}} models on {{providerCount}} providers', {
+            {t('{{modelCount}} models across {{typeCount}} model types', {
               modelCount: props.models.length,
-              providerCount,
+              typeCount: providerCount,
             })}
           </p>
         </div>

@@ -132,6 +132,37 @@ func TestGetFlowQuotaDataUsesQuotaDataRoleSpecificDimensions(t *testing.T) {
 	require.Equal(t, 175, selfRows[0].Quota)
 }
 
+func TestListUserKeyQuotaSumsTheSelectedRangeByKey(t *testing.T) {
+	truncateTables(t)
+	require.NoError(t, DB.Exec("DELETE FROM quota_data").Error)
+	require.NoError(t, DB.Exec("DELETE FROM tokens").Error)
+	require.NoError(t, DB.Create(&Token{Id: 11, UserId: 1, Key: "sk-primary", Name: "primary"}).Error)
+	require.NoError(t, DB.Create(&Token{Id: 22, UserId: 2, Key: "sk-backup", Name: "backup"}).Error)
+
+	seedFlowQuotaData(t, QuotaData{UserID: 1, TokenID: 11, ModelName: "gpt", CreatedAt: 1000, Count: 2, Quota: 70, TokenUsed: 10})
+	seedFlowQuotaData(t, QuotaData{UserID: 1, TokenID: 11, ModelName: "gpt", CreatedAt: 2000, Count: 1, Quota: 30, TokenUsed: 4})
+	seedFlowQuotaData(t, QuotaData{UserID: 1, TokenID: 11, ModelName: "claude", CreatedAt: 1500, Count: 1, Quota: 40, TokenUsed: 6})
+	seedFlowQuotaData(t, QuotaData{UserID: 1, TokenID: 22, ModelName: "gpt", CreatedAt: 1500, Count: 1, Quota: 10, TokenUsed: 2})
+	seedFlowQuotaData(t, QuotaData{UserID: 1, TokenID: 0, ModelName: "", CreatedAt: 1500, Count: 1, Quota: 5, TokenUsed: 1})
+	seedFlowQuotaData(t, QuotaData{UserID: 1, TokenID: 11, ModelName: "gpt", CreatedAt: 999, Count: 9, Quota: 999, TokenUsed: 9})
+	seedFlowQuotaData(t, QuotaData{UserID: 1, TokenID: 11, ModelName: "gpt", CreatedAt: 2001, Count: 9, Quota: 999, TokenUsed: 9})
+	seedFlowQuotaData(t, QuotaData{UserID: 2, TokenID: 22, ModelName: "gpt", CreatedAt: 1500, Count: 4, Quota: 80, TokenUsed: 8})
+
+	rows, err := ListUserKeyQuota(1, 1000, 2000)
+	require.NoError(t, err)
+	require.Len(t, rows, 4)
+	require.Equal(t, KeyQuotaUsage{TokenID: 11, TokenName: "primary", ModelName: "gpt", Count: 3, Quota: 100, TokenUsed: 14}, rows[0])
+	require.Equal(t, KeyQuotaUsage{TokenID: 11, TokenName: "primary", ModelName: "claude", Count: 1, Quota: 40, TokenUsed: 6}, rows[1])
+	require.Equal(t, KeyQuotaUsage{TokenID: 22, TokenName: "", ModelName: "gpt", Count: 1, Quota: 10, TokenUsed: 2}, rows[2])
+	require.Equal(t, KeyQuotaUsage{TokenID: 0, TokenName: "", ModelName: "", Count: 1, Quota: 5, TokenUsed: 1}, rows[3])
+
+	require.NoError(t, DB.Delete(&Token{Id: 11}).Error)
+	deleted, err := ListUserKeyQuota(1, 1000, 2000)
+	require.NoError(t, err)
+	require.Equal(t, 11, deleted[0].TokenID)
+	require.Empty(t, deleted[0].TokenName)
+}
+
 func TestLogQuotaDataSplitsRowsByUseGroupTokenChannelAndNode(t *testing.T) {
 	truncateTables(t)
 	CacheQuotaDataLock.Lock()

@@ -33,6 +33,15 @@ export interface QuotaDataItem {
   quota?: number
 }
 
+export interface KeyQuotaItem {
+  token_id?: number
+  token_name?: string
+  model_name?: string
+  token_used?: number
+  count?: number
+  quota?: number
+}
+
 export interface FlowQuotaDataItem {
   user_id?: number
   username?: string

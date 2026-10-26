@@ -196,6 +196,119 @@ func TestGetUserQuotaDatesLetsAdminReadAnotherUser(t *testing.T) {
 	require.Equal(t, 2, payload.Data[0].UserID)
 }
 
+func TestGetUserKeyQuotaReturnsOnlyTheAuthenticatedUsersKeys(t *testing.T) {
+	setupFlowControllerTestDB(t)
+
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	ctx.Set("id", 1)
+	ctx.Set("role", common.RoleCommonUser)
+	ctx.Request = httptest.NewRequest(http.MethodGet, "/api/data/self/keys?start_timestamp=1000&end_timestamp=2000", nil)
+
+	GetUserKeyQuota(ctx)
+
+	require.Equal(t, http.StatusOK, recorder.Code)
+	var payload struct {
+		Success bool                  `json:"success"`
+		Message string                `json:"message"`
+		Data    []model.KeyQuotaUsage `json:"data"`
+	}
+	require.NoError(t, common.Unmarshal(recorder.Body.Bytes(), &payload))
+	require.True(t, payload.Success, payload.Message)
+	require.Len(t, payload.Data, 1)
+	require.Equal(t, 11, payload.Data[0].TokenID)
+	require.Equal(t, "primary", payload.Data[0].TokenName)
+	require.Equal(t, "gpt-a", payload.Data[0].ModelName)
+	require.Equal(t, 100, payload.Data[0].Quota)
+	require.Equal(t, 2, payload.Data[0].Count)
+	require.Equal(t, 40, payload.Data[0].TokenUsed)
+}
+
+func TestGetUserKeyQuotaLetsAdminReadAnotherUser(t *testing.T) {
+	setupFlowControllerTestDB(t)
+	require.NoError(t, model.DB.Create(&model.User{
+		Id: 1, Username: "alice", Password: "secret", AffCode: "aaaa", Role: common.RoleAdminUser,
+	}).Error)
+	require.NoError(t, model.DB.Create(&model.User{
+		Id: 2, Username: "bob", Password: "secret", AffCode: "bbbb",
+	}).Error)
+
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	ctx.Set("id", 1)
+	ctx.Set("role", common.RoleAdminUser)
+	ctx.Request = httptest.NewRequest(http.MethodGet, "/api/data/self/keys?user_id=2&start_timestamp=1000&end_timestamp=2000", nil)
+
+	GetUserKeyQuota(ctx)
+
+	require.Equal(t, http.StatusOK, recorder.Code)
+	var payload struct {
+		Success bool                  `json:"success"`
+		Message string                `json:"message"`
+		Data    []model.KeyQuotaUsage `json:"data"`
+	}
+	require.NoError(t, common.Unmarshal(recorder.Body.Bytes(), &payload))
+	require.True(t, payload.Success, payload.Message)
+	require.Len(t, payload.Data, 1)
+	require.Equal(t, 22, payload.Data[0].TokenID)
+	require.Equal(t, "backup", payload.Data[0].TokenName)
+	require.Equal(t, 70, payload.Data[0].Quota)
+}
+
+func TestGetUserKeyQuotaRejectsOtherUserForCommonRole(t *testing.T) {
+	setupFlowControllerTestDB(t)
+
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	ctx.Set("id", 1)
+	ctx.Set("role", common.RoleCommonUser)
+	ctx.Request = httptest.NewRequest(http.MethodGet, "/api/data/self/keys?user_id=2&start_timestamp=1000&end_timestamp=2000", nil)
+
+	GetUserKeyQuota(ctx)
+
+	require.Equal(t, http.StatusOK, recorder.Code)
+	var payload struct {
+		Success bool   `json:"success"`
+		Message string `json:"message"`
+	}
+	require.NoError(t, common.Unmarshal(recorder.Body.Bytes(), &payload))
+	require.False(t, payload.Success)
+	require.Equal(t, "access denied", payload.Message)
+}
+
+func TestGetUserKeyQuotaRejectsAnInvertedOrOversizedRange(t *testing.T) {
+	setupFlowControllerTestDB(t)
+
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	ctx.Set("id", 1)
+	ctx.Request = httptest.NewRequest(http.MethodGet, "/api/data/self/keys?start_timestamp=2000&end_timestamp=1000", nil)
+
+	GetUserKeyQuota(ctx)
+
+	require.Equal(t, http.StatusOK, recorder.Code)
+	var payload struct {
+		Success bool   `json:"success"`
+		Message string `json:"message"`
+	}
+	require.NoError(t, common.Unmarshal(recorder.Body.Bytes(), &payload))
+	require.False(t, payload.Success)
+	require.Equal(t, "invalid time range", payload.Message)
+
+	recorder = httptest.NewRecorder()
+	ctx, _ = gin.CreateTestContext(recorder)
+	ctx.Set("id", 1)
+	end := int64(1 + 32*24*60*60 + 1)
+	ctx.Request = httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/data/self/keys?start_timestamp=1&end_timestamp=%d", end), nil)
+
+	GetUserKeyQuota(ctx)
+
+	require.Equal(t, http.StatusOK, recorder.Code)
+	require.NoError(t, common.Unmarshal(recorder.Body.Bytes(), &payload))
+	require.False(t, payload.Success)
+	require.Equal(t, "时间跨度不能超过 1 个月", payload.Message)
+}
+
 func TestGetUserQuotaDatesRejectsOtherUserForCommonRole(t *testing.T) {
 	setupFlowControllerTestDB(t)
 	recorder := httptest.NewRecorder()

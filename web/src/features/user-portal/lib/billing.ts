@@ -59,10 +59,75 @@ export type PortalBillingStats = {
   tokens: number
 }
 
+export type PortalKeyUsage = {
+  tokenId: number
+  name: string
+  quota: number
+  count: number
+  tokens: number
+}
+
 export type PortalBillingBarPoint = {
   bucket: string
   series: string
   quota: number
+}
+
+export function summarizePortalBillingByKey(
+  rows: Array<{
+    token_id?: number
+    token_name?: string
+    quota?: number
+    count?: number
+    token_used?: number
+  }>,
+  unknownLabel: string,
+  deletedLabel: (id: number) => string,
+): PortalKeyUsage[] {
+  const totals = new Map<
+    number,
+    {
+      tokenId: number
+      tokenName: string
+      quota: number
+      count: number
+      tokens: number
+    }
+  >()
+  for (const row of rows) {
+    const tokenId = Number(row.token_id) || 0
+    const current = totals.get(tokenId) ?? {
+      tokenId,
+      tokenName: '',
+      quota: 0,
+      count: 0,
+      tokens: 0,
+    }
+    const name = row.token_name?.trim() ?? ''
+    if (name) current.tokenName = name
+    current.quota += Number(row.quota) || 0
+    current.count += Number(row.count) || 0
+    current.tokens += Number(row.token_used) || 0
+    totals.set(tokenId, current)
+  }
+
+  return [...totals.values()]
+    .map((item) => {
+      let name = item.tokenName.trim()
+      if (!name && item.tokenId > 0) name = deletedLabel(item.tokenId)
+      if (!name) name = unknownLabel
+      return {
+        tokenId: item.tokenId,
+        name,
+        quota: item.quota,
+        count: item.count,
+        tokens: item.tokens,
+      }
+    })
+    .sort((a, b) => {
+      if (b.quota !== a.quota) return b.quota - a.quota
+      return a.name.localeCompare(b.name)
+    })
 }
 
 export function sumPortalBillingStats(

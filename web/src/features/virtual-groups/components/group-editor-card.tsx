@@ -47,13 +47,14 @@ import { requireServerSuccess } from '@/lib/server-error-message'
 
 import {
   appendSourceModels,
-  setSourceAliases,
-  sourceModelAliases,
+  insertModelAlias,
+  modelsForSave,
+  renameModelAlias,
   type EditorModel,
   type GroupDraft,
   type GroupSession,
 } from '../lib/draft'
-import { GroupModelEntry } from './group-model-entry'
+import { GroupModelTable } from './group-model-table'
 
 type SourceGroupOption = {
   value: string
@@ -78,6 +79,7 @@ export function GroupEditorCard(props: {
   )
   const [sourceGroup, setSourceGroup] = useState(props.initialSourceGroup)
   const [selectedModels, setSelectedModels] = useState<string[]>([])
+  const [aliasFocusId, setAliasFocusId] = useState<string | null>(null)
 
   const draftModels = useCallback(() => {
     if (sourceGroup === '' || selectedModels.length === 0) return models
@@ -87,12 +89,27 @@ export function GroupEditorCard(props: {
   }, [models, selectedModels, sourceGroup])
 
   const publishDraft = () => {
-    props.draftStore.current.draft = { name, models: draftModels() }
+    props.draftStore.current.draft = {
+      name,
+      models: modelsForSave(draftModels()),
+    }
   }
 
   useEffect(() => {
-    props.draftStore.current.draft = { name, models: draftModels() }
+    props.draftStore.current.draft = {
+      name,
+      models: modelsForSave(draftModels()),
+    }
   }, [draftModels, name, props.draftStore])
+
+  useEffect(() => {
+    if (aliasFocusId === null) return
+    const input = document.querySelector(
+      `#virtual-group-alias-${CSS.escape(aliasFocusId)}`
+    )
+    if (input instanceof HTMLInputElement) input.focus()
+    setAliasFocusId(null)
+  }, [aliasFocusId])
 
   useEffect(() => {
     if (sourceGroup !== '') return
@@ -135,24 +152,23 @@ export function GroupEditorCard(props: {
     setSelectedModels([])
   }
 
-  const cards = sourceModelAliases(models)
+  const modelCount = new Set(
+    models.map((model) => `${model.source_group}\0${model.source_model}`)
+  ).size
 
-  const updateAliases = (
-    sourceGroup: string,
-    sourceModel: string,
-    aliases: string[]
-  ) => {
-    const result = setSourceAliases(
-      models,
-      sourceGroup,
-      sourceModel,
-      aliases,
-      () => crypto.randomUUID()
-    )
-    if (result.rejected.length > 0) {
+  const changeAlias = (localId: string, alias: string) => {
+    const result = renameModelAlias(models, localId, alias)
+    if (result.rejected) {
       toast.error(t('This model is already in the virtual group'))
+      return
     }
     setModels(result.models)
+  }
+
+  const addAlias = (localId: string) => {
+    const result = insertModelAlias(models, localId, () => crypto.randomUUID())
+    setModels(result.models)
+    if (result.localId !== null) setAliasFocusId(result.localId)
   }
 
   return (
@@ -242,7 +258,7 @@ export function GroupEditorCard(props: {
                 {t('Models in this group')}
               </h3>
               <Badge variant='secondary'>
-                {t('{{count}} models', { count: cards.length })}
+                {t('{{count}} models', { count: modelCount })}
               </Badge>
             </div>
             {models.length === 0 ? (
@@ -250,32 +266,16 @@ export function GroupEditorCard(props: {
                 {t('No models in this virtual group')}
               </p>
             ) : (
-              <ul className='flex flex-col gap-3'>
-                {cards.map((card) => (
-                  <GroupModelEntry
-                    key={`${card.source_group}/${card.source_model}`}
-                    sourceGroup={card.source_group}
-                    sourceModel={card.source_model}
-                    aliases={card.aliases}
-                    onAliasesChange={(aliases) =>
-                      updateAliases(
-                        card.source_group,
-                        card.source_model,
-                        aliases
-                      )
-                    }
-                    onRemove={() =>
-                      setModels((current) =>
-                        current.filter(
-                          (item) =>
-                            item.source_group !== card.source_group ||
-                            item.source_model !== card.source_model
-                        )
-                      )
-                    }
-                  />
-                ))}
-              </ul>
+              <GroupModelTable
+                models={models}
+                onAliasChange={changeAlias}
+                onAddAlias={addAlias}
+                onRemove={(localId) =>
+                  setModels((current) =>
+                    current.filter((item) => item.localId !== localId)
+                  )
+                }
+              />
             )}
           </section>
         </FieldGroup>
