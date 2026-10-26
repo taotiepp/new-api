@@ -87,6 +87,7 @@
     "{{modelCount}} models on {{providerCount}} providers": "{{modelCount}} 个模型，{{providerCount}} 家供应商",
     "{{month}} bill": "{{month}} 账单",
     "{{n}} model(s) selected": "已选 {{n}} 个模型",
+    "{{name}} will be removed from this list.": "{{name}} 会从列表中移除。",
     "{{name}} will be removed from this list. Save to apply the change.": "{{name}} 会从列表中移除。保存后才会生效。",
     "{{operation}} (ID: {{id}})": "{{operation}}（ID: {{id}}）",
     "{{processed}} of {{total}} log entries processed.": "已处理 {{processed}} / {{total}} 条日志。",

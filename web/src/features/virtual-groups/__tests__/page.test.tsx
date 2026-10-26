@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, within } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { Toaster } from 'sonner'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -146,7 +146,7 @@ describe('virtual groups page', () => {
       screen.queryByRole('button', { name: 'Add model' })
     ).not.toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: 'Add group' }))
+    await user.click(screen.getByRole('button', { name: 'Save' }))
 
     const bundle = (
       await screen.findByRole('button', { name: 'Edit bundle' })
@@ -156,6 +156,21 @@ describe('virtual groups page', () => {
     expect(
       screen.queryByRole('combobox', { name: 'Add an alias' })
     ).not.toBeInTheDocument()
+    expect(api.put).toHaveBeenCalledWith(
+      '/api/user/self/virtual-groups',
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: 'bundle',
+          models: [
+            expect.objectContaining({
+              name: 'claude-3',
+              source_model: 'claude-3',
+            }),
+            expect.objectContaining({ name: 'gemini', source_model: 'gemini' }),
+          ],
+        }),
+      ])
+    )
   })
 
   it('discards a new group when the card is cancelled', async () => {
@@ -182,8 +197,13 @@ describe('virtual groups page', () => {
     expect(screen.getByText('Remove virtual group')).toBeVisible()
     await user.click(screen.getByRole('button', { name: 'Remove' }))
 
-    expect(screen.queryByText('spare')).not.toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.queryByText('spare')).not.toBeInTheDocument()
+    })
     expect(screen.getByRole('button', { name: 'Edit alias' })).toBeVisible()
+    expect(api.put).toHaveBeenCalledWith('/api/user/self/virtual-groups', [
+      expect.objectContaining({ name: 'alias' }),
+    ])
   })
 
   it('keeps the open card when the group name is duplicated', async () => {
@@ -195,11 +215,12 @@ describe('virtual groups page', () => {
       await screen.findByRole('textbox', { name: 'Group name' }),
       'alias'
     )
-    await user.click(screen.getByRole('button', { name: 'Add group' }))
+    await user.click(screen.getByRole('button', { name: 'Save' }))
 
     expect(
       await screen.findByText('Virtual group name is duplicated')
     ).toBeVisible()
+    expect(api.put).not.toHaveBeenCalled()
     expect(screen.getByRole('textbox', { name: 'Group name' })).toHaveValue(
       'alias'
     )

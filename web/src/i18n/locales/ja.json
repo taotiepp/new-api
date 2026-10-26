@@ -87,6 +87,7 @@
     "{{modelCount}} models on {{providerCount}} providers": "{{modelCount}} モデル / {{providerCount}} プロバイダー",
     "{{month}} bill": "{{month}} の請求",
     "{{n}} model(s) selected": "{{n}} 件のモデルを選択済み",
+    "{{name}} will be removed from this list.": "{{name}} を一覧から外します。",
     "{{name}} will be removed from this list. Save to apply the change.": "{{name}} を一覧から外します。保存すると反映されます。",
     "{{operation}} (ID: {{id}})": "{{operation}}（ID: {{id}}）",
     "{{processed}} of {{total}} log entries processed.": "{{total}} 件中 {{processed}} 件のログを処理しました。",

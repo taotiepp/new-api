@@ -87,6 +87,7 @@
     "{{modelCount}} models on {{providerCount}} providers": "{{modelCount}} моделей у {{providerCount}} провайдеров",
     "{{month}} bill": "Счёт за {{month}}",
     "{{n}} model(s) selected": "Выбрано моделей: {{n}}",
+    "{{name}} will be removed from this list.": "{{name}} будет удалён из списка.",
     "{{name}} will be removed from this list. Save to apply the change.": "{{name}} будет удалён из списка. Сохраните, чтобы применить изменение.",
     "{{operation}} (ID: {{id}})": "{{operation}} (ID: {{id}})",
     "{{processed}} of {{total}} log entries processed.": "Обработано {{processed}} из {{total}} записей журнала.",

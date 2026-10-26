@@ -67,7 +67,8 @@ export function GroupEditorCard(props: {
   initialSourceGroup: string
   sourceGroups: SourceGroupOption[]
   draftStore: { current: { draft: GroupDraft | null } }
-  onDone: () => void
+  pending?: boolean
+  onSave: () => void
   onCancel: () => void
 }) {
   const { t } = useTranslation()
@@ -178,8 +179,9 @@ export function GroupEditorCard(props: {
               onChange={(event) => setName(event.target.value)}
               onKeyDown={(event) => {
                 if (event.key !== 'Enter') return
+                event.preventDefault()
                 publishDraft()
-                props.onDone()
+                props.onSave()
               }}
               placeholder={t('Group name')}
             />
@@ -284,12 +286,13 @@ export function GroupEditorCard(props: {
         </Button>
         <Button
           type='button'
+          disabled={props.pending}
           onClick={() => {
             publishDraft()
-            props.onDone()
+            props.onSave()
           }}
         >
-          {props.mode === 'edit' ? t('Done') : t('Add group')}
+          {t('Save')}
         </Button>
       </CardFooter>
     </Card>

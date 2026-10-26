@@ -87,6 +87,7 @@
     "{{modelCount}} models on {{providerCount}} providers": "{{modelCount}} modèles chez {{providerCount}} fournisseurs",
     "{{month}} bill": "Facture de {{month}}",
     "{{n}} model(s) selected": "{{n}} modèle(s) sélectionné(s)",
+    "{{name}} will be removed from this list.": "{{name}} sera retiré de cette liste.",
     "{{name}} will be removed from this list. Save to apply the change.": "{{name}} sera retiré de cette liste. Enregistrez pour appliquer la modification.",
     "{{operation}} (ID: {{id}})": "{{operation}} (ID : {{id}})",
     "{{processed}} of {{total}} log entries processed.": "{{processed}} sur {{total}} entrées de journal traitées.",

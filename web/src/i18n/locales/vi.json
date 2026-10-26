@@ -87,6 +87,7 @@
     "{{modelCount}} models on {{providerCount}} providers": "{{modelCount}} mô hình trên {{providerCount}} nhà cung cấp",
     "{{month}} bill": "Hóa đơn {{month}}",
     "{{n}} model(s) selected": "Đã chọn {{n}} model",
+    "{{name}} will be removed from this list.": "{{name}} sẽ bị xóa khỏi danh sách.",
     "{{name}} will be removed from this list. Save to apply the change.": "{{name}} sẽ bị xóa khỏi danh sách. Hãy lưu để áp dụng thay đổi.",
     "{{operation}} (ID: {{id}})": "{{operation}} (ID: {{id}})",
     "{{processed}} of {{total}} log entries processed.": "Đã xử lý {{processed}}/{{total}} mục nhật ký.",

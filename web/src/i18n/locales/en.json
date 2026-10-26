@@ -87,6 +87,7 @@
     "{{modelCount}} models on {{providerCount}} providers": "{{modelCount}} models on {{providerCount}} providers",
     "{{month}} bill": "{{month}} bill",
     "{{n}} model(s) selected": "{{n}} model(s) selected",
+    "{{name}} will be removed from this list.": "{{name}} will be removed from this list.",
     "{{name}} will be removed from this list. Save to apply the change.": "{{name}} will be removed from this list. Save to apply the change.",
     "{{operation}} (ID: {{id}})": "{{operation}} (ID: {{id}})",
     "{{processed}} of {{total}} log entries processed.": "{{processed}} of {{total}} log entries processed.",

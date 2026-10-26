@@ -23,7 +23,6 @@ import { toast } from 'sonner'
 
 import { ConfirmDialog } from '@/components/confirm-dialog'
 import { SectionPageLayout } from '@/components/layout'
-import { Button } from '@/components/ui/button'
 import { getUserGroups, getVirtualGroups, updateVirtualGroups } from '@/lib/api'
 import { requireServerSuccess } from '@/lib/server-error-message'
 
@@ -78,7 +77,9 @@ export function VirtualGroupsPage(props: { embedded?: boolean }) {
   const saveMutation = useMutation({
     mutationFn: async (next: EditorGroup[]) =>
       requireServerSuccess(await updateVirtualGroups(toVirtualGroups(next))),
-    onSuccess: async () => {
+    onSuccess: async (_data, next) => {
+      setGroups(next)
+      setSession(null)
       toast.success(t('Virtual groups saved'))
       await queryClient.invalidateQueries({ queryKey: ['virtual-groups'] })
       await queryClient.invalidateQueries({ queryKey: ['user-groups'] })
@@ -94,8 +95,10 @@ export function VirtualGroupsPage(props: { embedded?: boolean }) {
       : undefined
   const removeTarget = groups.find((group) => group.localId === removeId)
 
-  const applyDraft = (draft: GroupDraft) => {
-    if (!session) return null
+  const saveEditing = () => {
+    if (!session || saveMutation.isPending) return
+    const draft = draftStore.current.draft
+    if (!draft) return
     const result = commitGroup(groups, session, draft, () =>
       crypto.randomUUID()
     )
@@ -105,29 +108,9 @@ export function VirtualGroupsPage(props: { embedded?: boolean }) {
           ? t('Group name is required')
           : t('Virtual group name is duplicated')
       )
-      return null
-    }
-    setGroups(result.groups)
-    setSession(null)
-    return result.groups
-  }
-
-  const finishEditing = () => {
-    const draft = draftStore.current.draft
-    if (!draft) return
-    applyDraft(draft)
-  }
-
-  const save = () => {
-    if (!session) {
-      saveMutation.mutate(groups)
       return
     }
-    const draft = draftStore.current.draft
-    if (!draft) return
-    const next = applyDraft(draft)
-    if (!next) return
-    saveMutation.mutate(next)
+    saveMutation.mutate(result.groups)
   }
 
   let initialSourceGroup = sourceGroups[0]?.value ?? ''
@@ -138,15 +121,6 @@ export function VirtualGroupsPage(props: { embedded?: boolean }) {
   ) {
     initialSourceGroup = editingSource
   }
-
-  const saveButton = (
-    <Button
-      onClick={save}
-      disabled={saveMutation.isPending || catalogQuery.isLoading}
-    >
-      {t('Save')}
-    </Button>
-  )
 
   const loadError =
     catalogQuery.isError && !loaded && catalogQuery.error instanceof Error
@@ -176,17 +150,18 @@ export function VirtualGroupsPage(props: { embedded?: boolean }) {
         initialSourceGroup={initialSourceGroup}
         sourceGroups={sourceGroups}
         draftStore={draftStore}
-        onDone={finishEditing}
-        onCancel={() => setSession(null)}
+        pending={saveMutation.isPending}
+        onSave={saveEditing}
+        onCancel={() => {
+          if (saveMutation.isPending) return
+          setSession(null)
+        }}
       />
     )
   }
 
   const editor = (
     <div className='flex max-w-4xl flex-col gap-4'>
-      {props.embedded ? (
-        <div className='flex justify-end'>{saveButton}</div>
-      ) : null}
       {props.embedded || session != null ? null : (
         <p className='text-muted-foreground text-sm'>
           {t(
@@ -201,18 +176,19 @@ export function VirtualGroupsPage(props: { embedded?: boolean }) {
           if (!open) setRemoveId(null)
         }}
         title={t('Remove virtual group')}
-        desc={t(
-          '{{name}} will be removed from this list. Save to apply the change.',
-          { name: removeTarget?.name ?? '' }
-        )}
+        desc={t('{{name}} will be removed from this list.', {
+          name: removeTarget?.name ?? '',
+        })}
         confirmText={t('Remove')}
         destructive
+        isLoading={saveMutation.isPending}
         handleConfirm={() => {
-          if (!removeTarget) return
-          setGroups((current) =>
-            current.filter((group) => group.localId !== removeTarget.localId)
+          if (!removeTarget || saveMutation.isPending) return
+          const next = groups.filter(
+            (group) => group.localId !== removeTarget.localId
           )
           setRemoveId(null)
+          saveMutation.mutate(next)
         }}
       />
     </div>
@@ -223,7 +199,6 @@ export function VirtualGroupsPage(props: { embedded?: boolean }) {
   return (
     <SectionPageLayout>
       <SectionPageLayout.Title>{t('Virtual groups')}</SectionPageLayout.Title>
-      <SectionPageLayout.Actions>{saveButton}</SectionPageLayout.Actions>
       <SectionPageLayout.Content>{editor}</SectionPageLayout.Content>
     </SectionPageLayout>
   )
