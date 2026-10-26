@@ -59,6 +59,7 @@ import { GroupModelTable } from './group-model-table'
 type SourceGroupOption = {
   value: string
   label: string
+  ratio: number | null
 }
 
 export function GroupEditorCard(props: {
@@ -268,6 +269,11 @@ export function GroupEditorCard(props: {
             ) : (
               <GroupModelTable
                 models={models}
+                groupRatios={Object.fromEntries(
+                  props.sourceGroups.flatMap((group) =>
+                    group.ratio == null ? [] : [[group.value, group.ratio]]
+                  )
+                )}
                 onAliasChange={changeAlias}
                 onAddAlias={addAlias}
                 onRemove={(localId) =>

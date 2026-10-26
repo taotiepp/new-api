@@ -64,7 +64,7 @@ describe('virtual groups page', () => {
           data: {
             success: true,
             data: {
-              default: { desc: 'Default', ratio: 1 },
+              default: { desc: 'Default', ratio: 0.4 },
               auto: { desc: 'Auto', ratio: 1 },
               mirrored: { desc: 'Mirror', ratio: 1, virtual: true },
             },
@@ -101,6 +101,10 @@ describe('virtual groups page', () => {
       screen.getByRole('columnheader', { name: 'Actual model' })
     ).toBeVisible()
     expect(
+      screen.getByRole('columnheader', { name: 'Group rate' })
+    ).toBeVisible()
+    expect(screen.getByText('×0.4')).toBeVisible()
+    expect(
       screen.getByRole('textbox', { name: /Alias for default/ })
     ).toHaveValue('gpt-4o')
     expect(screen.getByText('default / gpt-4o')).toBeVisible()
@@ -121,7 +125,7 @@ describe('virtual groups page', () => {
 
     await user.click(screen.getByRole('combobox', { name: 'Source group' }))
     expect(
-      await screen.findByRole('option', { name: 'default · Default' })
+      await screen.findByRole('option', { name: 'default · Default ×0.4' })
     ).toBeVisible()
     expect(
       screen.queryByRole('option', { name: /auto/ })

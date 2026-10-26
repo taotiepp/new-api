@@ -56,13 +56,13 @@ export function usePortalCatalogData(enabled = true) {
         vendor_name: vendor?.name,
         vendor_icon: vendor?.icon,
         vendor_description: vendor?.description,
-        group_ratio: {},
       }
     })
   }, [data])
 
   return {
     models,
+    groupRatio: data?.group_ratio ?? {},
     vendors: data?.vendors ?? [],
     endpointMap: data?.supported_endpoint ?? {},
     isLoading,

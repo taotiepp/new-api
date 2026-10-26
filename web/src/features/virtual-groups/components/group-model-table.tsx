@@ -27,6 +27,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 
 import type { EditorModel } from '../lib/draft'
+import { formatGroupRate } from '../lib/group-rate'
 
 function actualModelName(model: EditorModel) {
   return `${model.source_group} / ${model.source_model}`
@@ -34,6 +35,7 @@ function actualModelName(model: EditorModel) {
 
 export function GroupModelTable(props: {
   models: EditorModel[]
+  groupRatios?: Record<string, number>
   onAliasChange: (localId: string, name: string) => void
   onAddAlias: (localId: string) => void
   onRemove: (localId: string) => void
@@ -68,6 +70,16 @@ export function GroupModelTable(props: {
       id: 'model',
       header: t('Actual model'),
       cell: (model) => actualModelName(model),
+    },
+    {
+      id: 'discount',
+      header: t('Group rate'),
+      className: 'w-28',
+      cell: (model) => {
+        const ratio = props.groupRatios?.[model.source_group]
+        if (ratio == null) return '—'
+        return formatGroupRate(ratio)
+      },
     },
     {
       id: 'actions',

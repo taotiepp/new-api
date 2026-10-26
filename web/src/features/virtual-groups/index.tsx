@@ -36,6 +36,7 @@ import {
   type GroupDraft,
   type GroupSession,
 } from './lib/draft'
+import { formatGroupRate, numericGroupRate } from './lib/group-rate'
 
 export function VirtualGroupsPage(props: { embedded?: boolean }) {
   const { t } = useTranslation()
@@ -67,10 +68,15 @@ export function VirtualGroupsPage(props: { embedded?: boolean }) {
     () =>
       Object.entries(groupsQuery.data?.data ?? {})
         .filter(([name, info]) => name !== 'auto' && !info.virtual)
-        .map(([name, info]) => ({
-          value: name,
-          label: info.desc ? `${name} · ${info.desc}` : name,
-        })),
+        .map(([name, info]) => {
+          const base = info.desc ? `${name} · ${info.desc}` : name
+          const ratio = numericGroupRate(info.ratio)
+          return {
+            value: name,
+            ratio,
+            label: ratio == null ? base : `${base} ${formatGroupRate(ratio)}`,
+          }
+        }),
     [groupsQuery.data]
   )
 

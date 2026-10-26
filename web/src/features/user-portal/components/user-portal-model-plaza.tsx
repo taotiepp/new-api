@@ -36,7 +36,7 @@ export function UserPortalModelPlaza() {
   const { t } = useTranslation()
   const navigate = useNavigate()
 
-  const { models, isLoading, priceRate, usdExchangeRate } =
+  const { models, groupRatio, isLoading, priceRate, usdExchangeRate } =
     usePortalCatalogData()
 
   const {
@@ -87,7 +87,7 @@ export function UserPortalModelPlaza() {
       <UserPortalPage
         title={t('Model Square')}
         description={t(
-          'Compare price, context, and vendor, then open a model.'
+          'Compare input, output, and cache prices, then open a model.'
         )}
         actions={headerActions}
       >
@@ -104,7 +104,7 @@ export function UserPortalModelPlaza() {
     <UserPortalPage
       title={t('Model Square')}
       description={t(
-        'Compare price, context, and vendor, then open a model.'
+        'Compare input, output, and cache prices, then open a model.'
       )}
       actions={headerActions}
     >
@@ -145,6 +145,8 @@ export function UserPortalModelPlaza() {
             onModelClick={handleModelClick}
             priceRate={priceRate}
             usdExchangeRate={usdExchangeRate}
+            selectedGroup={groupFilter}
+            groupRatio={groupRatio}
           />
         )}
       </div>

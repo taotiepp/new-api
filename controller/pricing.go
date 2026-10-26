@@ -78,7 +78,7 @@ func GetPricing(c *gin.Context) {
 			"success":            true,
 			"data":               pricing,
 			"vendors":            catalogVendorsForItems(pricing, model.GetVendors()),
-			"group_ratio":        map[string]float64{},
+			"group_ratio":        groupRatio,
 			"usable_group":       map[string]string{},
 			"supported_endpoint": model.GetSupportedEndpointMap(),
 			"auto_groups":        []string{},

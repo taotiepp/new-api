@@ -24,10 +24,12 @@ import {
   staticDataTableClassNames,
   type StaticDataTableColumn,
 } from '@/components/data-table'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { TableCell, TableRow } from '@/components/ui/table'
 import { DEFAULT_PRICING_PAGE_SIZE, DEFAULT_TOKEN_UNIT } from '@/features/pricing/constants'
 import { useBillingTime } from '@/features/pricing/hooks/use-billing-time'
+import { useDisplaySellRatio } from '@/features/pricing/hooks/use-display-sell-ratio'
 import { usePricingFormatters } from '@/features/pricing/hooks/use-pricing-formatters'
 import {
   getDynamicDisplayGroupRatio,
@@ -39,9 +41,9 @@ import type { PricingModel, TokenUnit } from '@/features/pricing/types'
 import { getLobeIcon } from '@/lib/lobe-icon'
 import { cn } from '@/lib/utils'
 
-const TOKEN_FORMAT = new Intl.NumberFormat(undefined, {
-  maximumFractionDigits: 1,
-})
+import { PORTAL_GROUP_ALL } from '../lib/catalog-filters'
+
+const EMPTY_GROUP_RATIO: Record<string, number> = {}
 
 type PortalModelGridProps = {
   models: PricingModel[]
@@ -50,6 +52,8 @@ type PortalModelGridProps = {
   priceRate?: number
   usdExchangeRate?: number
   tokenUnit?: TokenUnit
+  selectedGroup?: string
+  groupRatio?: Record<string, number>
 }
 
 export function PortalModelGrid(props: PortalModelGridProps) {
@@ -70,20 +74,18 @@ export function PortalModelGrid(props: PortalModelGridProps) {
     const start = (currentPage - 1) * pageSize
     return props.models.slice(start, start + pageSize)
   }, [currentPage, pageSize, props.models])
+  const groupRatio = props.groupRatio ?? EMPTY_GROUP_RATIO
+  const selectedGroup =
+    props.selectedGroup && props.selectedGroup !== PORTAL_GROUP_ALL
+      ? props.selectedGroup
+      : undefined
 
-  const columns = useMemo<StaticDataTableColumn<PricingModel>[]>(
-    () => [
+  const columns = useMemo<StaticDataTableColumn<PricingModel>[]>(() => {
+    const columns: StaticDataTableColumn<PricingModel>[] = [
       {
         id: 'model',
         header: t('Model name'),
         cell: (model) => <CatalogModelName model={model} />,
-      },
-      {
-        id: 'context',
-        header: t('Context'),
-        className: 'w-28',
-        cellClassName: 'text-[var(--portal-ink-muted)]',
-        cell: (model) => formatCompactTokens(model.context_length) || '—',
       },
       {
         id: 'input',
@@ -115,9 +117,38 @@ export function PortalModelGrid(props: PortalModelGridProps) {
           />
         ),
       },
-    ],
-    [priceRate, t, tokenUnit, usdExchangeRate],
-  )
+      {
+        id: 'cache',
+        header: t('Cache Read'),
+        className: 'w-40 text-end',
+        cellClassName: 'text-end text-[var(--portal-ink)]',
+        cell: (model) => (
+          <CatalogPrice
+            model={model}
+            kind='cache'
+            tokenUnit={tokenUnit}
+            priceRate={priceRate}
+            usdExchangeRate={usdExchangeRate}
+          />
+        ),
+      },
+    ]
+    if (selectedGroup) {
+      columns.push({
+        id: 'group-rate',
+        header: <span className='sr-only'>{t('Group rate')}</span>,
+        className: 'w-20',
+        cell: (model) => (
+          <CatalogGroupRate
+            model={model}
+            group={selectedGroup}
+            groupRatio={groupRatio}
+          />
+        ),
+      })
+    }
+    return columns
+  }, [groupRatio, priceRate, selectedGroup, t, tokenUnit, usdExchangeRate])
 
   if (props.models.length === 0) {
     return null
@@ -225,7 +256,7 @@ function CatalogModelName(props: { model: PricingModel }) {
 
 function CatalogPrice(props: {
   model: PricingModel
-  kind: 'input' | 'output'
+  kind: 'input' | 'output' | 'cache'
   tokenUnit: TokenUnit
   priceRate: number
   usdExchangeRate: number
@@ -249,14 +280,43 @@ function CatalogPrice(props: {
       usdExchangeRate: props.usdExchangeRate,
       groupRatioMultiplier: getDynamicDisplayGroupRatio(props.model, undefined),
     })
+    if (props.kind === 'cache') {
+      const cache = summary?.entries.find(
+        (entry) => entry.field === 'cacheReadPrice',
+      )
+      if (!cache) return <Dash />
+      return <span>{cache.formattedRange ?? cache.formatted}</span>
+    }
     const entries = summary?.primaryEntries.slice(0, 2) ?? []
     const entry = props.kind === 'input' ? entries[0] : entries[1]
     if (!entry) return <Dash />
     return <span>{entry.formattedRange ?? entry.formatted}</span>
   }
 
+  if (props.kind === 'cache') {
+    if (!isTokenBasedModel(props.model) || props.model.cache_ratio == null) {
+      return <Dash />
+    }
+    return (
+      <span>
+        {formatPrice(
+          props.model,
+          'cache',
+          props.tokenUnit,
+          false,
+          props.priceRate,
+          props.usdExchangeRate,
+        )}
+        <span className='text-[var(--portal-ink-muted)] font-normal'>
+          {' '}
+          / {unitLabel}
+        </span>
+      </span>
+    )
+  }
+
   if (!isTokenBasedModel(props.model)) {
-    if (props.kind === 'output') return <Dash />
+    if (props.kind !== 'input') return <Dash />
     return (
       <span>
         {formatRequestPrice(
@@ -291,6 +351,32 @@ function CatalogPrice(props: {
   )
 }
 
+function CatalogGroupRate(props: {
+  model: PricingModel
+  group: string
+  groupRatio: Record<string, number>
+}) {
+  const { t } = useTranslation()
+  const rate = useDisplaySellRatio(
+    props.model.model_name,
+    props.groupRatio,
+    props.group,
+  )
+  if (!Number.isFinite(rate) || rate < 0) return <Dash />
+  const value = Number(rate.toFixed(4)).toString()
+  return (
+    <Badge
+      variant='outline'
+      className='h-5 rounded-none border-[var(--portal-hairline)] bg-transparent px-1.5 font-mono text-[11px] font-medium text-[var(--portal-ink)] tabular-nums'
+      aria-label={t('Group price is {{rate}} times the list price', {
+        rate: value,
+      })}
+    >
+      ×{value}
+    </Badge>
+  )
+}
+
 function Dash() {
   return <span className='text-[var(--portal-ink-muted)] font-normal'>—</span>
 }
@@ -303,11 +389,4 @@ function openModelOnActivate(
   if (event.key !== 'Enter' && event.key !== ' ') return
   event.preventDefault()
   onModelClick(model.model_name || '')
-}
-
-function formatCompactTokens(tokens?: number): string {
-  if (!tokens || !Number.isFinite(tokens) || tokens <= 0) return ''
-  if (tokens >= 1_000_000) return `${TOKEN_FORMAT.format(tokens / 1_000_000)}M`
-  if (tokens >= 1_000) return `${TOKEN_FORMAT.format(tokens / 1_000)}K`
-  return TOKEN_FORMAT.format(tokens)
 }
