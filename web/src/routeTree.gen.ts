@@ -71,6 +71,7 @@ import { Route as AuthenticatedAppLogsIndexRouteImport } from './routes/_authent
 import { Route as AuthenticatedAppPlaygroundIndexRouteImport } from './routes/_authenticated/app/playground/index'
 import { Route as AuthenticatedAppSecurityIndexRouteImport } from './routes/_authenticated/app/security/index'
 import { Route as AuthenticatedAppSettingsIndexRouteImport } from './routes/_authenticated/app/settings/index'
+import { Route as AuthenticatedAppSuppliersIndexRouteImport } from './routes/_authenticated/app/suppliers/index'
 import { Route as AuthenticatedAppUsageIndexRouteImport } from './routes/_authenticated/app/usage/index'
 import { Route as AuthenticatedAppVirtualGroupsIndexRouteImport } from './routes/_authenticated/app/virtual-groups/index'
 import { Route as AuthenticatedSystemSettingsAuthIndexRouteImport } from './routes/_authenticated/system-settings/auth/index'
@@ -426,6 +427,12 @@ const AuthenticatedAppSettingsIndexRoute =
     path: '/settings/',
     getParentRoute: () => AuthenticatedAppRouteRoute,
   } as any)
+const AuthenticatedAppSuppliersIndexRoute =
+  AuthenticatedAppSuppliersIndexRouteImport.update({
+    id: '/suppliers/',
+    path: '/suppliers/',
+    getParentRoute: () => AuthenticatedAppRouteRoute,
+  } as any)
 const AuthenticatedAppUsageIndexRoute =
   AuthenticatedAppUsageIndexRouteImport.update({
     id: '/usage/',
@@ -597,6 +604,7 @@ export interface FileRoutesByFullPath {
   '/app/playground/': typeof AuthenticatedAppPlaygroundIndexRoute
   '/app/security/': typeof AuthenticatedAppSecurityIndexRoute
   '/app/settings/': typeof AuthenticatedAppSettingsIndexRoute
+  '/app/suppliers/': typeof AuthenticatedAppSuppliersIndexRoute
   '/app/usage/': typeof AuthenticatedAppUsageIndexRoute
   '/app/virtual-groups/': typeof AuthenticatedAppVirtualGroupsIndexRoute
   '/system-settings/auth/': typeof AuthenticatedSystemSettingsAuthIndexRoute
@@ -672,6 +680,7 @@ export interface FileRoutesByTo {
   '/app/playground': typeof AuthenticatedAppPlaygroundIndexRoute
   '/app/security': typeof AuthenticatedAppSecurityIndexRoute
   '/app/settings': typeof AuthenticatedAppSettingsIndexRoute
+  '/app/suppliers': typeof AuthenticatedAppSuppliersIndexRoute
   '/app/usage': typeof AuthenticatedAppUsageIndexRoute
   '/app/virtual-groups': typeof AuthenticatedAppVirtualGroupsIndexRoute
   '/system-settings/auth': typeof AuthenticatedSystemSettingsAuthIndexRoute
@@ -754,6 +763,7 @@ export interface FileRoutesById {
   '/_authenticated/app/playground/': typeof AuthenticatedAppPlaygroundIndexRoute
   '/_authenticated/app/security/': typeof AuthenticatedAppSecurityIndexRoute
   '/_authenticated/app/settings/': typeof AuthenticatedAppSettingsIndexRoute
+  '/_authenticated/app/suppliers/': typeof AuthenticatedAppSuppliersIndexRoute
   '/_authenticated/app/usage/': typeof AuthenticatedAppUsageIndexRoute
   '/_authenticated/app/virtual-groups/': typeof AuthenticatedAppVirtualGroupsIndexRoute
   '/_authenticated/system-settings/auth/': typeof AuthenticatedSystemSettingsAuthIndexRoute
@@ -835,6 +845,7 @@ export interface FileRouteTypes {
     | '/app/playground/'
     | '/app/security/'
     | '/app/settings/'
+    | '/app/suppliers/'
     | '/app/usage/'
     | '/app/virtual-groups/'
     | '/system-settings/auth/'
@@ -910,6 +921,7 @@ export interface FileRouteTypes {
     | '/app/playground'
     | '/app/security'
     | '/app/settings'
+    | '/app/suppliers'
     | '/app/usage'
     | '/app/virtual-groups'
     | '/system-settings/auth'
@@ -991,6 +1003,7 @@ export interface FileRouteTypes {
     | '/_authenticated/app/playground/'
     | '/_authenticated/app/security/'
     | '/_authenticated/app/settings/'
+    | '/_authenticated/app/suppliers/'
     | '/_authenticated/app/usage/'
     | '/_authenticated/app/virtual-groups/'
     | '/_authenticated/system-settings/auth/'
@@ -1459,6 +1472,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAppSettingsIndexRouteImport
       parentRoute: typeof AuthenticatedAppRouteRoute
     }
+    '/_authenticated/app/suppliers/': {
+      id: '/_authenticated/app/suppliers/'
+      path: '/suppliers'
+      fullPath: '/app/suppliers/'
+      preLoaderRoute: typeof AuthenticatedAppSuppliersIndexRouteImport
+      parentRoute: typeof AuthenticatedAppRouteRoute
+    }
     '/_authenticated/app/usage/': {
       id: '/_authenticated/app/usage/'
       path: '/usage'
@@ -1632,6 +1652,7 @@ interface AuthenticatedAppRouteRouteChildren {
   AuthenticatedAppPlaygroundIndexRoute: typeof AuthenticatedAppPlaygroundIndexRoute
   AuthenticatedAppSecurityIndexRoute: typeof AuthenticatedAppSecurityIndexRoute
   AuthenticatedAppSettingsIndexRoute: typeof AuthenticatedAppSettingsIndexRoute
+  AuthenticatedAppSuppliersIndexRoute: typeof AuthenticatedAppSuppliersIndexRoute
   AuthenticatedAppUsageIndexRoute: typeof AuthenticatedAppUsageIndexRoute
   AuthenticatedAppVirtualGroupsIndexRoute: typeof AuthenticatedAppVirtualGroupsIndexRoute
   AuthenticatedAppModelsModelIdIndexRoute: typeof AuthenticatedAppModelsModelIdIndexRoute
@@ -1646,6 +1667,7 @@ const AuthenticatedAppRouteRouteChildren: AuthenticatedAppRouteRouteChildren = {
   AuthenticatedAppPlaygroundIndexRoute: AuthenticatedAppPlaygroundIndexRoute,
   AuthenticatedAppSecurityIndexRoute: AuthenticatedAppSecurityIndexRoute,
   AuthenticatedAppSettingsIndexRoute: AuthenticatedAppSettingsIndexRoute,
+  AuthenticatedAppSuppliersIndexRoute: AuthenticatedAppSuppliersIndexRoute,
   AuthenticatedAppUsageIndexRoute: AuthenticatedAppUsageIndexRoute,
   AuthenticatedAppVirtualGroupsIndexRoute:
     AuthenticatedAppVirtualGroupsIndexRoute,

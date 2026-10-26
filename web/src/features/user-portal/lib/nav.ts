@@ -19,6 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import {
   BarChart3,
   BookOpen,
+  Building2,
   FileText,
   KeyRound,
   Layers,
@@ -37,6 +38,7 @@ export type UserPortalNavItem = {
   href: string
   icon: LucideIcon
   match: UserPortalNavMatch
+  adminOnly?: boolean
 }
 
 export const USER_PORTAL_CONSOLE_HREF = '/app/keys'
@@ -80,6 +82,13 @@ export const USER_PORTAL_CONSOLE_NAV_ITEMS: UserPortalNavItem[] = [
     href: '/app/virtual-groups',
     icon: Layers,
     match: 'prefix',
+  },
+  {
+    titleKey: 'Suppliers',
+    href: '/app/suppliers',
+    icon: Building2,
+    match: 'prefix',
+    adminOnly: true,
   },
   {
     titleKey: 'Usage Statistics',

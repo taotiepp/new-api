@@ -42,7 +42,12 @@ type Channel struct {
 	UsedCostQuota      int64    `json:"used_cost_quota" gorm:"bigint;default:0"`
 	Discount           *float64 `json:"discount"`
 	ModelDiscounts     string   `json:"model_discounts" gorm:"type:text"`
-	ModelMapping       *string  `json:"model_mapping" gorm:"type:text"`
+	// SupplierProfile stores commercial attributes such as TPM, RPM, payment
+	// method, and company entity. Unknown keys are kept so later attributes
+	// can be added without a schema change. The legacy channel editor does
+	// not send this field, and Updates skips the empty value.
+	SupplierProfile string  `json:"-" gorm:"type:text"`
+	ModelMapping    *string `json:"model_mapping" gorm:"type:text"`
 	//MaxInputTokens     *int    `json:"max_input_tokens" gorm:"default:0"`
 	StatusCodeMapping *string `json:"status_code_mapping" gorm:"type:varchar(1024);default:''"`
 	Priority          *int64  `json:"priority" gorm:"bigint;default:0"`

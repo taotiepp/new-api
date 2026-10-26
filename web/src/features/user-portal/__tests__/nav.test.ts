@@ -40,6 +40,7 @@ describe('user portal navigation', () => {
     expect(USER_PORTAL_CONSOLE_NAV_ITEMS.map((item) => item.href)).toEqual([
       '/app/keys',
       '/app/virtual-groups',
+      '/app/suppliers',
       '/app/usage',
       '/app/logs',
       '/app/bills',
@@ -48,6 +49,7 @@ describe('user portal navigation', () => {
   })
 
   test('treats console feature routes as console paths and plaza routes as plaza', () => {
+    expect(isUserPortalConsolePath('/app/suppliers')).toBe(true)
     expect(isUserPortalConsolePath('/app/keys')).toBe(true)
     expect(isUserPortalConsolePath('/app/bills')).toBe(true)
     expect(isUserPortalConsolePath('/app/settings')).toBe(true)

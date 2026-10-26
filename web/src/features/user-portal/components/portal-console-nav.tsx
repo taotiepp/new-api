@@ -19,6 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import { Link, useRouterState } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 
+import { useIsAdmin } from '@/hooks/use-admin'
 import { cn } from '@/lib/utils'
 
 import {
@@ -29,13 +30,17 @@ import {
 export function PortalConsoleNav() {
   const { t } = useTranslation()
   const pathname = useRouterState({ select: (s) => s.location.pathname })
+  const isAdmin = useIsAdmin()
+  const items = USER_PORTAL_CONSOLE_NAV_ITEMS.filter(
+    (item) => item.adminOnly !== true || isAdmin
+  )
 
   return (
     <nav
       aria-label={t('Console navigation')}
       className='portal-console-nav'
     >
-      {USER_PORTAL_CONSOLE_NAV_ITEMS.map((item) => {
+      {items.map((item) => {
         const active = isUserPortalNavActive(pathname, item)
         const Icon = item.icon
         return (

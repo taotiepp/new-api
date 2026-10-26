@@ -19,6 +19,9 @@ For commercial licensing, please contact support@quantumnous.com
 import { render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, test, vi } from 'vitest'
 
+import { ROLE } from '@/lib/roles'
+import { useAuthStore } from '@/stores/auth-store'
+
 import { PortalConsoleNav } from '../components/portal-console-nav'
 import { UserPortalLayout } from '../components/user-portal-layout'
 
@@ -55,6 +58,7 @@ vi.mock('../components/portal-nav-links', () => ({
 
 afterEach(() => {
   routerState.pathname = '/app/keys'
+  useAuthStore.getState().auth.reset()
   vi.clearAllMocks()
 })
 
@@ -89,6 +93,21 @@ describe('portal console navigation', () => {
     )
     expect(screen.getByRole('navigation', { name: 'Console navigation' })).toHaveClass(
       'portal-console-nav',
+    )
+    expect(screen.queryByRole('link', { name: 'Suppliers' })).not.toBeInTheDocument()
+  })
+
+  test('shows suppliers to administrators', () => {
+    useAuthStore.getState().auth.setUser({
+      id: 1,
+      username: 'admin',
+      role: ROLE.ADMIN,
+    })
+    render(<PortalConsoleNav />)
+
+    expect(screen.getByRole('link', { name: 'Suppliers' })).toHaveAttribute(
+      'href',
+      '/app/suppliers',
     )
   })
 
