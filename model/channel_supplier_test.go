@@ -20,6 +20,7 @@ func TestUpdateChannelSupplierKeepsUnknownProfileFields(t *testing.T) {
 	discount := 0.8
 	channel := &Channel{
 		Name:            "openai-main",
+		Status:          1,
 		Group:           "vip,default",
 		Key:             "secret",
 		Discount:        &discount,
@@ -55,6 +56,7 @@ func TestUpdateChannelSupplierKeepsUnknownProfileFields(t *testing.T) {
 	require.Equal(t, int64(1), total)
 	require.Len(t, rows, 1)
 	assert.Equal(t, channel.Id, rows[0].Id)
+	assert.Equal(t, 1, rows[0].Status)
 	assert.Equal(t, "openai-main", rows[0].Name)
 	assert.Equal(t, []string{"vip", "default"}, rows[0].GetGroups())
 	assert.Empty(t, rows[0].Key)

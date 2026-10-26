@@ -32,6 +32,7 @@ export type SupplierProfile = {
 export type Supplier = {
   id: number
   name: string
+  status: number
   groups: SupplierGroup[]
   discount?: number | null
   profile: SupplierProfile

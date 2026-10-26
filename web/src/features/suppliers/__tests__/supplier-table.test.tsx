@@ -25,6 +25,7 @@ import type { Supplier } from '../types'
 const supplier: Supplier = {
   id: 7,
   name: 'openai-main',
+  status: 1,
   groups: [
     { name: 'vip', discount: 0.9 },
     { name: 'default', discount: null },
@@ -41,8 +42,31 @@ const supplier: Supplier = {
 
 describe('supplier table', () => {
   test('shows channel, group, and commercial columns', () => {
-    render(<SupplierTable suppliers={[supplier]} onEdit={() => undefined} />)
+    render(
+      <SupplierTable
+        suppliers={[
+          supplier,
+          {
+            ...supplier,
+            id: 8,
+            name: 'stopped',
+            status: 2,
+            groups: [],
+            discount: null,
+            profile: {},
+          },
+        ]}
+        onEdit={() => undefined}
+      />
+    )
 
+    expect(screen.getByText('Status')).toBeInTheDocument()
+    expect(screen.getByText('Enabled').closest('[data-slot="status-badge"]')).toHaveClass(
+      'text-success'
+    )
+    expect(screen.getByText('Disabled').closest('[data-slot="status-badge"]')).toHaveClass(
+      'text-destructive'
+    )
     expect(screen.getByText('Channel name')).toBeInTheDocument()
     expect(screen.getByText('Group discount')).toBeInTheDocument()
     expect(screen.getByText('Channel discount')).toBeInTheDocument()

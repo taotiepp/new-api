@@ -19,6 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import { useTranslation } from 'react-i18next'
 
 import { StaticDataTable } from '@/components/data-table'
+import { StatusBadge } from '@/components/status-badge'
 import { Button } from '@/components/ui/button'
 
 import { SUPPLIER_PROFILE_FIELDS, type SupplierFieldKey } from '../lib/fields'
@@ -41,6 +42,11 @@ export function SupplierTable(props: SupplierTableProps) {
           id: 'name',
           header: t('Channel name'),
           cell: (supplier) => supplier.name,
+        },
+        {
+          id: 'status',
+          header: t('Status'),
+          cell: (supplier) => <SupplierStatus status={supplier.status} />,
         },
         {
           id: 'group',
@@ -86,6 +92,20 @@ export function SupplierTable(props: SupplierTableProps) {
       ]}
       data={props.suppliers}
       getRowKey={(supplier) => supplier.id}
+    />
+  )
+}
+
+function SupplierStatus(props: { status: number }) {
+  const { t } = useTranslation()
+  const enabled = props.status === 1
+
+  return (
+    <StatusBadge
+      copyable={false}
+      label={enabled ? t('Enabled') : t('Disabled')}
+      showDot
+      variant={enabled ? 'green' : 'red'}
     />
   )
 }

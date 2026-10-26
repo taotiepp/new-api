@@ -21,6 +21,7 @@ type channelSupplierGroup struct {
 type channelSupplierItem struct {
 	ID       int                    `json:"id"`
 	Name     string                 `json:"name"`
+	Status   int                    `json:"status"`
 	Groups   []channelSupplierGroup `json:"groups"`
 	Discount *float64               `json:"discount,omitempty"`
 	Profile  model.SupplierProfile  `json:"profile"`
@@ -62,6 +63,7 @@ func GetChannelSuppliers(c *gin.Context) {
 		items = append(items, channelSupplierItem{
 			ID:       channel.Id,
 			Name:     channel.Name,
+			Status:   channel.Status,
 			Groups:   views,
 			Discount: channel.Discount,
 			Profile:  profile,
