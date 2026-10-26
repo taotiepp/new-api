@@ -34,7 +34,7 @@ const origin = 'https://app.example.com'
 describe('user portal access', () => {
   test('default authenticated landing by role', () => {
     expect(resolveDefaultAuthenticatedPath(ROLE.USER)).toBe('/app')
-    expect(resolveDefaultAuthenticatedPath(ROLE.ADMIN)).toBe('/dashboard')
+    expect(resolveDefaultAuthenticatedPath(ROLE.ADMIN)).toBe('/app/suppliers')
   })
 
   test('post-login redirect respects role and console mapping', () => {
@@ -48,6 +48,9 @@ describe('user portal access', () => {
       resolvePostLoginTarget('/dashboard', ROLE.ADMIN, origin)
     ).toBe('/dashboard')
     expect(resolvePostLoginTarget(undefined, ROLE.USER, origin)).toBe('/app')
+    expect(resolvePostLoginTarget(undefined, ROLE.ADMIN, origin)).toBe(
+      '/app/suppliers'
+    )
     expect(resolvePostLoginTarget('/profile', ROLE.USER, origin)).toBe(
       '/app/settings'
     )

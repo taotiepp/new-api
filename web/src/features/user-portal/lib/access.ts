@@ -76,7 +76,7 @@ export function mapConsolePathToUserPortal(pathname: string): string {
 }
 
 export function resolveDefaultAuthenticatedPath(role: number): string {
-  return isAdminRole(role) ? '/dashboard' : '/app'
+  return isAdminRole(role) ? '/app/suppliers' : '/app'
 }
 
 export function resolvePostLoginTarget(
