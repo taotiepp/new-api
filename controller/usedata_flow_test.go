@@ -159,3 +159,59 @@ func TestGetUserQuotaDatesAllowsCalendarMonth(t *testing.T) {
 	require.NoError(t, common.Unmarshal(recorder.Body.Bytes(), &payload))
 	require.True(t, payload.Success, payload.Message)
 }
+
+func TestGetUserQuotaDatesLetsAdminReadAnotherUser(t *testing.T) {
+	setupFlowControllerTestDB(t)
+	require.NoError(t, model.DB.Create(&model.User{
+		Id: 1, Username: "alice", Password: "secret", AffCode: "aaaa", Role: common.RoleAdminUser,
+	}).Error)
+	require.NoError(t, model.DB.Create(&model.User{
+		Id: 2, Username: "bob", Password: "secret", AffCode: "bbbb",
+	}).Error)
+
+	start := int64(1)
+	end := start + 31*24*60*60 - 1
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	ctx.Set("id", 1)
+	ctx.Set("role", common.RoleAdminUser)
+	ctx.Request = httptest.NewRequest(
+		http.MethodGet,
+		fmt.Sprintf("/api/data/self?user_id=2&start_timestamp=%d&end_timestamp=%d", start, end),
+		nil,
+	)
+
+	GetUserQuotaDates(ctx)
+
+	require.Equal(t, http.StatusOK, recorder.Code)
+	var payload struct {
+		Success bool              `json:"success"`
+		Message string            `json:"message"`
+		Data    []model.QuotaData `json:"data"`
+	}
+	require.NoError(t, common.Unmarshal(recorder.Body.Bytes(), &payload))
+	require.True(t, payload.Success, payload.Message)
+	require.Len(t, payload.Data, 1)
+	require.Equal(t, "gpt-b", payload.Data[0].ModelName)
+	require.Equal(t, 2, payload.Data[0].UserID)
+}
+
+func TestGetUserQuotaDatesRejectsOtherUserForCommonRole(t *testing.T) {
+	setupFlowControllerTestDB(t)
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	ctx.Set("id", 1)
+	ctx.Set("role", common.RoleCommonUser)
+	ctx.Request = httptest.NewRequest(http.MethodGet, "/api/data/self?user_id=2&start_timestamp=1&end_timestamp=2", nil)
+
+	GetUserQuotaDates(ctx)
+
+	require.Equal(t, http.StatusOK, recorder.Code)
+	var payload struct {
+		Success bool   `json:"success"`
+		Message string `json:"message"`
+	}
+	require.NoError(t, common.Unmarshal(recorder.Body.Bytes(), &payload))
+	require.False(t, payload.Success)
+	require.Equal(t, "access denied", payload.Message)
+}

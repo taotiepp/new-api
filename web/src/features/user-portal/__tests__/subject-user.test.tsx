@@ -28,15 +28,18 @@ import { ROLE } from '@/lib/roles'
 import { useAuthStore } from '@/stores/auth-store'
 
 import { PortalBillPanel } from '../components/portal-bill-panel'
+import { PortalBillingPanel } from '../components/portal-billing-panel'
 import { PortalLogsPanel } from '../components/portal-logs-panel'
 
 const getUserBills = vi.hoisted(() => vi.fn())
 const listUserInvoices = vi.hoisted(() => vi.fn())
 const issueUserInvoice = vi.hoisted(() => vi.fn())
+const getUserQuotaDates = vi.hoisted(() => vi.fn())
 const getUserLogs = vi.hoisted(() => vi.fn())
 const getUserLogStats = vi.hoisted(() => vi.fn())
 const getUserModels = vi.hoisted(() => vi.fn())
 const searchUsers = vi.hoisted(() => vi.fn())
+const getUser = vi.hoisted(() => vi.fn())
 const searchApiKeys = vi.hoisted(() => vi.fn())
 
 vi.mock('@tanstack/react-router', () => ({
@@ -59,7 +62,7 @@ vi.mock('@/features/dashboard/api', () => ({
   getUserBills,
   listUserInvoices,
   issueUserInvoice,
-  getUserQuotaDates: vi.fn(),
+  getUserQuotaDates,
 }))
 
 vi.mock('@/features/usage-logs/api', () => ({
@@ -74,6 +77,7 @@ vi.mock('@/lib/api', async (importOriginal) => {
 
 vi.mock('@/features/users/api', () => ({
   searchUsers,
+  getUser,
 }))
 
 vi.mock('@/features/keys/api', () => ({
@@ -255,5 +259,46 @@ describe('portal subject user', () => {
         expect.objectContaining({ user_id: 2 })
       )
     })
+  })
+
+  test('administrator can load another user usage', async () => {
+    signIn(ROLE.ADMIN)
+    getUserQuotaDates.mockResolvedValue({ success: true, data: [] })
+    getUser.mockResolvedValue({
+      success: true,
+      data: { id: 2, username: 'bob', quota: 10, used_quota: 4 },
+    })
+
+    renderPanel(
+      <PortalBillingPanel initialSubject={{ id: 2, username: 'bob' }} />
+    )
+
+    expect(await screen.findByText('Viewing bob')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(getUserQuotaDates).toHaveBeenCalledWith(
+        expect.objectContaining({ user_id: 2 }),
+        false
+      )
+    })
+  })
+
+  test('common user cannot open another user usage from the address', async () => {
+    signIn(ROLE.USER)
+    getUserQuotaDates.mockResolvedValue({ success: true, data: [] })
+
+    renderPanel(
+      <PortalBillingPanel initialSubject={{ id: 2, username: 'bob' }} />
+    )
+
+    expect(
+      await screen.findByRole('heading', { name: 'Usage information' })
+    ).toBeInTheDocument()
+    expect(screen.queryByText('Viewing bob')).toBeNull()
+    await waitFor(() => {
+      expect(getUserQuotaDates).toHaveBeenCalled()
+    })
+    expect(getUserQuotaDates.mock.calls[0]?.[0]).not.toEqual(
+      expect.objectContaining({ user_id: expect.any(Number) })
+    )
   })
 })

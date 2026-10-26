@@ -3,6 +3,7 @@ package controller
 import (
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/model"
@@ -61,7 +62,10 @@ func GetQuotaDatesByUser(c *gin.Context) {
 }
 
 func GetUserQuotaDates(c *gin.Context) {
-	userId := c.GetInt("id")
+	subject, ok := resolveScopedUser(c)
+	if !ok {
+		return
+	}
 	startTimestamp, _ := strconv.ParseInt(c.Query("start_timestamp"), 10, 64)
 	endTimestamp, _ := strconv.ParseInt(c.Query("end_timestamp"), 10, 64)
 	// Allow a full calendar month, including 31-day months.
@@ -72,7 +76,7 @@ func GetUserQuotaDates(c *gin.Context) {
 		})
 		return
 	}
-	dates, err := model.GetQuotaDataByUserId(userId, startTimestamp, endTimestamp)
+	dates, err := model.GetQuotaDataByUserId(subject.ID, startTimestamp, endTimestamp)
 	if err != nil {
 		common.ApiError(c, err)
 		return
@@ -83,6 +87,31 @@ func GetUserQuotaDates(c *gin.Context) {
 		"data":    dates,
 	})
 	return
+}
+
+func GetAccountMonthCosts(c *gin.Context) {
+	period := c.Query("period")
+	if period == "" {
+		period = model.CurrentBillPeriod(time.Now())
+	}
+	if _, _, ok := model.ParseBillPeriod(period); !ok {
+		common.ApiErrorMsg(c, "invalid period")
+		return
+	}
+	pageInfo := common.GetPageQuery(c)
+	rows, total, err := model.ListAccountMonthCosts(period, c.Query("keyword"), pageInfo.GetStartIdx(), pageInfo.GetPageSize())
+	if err != nil {
+		common.SysError("failed to list account month costs: " + err.Error())
+		common.ApiErrorMsg(c, "failed to list account costs")
+		return
+	}
+	common.ApiSuccess(c, gin.H{
+		"items":     rows,
+		"total":     total,
+		"page":      pageInfo.GetPage(),
+		"page_size": pageInfo.GetPageSize(),
+		"period":    period,
+	})
 }
 
 func GetAllFlowQuotaDates(c *gin.Context) {

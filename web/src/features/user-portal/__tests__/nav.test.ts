@@ -41,6 +41,7 @@ describe('user portal navigation', () => {
       '/app/keys',
       '/app/virtual-groups',
       '/app/suppliers',
+      '/app/operations',
       '/app/usage',
       '/app/logs',
       '/app/bills',
@@ -50,6 +51,7 @@ describe('user portal navigation', () => {
 
   test('treats console feature routes as console paths and plaza routes as plaza', () => {
     expect(isUserPortalConsolePath('/app/suppliers')).toBe(true)
+    expect(isUserPortalConsolePath('/app/operations')).toBe(true)
     expect(isUserPortalConsolePath('/app/keys')).toBe(true)
     expect(isUserPortalConsolePath('/app/bills')).toBe(true)
     expect(isUserPortalConsolePath('/app/settings')).toBe(true)

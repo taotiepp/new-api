@@ -16,6 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { CalendarDays, CircleHelp, Download } from 'lucide-react'
 import { useMemo, useState } from 'react'
@@ -45,13 +46,19 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 import { parseUserSettings } from '@/features/profile/lib/format'
+import { getUser } from '@/features/users/api'
 import { usePricingCurrency } from '@/lib/currency'
 import dayjs from '@/lib/dayjs'
 import { formatNumber } from '@/lib/format'
+import { requireServerSuccess } from '@/lib/server-error-message'
 import { getEndOfDay, getStartOfDay } from '@/lib/time'
 import { useAuthStore } from '@/stores/auth-store'
 
 import { usePortalBillingData } from '../hooks/use-portal-billing-data'
+import {
+  usePortalSubjectUser,
+  type PortalSubjectUser,
+} from '../hooks/use-portal-subject-user'
 import {
   PORTAL_BILL_MAX_RANGE_SECONDS,
   PORTAL_BILLING_ALL_MODELS,
@@ -66,10 +73,12 @@ import {
   sumPortalBillingStats,
 } from '../lib/billing'
 import { PortalBillingChart } from './portal-billing-chart'
+import { PortalSubjectUserPicker } from './portal-subject-user-picker'
 
 type PortalBillingPanelProps = {
   initialStart?: Date
   initialEnd?: Date
+  initialSubject?: PortalSubjectUser | null
 }
 
 const RANGE_PRESETS = [
@@ -83,6 +92,13 @@ export function PortalBillingPanel(props: PortalBillingPanelProps) {
   const { t } = useTranslation()
   const { currency: catalogCurrency, formatQuota } = usePricingCurrency()
   const user = useAuthStore((state) => state.auth.user)
+  const subjectUser = usePortalSubjectUser(props.initialSubject)
+  const subjectAccount = useQuery({
+    queryKey: ['user-portal', 'subject-account', subjectUser.subjectUserId ?? 0],
+    enabled: subjectUser.subjectUserId != null,
+    queryFn: async () =>
+      requireServerSuccess(await getUser(subjectUser.subjectUserId ?? 0)).data,
+  })
   const seededRange =
     props.initialStart &&
     props.initialEnd &&
@@ -112,6 +128,7 @@ export function PortalBillingPanel(props: PortalBillingPanelProps) {
     seededFromBill
       ? PORTAL_BILL_MAX_RANGE_SECONDS
       : undefined,
+    subjectUser.subjectUserId,
   )
   const unknownModel = t('Unknown model')
   const selectedModelName =
@@ -147,8 +164,23 @@ export function PortalBillingPanel(props: PortalBillingPanelProps) {
   } else if (user?.setting) {
     settingJson = JSON.stringify(user.setting)
   }
+  const viewingOther = subjectUser.subject != null
   const warningOff =
+    !viewingOther &&
     (parseUserSettings(settingJson).quota_warning_threshold ?? 0) === 0
+  const balanceLoading = viewingOther && subjectAccount.isLoading
+  let quotaBalance = user?.quota ?? 0
+  let usedBalance = user?.used_quota ?? 0
+  if (viewingOther && subjectAccount.data) {
+    quotaBalance = subjectAccount.data.quota
+    usedBalance = subjectAccount.data.used_quota
+  }
+  let quotaLabel = formatQuota(quotaBalance)
+  let usedLabel = formatQuota(usedBalance)
+  if (viewingOther && subjectAccount.isError) {
+    quotaLabel = t('Unset')
+    usedLabel = t('Unset')
+  }
   const filtersAreDefault = isDefaultPortalBillingRange(start, end, modelName)
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone
 
@@ -216,6 +248,13 @@ export function PortalBillingPanel(props: PortalBillingPanelProps) {
               </TooltipContent>
             </Tooltip>
           </p>
+          {subjectUser.subject ? (
+            <p className='text-sm text-[var(--portal-ink)]'>
+              {t('Viewing {{username}}', {
+                username: subjectUser.subject.username,
+              })}
+            </p>
+          ) : null}
         </div>
         <Link
           to='/app/bills'
@@ -240,36 +279,50 @@ export function PortalBillingPanel(props: PortalBillingPanelProps) {
                   </Link>
                 </p>
               ) : null}
-              <p className='mt-3 text-3xl font-semibold tracking-tight tabular-nums'>
-                {formatQuota(user?.quota ?? 0)}
-                <span className='text-muted-foreground ml-2 text-sm font-medium'>
-                  {catalogCurrency}
-                </span>
-              </p>
+              {balanceLoading ? (
+                <Skeleton className='mt-3 h-9 w-28' />
+              ) : (
+                <p className='mt-3 text-3xl font-semibold tracking-tight tabular-nums'>
+                  {quotaLabel}
+                  <span className='text-muted-foreground ml-2 text-sm font-medium'>
+                    {catalogCurrency}
+                  </span>
+                </p>
+              )}
             </div>
-            <Button
-              size='sm'
-              render={<Link to='/wallet' />}
-            >
-              {t('Recharge')}
-            </Button>
+            {viewingOther ? null : (
+              <Button
+                size='sm'
+                render={<Link to='/wallet' />}
+              >
+                {t('Recharge')}
+              </Button>
+            )}
           </div>
         </article>
         <article className='border-b border-[var(--portal-hairline)] py-5'>
           <p className='text-muted-foreground text-sm'>
             {t('Total consumption')}
           </p>
-          <p className='mt-3 text-3xl font-semibold tracking-tight tabular-nums'>
-            {formatQuota(user?.used_quota ?? 0)}
-            <span className='text-muted-foreground ml-2 text-sm font-medium'>
-              {catalogCurrency}
-            </span>
-          </p>
+          {balanceLoading ? (
+            <Skeleton className='mt-3 h-9 w-28' />
+          ) : (
+            <p className='mt-3 text-3xl font-semibold tracking-tight tabular-nums'>
+              {usedLabel}
+              <span className='text-muted-foreground ml-2 text-sm font-medium'>
+                {catalogCurrency}
+              </span>
+            </p>
+          )}
         </article>
       </div>
 
       <div className='flex flex-wrap items-center justify-between gap-3 border-t pt-5'>
         <div className='flex flex-wrap items-center gap-2'>
+          <PortalSubjectUserPicker
+            value={subjectUser.subject}
+            onValueChange={subjectUser.setSubject}
+          />
           <Popover open={rangeOpen} onOpenChange={setRangeOpen}>
             <PopoverTrigger
               render={

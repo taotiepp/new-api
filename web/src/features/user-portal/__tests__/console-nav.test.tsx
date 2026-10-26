@@ -95,6 +95,9 @@ describe('portal console navigation', () => {
       'portal-console-nav',
     )
     expect(screen.queryByRole('link', { name: 'Suppliers' })).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('link', { name: 'Operations management' })
+    ).not.toBeInTheDocument()
   })
 
   test('shows suppliers to administrators', () => {
@@ -109,6 +112,9 @@ describe('portal console navigation', () => {
       'href',
       '/app/suppliers',
     )
+    expect(
+      screen.getByRole('link', { name: 'Operations management' })
+    ).toHaveAttribute('href', '/app/operations')
   })
 
   test('sits on the chrome canvas beside the white stage, not inside it', () => {

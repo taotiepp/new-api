@@ -36,13 +36,14 @@ import {
 export function usePortalBillingData(
   start: Date,
   end: Date,
-  maxRangeSeconds = PORTAL_BILLING_MAX_RANGE_SECONDS
+  maxRangeSeconds = PORTAL_BILLING_MAX_RANGE_SECONDS,
+  userId?: number
 ) {
   const rangeTooLong = isPortalBillingRangeTooLong(start, end, maxRangeSeconds)
   const timeRange = computeTimeRange(1, start, end)
 
   const quotaQuery = useQuery({
-    queryKey: ['user-portal', 'billing', 'quota', timeRange],
+    queryKey: ['user-portal', 'billing', 'quota', timeRange, userId ?? 0],
     enabled: !rangeTooLong,
     queryFn: async () => {
       const result = requireServerSuccess(
@@ -50,6 +51,7 @@ export function usePortalBillingData(
           {
             start_timestamp: timeRange.start_timestamp,
             end_timestamp: timeRange.end_timestamp,
+            user_id: userId,
           },
           false
         )

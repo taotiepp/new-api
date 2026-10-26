@@ -16,7 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 import { useAuthStore } from '@/stores/auth-store'
 
@@ -27,10 +27,18 @@ export type PortalSubjectUser = {
   username: string
 }
 
-export function usePortalSubjectUser() {
+export function usePortalSubjectUser(initial?: PortalSubjectUser | null) {
   const role = useAuthStore((state) => state.auth.user?.role)
   const canViewOtherUsers = isAdminRole(role)
-  const [subject, setSubject] = useState<PortalSubjectUser | null>(null)
+  const [subject, setSubject] = useState<PortalSubjectUser | null>(
+    canViewOtherUsers && initial?.id
+      ? { id: initial.id, username: initial.username }
+      : null
+  )
+  useEffect(() => {
+    if (!canViewOtherUsers || !initial?.id) return
+    setSubject({ id: initial.id, username: initial.username })
+  }, [canViewOtherUsers, initial?.id, initial?.username])
   const activeSubject = canViewOtherUsers ? subject : null
   return {
     subject: activeSubject,

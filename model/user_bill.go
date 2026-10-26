@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"fmt"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
@@ -62,6 +63,51 @@ func ListRecentBillPeriods(now time.Time, count int) []string {
 		periods = append(periods, cursor.AddDate(0, -offset, 0).Format("2006-01"))
 	}
 	return periods
+}
+
+// AccountMonthCost is one account's consumption during a calendar month.
+type AccountMonthCost struct {
+	UserId      int    `json:"user_id" gorm:"column:user_id"`
+	Username    string `json:"username" gorm:"column:username"`
+	DisplayName string `json:"display_name" gorm:"column:display_name"`
+	Quota       int    `json:"quota" gorm:"column:quota"`
+	Count       int    `json:"count" gorm:"column:count"`
+	TokenUsed   int    `json:"token_used" gorm:"column:token_used"`
+}
+
+func ListAccountMonthCosts(period string, keyword string, offset int, limit int) ([]AccountMonthCost, int64, error) {
+	start, end, ok := ParseBillPeriod(period)
+	if !ok {
+		return nil, 0, fmt.Errorf("invalid period")
+	}
+	users := DB.Model(&User{})
+	keyword = strings.TrimSpace(keyword)
+	if keyword != "" {
+		escaped := strings.NewReplacer("!", "!!", "%", "!%", "_", "!_").Replace(keyword)
+		like := "%" + escaped + "%"
+		users = users.Where(
+			"users.username LIKE ? ESCAPE '!' OR users.display_name LIKE ? ESCAPE '!'",
+			like,
+			like,
+		)
+	}
+	var total int64
+	if err := users.Session(&gorm.Session{}).Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	rows := make([]AccountMonthCost, 0)
+	err := users.Session(&gorm.Session{}).
+		Select("users.id as user_id, users.username, users.display_name, COALESCE(SUM(quota_data.quota), 0) as quota, COALESCE(SUM(quota_data.count), 0) as count, COALESCE(SUM(quota_data.token_used), 0) as token_used").
+		Joins("LEFT JOIN quota_data ON quota_data.user_id = users.id AND quota_data.created_at >= ? AND quota_data.created_at <= ?", start.Unix(), end.Unix()).
+		Group("users.id, users.username, users.display_name").
+		Order("quota DESC, users.id DESC").
+		Offset(offset).
+		Limit(limit).
+		Find(&rows).Error
+	if err != nil {
+		return nil, 0, err
+	}
+	return rows, total, nil
 }
 
 func AggregateQuotaByModel(userId int, period string) ([]*UserBillItem, error) {

@@ -28,14 +28,20 @@ export const Route = createFileRoute('/_authenticated/app/usage/')({
 
 function UserPortalUsagePage() {
   const search = Route.useSearch()
+  const subject =
+    search.userId != null
+      ? { id: search.userId, username: search.username ?? '' }
+      : undefined
   return (
     <UserPortalUsage
+      key={search.userId ?? 0}
       initialStart={
         search.startTime != null ? new Date(search.startTime * 1000) : undefined
       }
       initialEnd={
         search.endTime != null ? new Date(search.endTime * 1000) : undefined
       }
+      subject={subject}
     />
   )
 }

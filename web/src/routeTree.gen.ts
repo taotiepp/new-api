@@ -68,6 +68,7 @@ import { Route as AuthenticatedAppDocsIndexRouteImport } from './routes/_authent
 import { Route as AuthenticatedAppDocsSplatRouteImport } from './routes/_authenticated/app/docs/$'
 import { Route as AuthenticatedAppKeysIndexRouteImport } from './routes/_authenticated/app/keys/index'
 import { Route as AuthenticatedAppLogsIndexRouteImport } from './routes/_authenticated/app/logs/index'
+import { Route as AuthenticatedAppOperationsIndexRouteImport } from './routes/_authenticated/app/operations/index'
 import { Route as AuthenticatedAppPlaygroundIndexRouteImport } from './routes/_authenticated/app/playground/index'
 import { Route as AuthenticatedAppSecurityIndexRouteImport } from './routes/_authenticated/app/security/index'
 import { Route as AuthenticatedAppSettingsIndexRouteImport } from './routes/_authenticated/app/settings/index'
@@ -409,6 +410,12 @@ const AuthenticatedAppLogsIndexRoute =
     path: '/logs/',
     getParentRoute: () => AuthenticatedAppRouteRoute,
   } as any)
+const AuthenticatedAppOperationsIndexRoute =
+  AuthenticatedAppOperationsIndexRouteImport.update({
+    id: '/operations/',
+    path: '/operations/',
+    getParentRoute: () => AuthenticatedAppRouteRoute,
+  } as any)
 const AuthenticatedAppPlaygroundIndexRoute =
   AuthenticatedAppPlaygroundIndexRouteImport.update({
     id: '/playground/',
@@ -601,6 +608,7 @@ export interface FileRoutesByFullPath {
   '/app/docs/': typeof AuthenticatedAppDocsIndexRoute
   '/app/keys/': typeof AuthenticatedAppKeysIndexRoute
   '/app/logs/': typeof AuthenticatedAppLogsIndexRoute
+  '/app/operations/': typeof AuthenticatedAppOperationsIndexRoute
   '/app/playground/': typeof AuthenticatedAppPlaygroundIndexRoute
   '/app/security/': typeof AuthenticatedAppSecurityIndexRoute
   '/app/settings/': typeof AuthenticatedAppSettingsIndexRoute
@@ -677,6 +685,7 @@ export interface FileRoutesByTo {
   '/app/docs': typeof AuthenticatedAppDocsIndexRoute
   '/app/keys': typeof AuthenticatedAppKeysIndexRoute
   '/app/logs': typeof AuthenticatedAppLogsIndexRoute
+  '/app/operations': typeof AuthenticatedAppOperationsIndexRoute
   '/app/playground': typeof AuthenticatedAppPlaygroundIndexRoute
   '/app/security': typeof AuthenticatedAppSecurityIndexRoute
   '/app/settings': typeof AuthenticatedAppSettingsIndexRoute
@@ -760,6 +769,7 @@ export interface FileRoutesById {
   '/_authenticated/app/docs/': typeof AuthenticatedAppDocsIndexRoute
   '/_authenticated/app/keys/': typeof AuthenticatedAppKeysIndexRoute
   '/_authenticated/app/logs/': typeof AuthenticatedAppLogsIndexRoute
+  '/_authenticated/app/operations/': typeof AuthenticatedAppOperationsIndexRoute
   '/_authenticated/app/playground/': typeof AuthenticatedAppPlaygroundIndexRoute
   '/_authenticated/app/security/': typeof AuthenticatedAppSecurityIndexRoute
   '/_authenticated/app/settings/': typeof AuthenticatedAppSettingsIndexRoute
@@ -842,6 +852,7 @@ export interface FileRouteTypes {
     | '/app/docs/'
     | '/app/keys/'
     | '/app/logs/'
+    | '/app/operations/'
     | '/app/playground/'
     | '/app/security/'
     | '/app/settings/'
@@ -918,6 +929,7 @@ export interface FileRouteTypes {
     | '/app/docs'
     | '/app/keys'
     | '/app/logs'
+    | '/app/operations'
     | '/app/playground'
     | '/app/security'
     | '/app/settings'
@@ -1000,6 +1012,7 @@ export interface FileRouteTypes {
     | '/_authenticated/app/docs/'
     | '/_authenticated/app/keys/'
     | '/_authenticated/app/logs/'
+    | '/_authenticated/app/operations/'
     | '/_authenticated/app/playground/'
     | '/_authenticated/app/security/'
     | '/_authenticated/app/settings/'
@@ -1451,6 +1464,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAppLogsIndexRouteImport
       parentRoute: typeof AuthenticatedAppRouteRoute
     }
+    '/_authenticated/app/operations/': {
+      id: '/_authenticated/app/operations/'
+      path: '/operations'
+      fullPath: '/app/operations/'
+      preLoaderRoute: typeof AuthenticatedAppOperationsIndexRouteImport
+      parentRoute: typeof AuthenticatedAppRouteRoute
+    }
     '/_authenticated/app/playground/': {
       id: '/_authenticated/app/playground/'
       path: '/playground'
@@ -1649,6 +1669,7 @@ interface AuthenticatedAppRouteRouteChildren {
   AuthenticatedAppBillsIndexRoute: typeof AuthenticatedAppBillsIndexRoute
   AuthenticatedAppKeysIndexRoute: typeof AuthenticatedAppKeysIndexRoute
   AuthenticatedAppLogsIndexRoute: typeof AuthenticatedAppLogsIndexRoute
+  AuthenticatedAppOperationsIndexRoute: typeof AuthenticatedAppOperationsIndexRoute
   AuthenticatedAppPlaygroundIndexRoute: typeof AuthenticatedAppPlaygroundIndexRoute
   AuthenticatedAppSecurityIndexRoute: typeof AuthenticatedAppSecurityIndexRoute
   AuthenticatedAppSettingsIndexRoute: typeof AuthenticatedAppSettingsIndexRoute
@@ -1664,6 +1685,7 @@ const AuthenticatedAppRouteRouteChildren: AuthenticatedAppRouteRouteChildren = {
   AuthenticatedAppBillsIndexRoute: AuthenticatedAppBillsIndexRoute,
   AuthenticatedAppKeysIndexRoute: AuthenticatedAppKeysIndexRoute,
   AuthenticatedAppLogsIndexRoute: AuthenticatedAppLogsIndexRoute,
+  AuthenticatedAppOperationsIndexRoute: AuthenticatedAppOperationsIndexRoute,
   AuthenticatedAppPlaygroundIndexRoute: AuthenticatedAppPlaygroundIndexRoute,
   AuthenticatedAppSecurityIndexRoute: AuthenticatedAppSecurityIndexRoute,
   AuthenticatedAppSettingsIndexRoute: AuthenticatedAppSettingsIndexRoute,

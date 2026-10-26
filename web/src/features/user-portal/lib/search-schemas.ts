@@ -38,4 +38,6 @@ export const appPlaygroundSearchSchema = z.object({
 export const appUsageSearchSchema = z.object({
   startTime: z.number().optional(),
   endTime: z.number().optional(),
+  userId: z.number().optional(),
+  username: z.string().optional(),
 })
