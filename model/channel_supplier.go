@@ -133,7 +133,7 @@ func ListChannelSuppliers(keyword string, offset int, limit int) ([]Channel, int
 	}
 	var channels []Channel
 	err := query.Session(&gorm.Session{}).
-		Select("ID", "Name", "Group", "Discount", "SupplierProfile").
+		Select("Id", "Name", "Group", "Discount", "SupplierProfile").
 		Order("id desc").
 		Offset(offset).
 		Limit(limit).
