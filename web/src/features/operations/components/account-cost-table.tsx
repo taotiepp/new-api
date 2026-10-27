@@ -17,6 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { Link } from '@tanstack/react-router'
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { StaticDataTable } from '@/components/data-table'
@@ -26,6 +27,8 @@ import { formatNumber } from '@/lib/format'
 import { dateToUnixTimestamp } from '@/lib/time'
 
 import type { AccountMonthCost } from '../types'
+
+import { AccountOperationsDialog } from './account-operations-dialog'
 
 type AccountCostTableProps = {
   accounts: AccountMonthCost[]
@@ -40,9 +43,12 @@ export function AccountCostTable(props: AccountCostTableProps) {
   const unset = t('Unset')
   const startTime = dateToUnixTimestamp(props.start)
   const endTime = dateToUnixTimestamp(props.end)
+  const [settingsAccount, setSettingsAccount] =
+    useState<AccountMonthCost | null>(null)
 
   return (
-    <StaticDataTable
+    <>
+      <StaticDataTable
       columns={[
         {
           id: 'username',
@@ -60,6 +66,20 @@ export function AccountCostTable(props: AccountCostTableProps) {
             >
               {account.username}
             </Link>
+          ),
+        },
+        {
+          id: 'operations',
+          header: t('Operations settings'),
+          cell: (account) => (
+            <Button
+              size='sm'
+              type='button'
+              variant='outline'
+              onClick={() => setSettingsAccount(account)}
+            >
+              {t('Operations settings')}
+            </Button>
           ),
         },
         {
@@ -105,8 +125,15 @@ export function AccountCostTable(props: AccountCostTableProps) {
           cell: (account) => formatNumber(account.token_used),
         },
       ]}
-      data={props.accounts}
-      getRowKey={(account) => account.user_id}
-    />
+        data={props.accounts}
+        getRowKey={(account) => account.user_id}
+      />
+      {settingsAccount ? (
+        <AccountOperationsDialog
+          account={settingsAccount}
+          onClose={() => setSettingsAccount(null)}
+        />
+      ) : null}
+    </>
   )
 }

@@ -32,3 +32,28 @@ export type AccountMonthCostList = {
   page_size: number
   period: string
 }
+
+export type AccountOperationsGroup = {
+  name: string
+  description: string
+  inherited: boolean
+  allowed: boolean
+  assigned: boolean
+  default_ratio: number
+  discount: number | null
+}
+
+export type AccountOperations = {
+  user_id: number
+  username: string
+  display_name: string
+  group: string
+  custom: boolean
+  groups: AccountOperationsGroup[]
+}
+
+export type AccountOperationsUpdate = {
+  custom: boolean
+  groups: string[]
+  discounts: Record<string, number | null>
+}

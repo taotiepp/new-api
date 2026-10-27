@@ -19,7 +19,11 @@ For commercial licensing, please contact support@quantumnous.com
 import { api } from '@/lib/api'
 import { requireServerSuccess } from '@/lib/server-error-message'
 
-import type { AccountMonthCostList } from './types'
+import type {
+  AccountMonthCostList,
+  AccountOperations,
+  AccountOperationsUpdate,
+} from './types'
 
 export async function getAccountMonthCosts(params: {
   period: string
@@ -39,4 +43,26 @@ export async function getAccountMonthCosts(params: {
     }
   )
   return requireServerSuccess(response.data).data
+}
+
+export async function getAccountOperations(
+  userId: number
+): Promise<AccountOperations> {
+  const response = await api.get<{ success: boolean; data: AccountOperations }>(
+    `/api/user/${userId}/operations`,
+    { skipErrorHandler: true }
+  )
+  return requireServerSuccess(response.data).data
+}
+
+export async function updateAccountOperations(
+  userId: number,
+  body: AccountOperationsUpdate
+): Promise<void> {
+  const response = await api.put<{ success: boolean }>(
+    `/api/user/${userId}/operations`,
+    body,
+    { skipErrorHandler: true }
+  )
+  requireServerSuccess(response.data)
 }

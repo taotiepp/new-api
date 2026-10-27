@@ -941,6 +941,32 @@ func (user *User) EditWithTx(tx *gorm.DB, updatePassword bool) error {
 	return tx.First(user, user.Id).Error
 }
 
+// UpdateOperationsSettings stores an administrator's group permission list and
+// per-group discounts. Other profile fields, including model discounts inside a
+// group, stay unchanged. Empty strings are written on purpose so a cleared
+// permission list or discount map is not skipped as a zero value.
+func (user *User) UpdateOperationsSettings(usableGroups, groupDiscounts string) error {
+	if user.Id == 0 {
+		return errors.New("user id is empty")
+	}
+	if err := validateUsableGroups(usableGroups); err != nil {
+		return err
+	}
+	if err := validateUserDiscountFields(user.Discount, user.ModelDiscounts, groupDiscounts, user.GroupModelDiscounts); err != nil {
+		return err
+	}
+	err := DB.Model(&User{}).Where("id = ?", user.Id).Select("usable_groups", "group_discounts").Updates(map[string]any{
+		"usable_groups":   usableGroups,
+		"group_discounts": groupDiscounts,
+	}).Error
+	if err != nil {
+		return err
+	}
+	user.UsableGroups = usableGroups
+	user.GroupDiscounts = groupDiscounts
+	return updateUserCache(*user)
+}
+
 func (user *User) ClearBinding(bindingType string) error {
 	if user.Id == 0 {
 		return errors.New("user id is empty")

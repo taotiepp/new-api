@@ -75,6 +75,7 @@ describe('account cost table', () => {
     expect(href).toContain('username=bob')
     expect(href).toContain('startTime=')
     expect(href).toContain('endTime=')
+    expect(screen.getByRole('button', { name: 'Operations settings' })).toBeInTheDocument()
     expect(screen.getByText('Monthly cost')).toBeInTheDocument()
     expect(screen.getByText('Bob')).toBeInTheDocument()
     expect(screen.getByText('3')).toBeInTheDocument()
