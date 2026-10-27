@@ -13,13 +13,16 @@ import (
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/pkg/jsplugin"
 	"github.com/QuantumNous/new-api/relaykit/dto"
+	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting"
 	"github.com/QuantumNous/new-api/setting/model_setting"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
 	"github.com/gin-gonic/gin"
+	"github.com/glebarez/sqlite"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/tidwall/gjson"
+	"gorm.io/gorm"
 )
 
 func TestChannelMatchesExpectedTaskPluginUsesGenericChannelSetting(t *testing.T) {
@@ -242,4 +245,91 @@ func TestNoAvailableChannelMessageNamesClaimingTaskPlugin(t *testing.T) {
 	generic := noAvailableChannelMessage(plain, "default", "gpt-4o")
 	assert.NotContains(t, generic, "task plugin")
 	assert.Contains(t, generic, "gpt-4o")
+}
+
+func TestDistributeVirtualGroupRetriesUseSourceGroupChannels(t *testing.T) {
+	require.NoError(t, i18n.Init())
+	originalDB := model.DB
+	originalMemoryCache := common.MemoryCacheEnabled
+	dsn := fmt.Sprintf("file:%s?mode=memory&cache=shared", strings.ReplaceAll(t.Name(), "/", "_"))
+	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{})
+	require.NoError(t, err)
+	require.NoError(t, db.AutoMigrate(&model.Channel{}, &model.Ability{}))
+	model.DB = db
+	common.MemoryCacheEnabled = true
+	t.Cleanup(func() {
+		model.DB = originalDB
+		common.MemoryCacheEnabled = originalMemoryCache
+		if originalMemoryCache && originalDB != nil &&
+			originalDB.Migrator().HasTable(&model.Channel{}) && originalDB.Migrator().HasTable(&model.Ability{}) {
+			model.InitChannelCache()
+		}
+		sqlDB, sqlErr := db.DB()
+		if sqlErr == nil {
+			require.NoError(t, sqlDB.Close())
+		}
+	})
+
+	const (
+		virtualGroup = "数据合成"
+		sourceGroup  = "vip"
+		modelName    = "deepseek-v4.1-flash-1017"
+		channelID    = 8801
+	)
+	priority := int64(0)
+	weight := uint(100)
+	require.NoError(t, db.Create(&model.Channel{
+		Id:       channelID,
+		Type:     constant.ChannelTypeOpenAI,
+		Key:      "source-key",
+		Status:   common.ChannelStatusEnabled,
+		Name:     "source-channel",
+		Weight:   &weight,
+		Models:   modelName,
+		Group:    sourceGroup,
+		Priority: &priority,
+	}).Error)
+	require.NoError(t, db.Create(&model.Ability{
+		Group:     sourceGroup,
+		Model:     modelName,
+		ChannelId: channelID,
+		Enabled:   true,
+		Priority:  &priority,
+		Weight:    weight,
+	}).Error)
+	model.InitChannelCache()
+
+	body := fmt.Sprintf(`{"model":%q,"messages":[{"role":"user","content":"hi"}]}`, modelName)
+	recorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(body))
+	c.Request.Header.Set("Content-Type", "application/json")
+	common.SetContextKey(c, constant.ContextKeyUserGroup, "default")
+	common.SetContextKey(c, constant.ContextKeyUsingGroup, virtualGroup)
+	common.SetContextKey(c, constant.ContextKeyTokenGroup, virtualGroup)
+	common.SetContextKey(c, constant.ContextKeyUserVirtualGroups, fmt.Sprintf(
+		`[{"name":%q,"models":[{"name":%q,"source_group":%q,"source_model":%q}]}]`,
+		virtualGroup, modelName, sourceGroup, modelName,
+	))
+
+	Distribute()(c)
+
+	require.False(t, c.IsAborted(), recorder.Body.String())
+	assert.Equal(t, sourceGroup, common.GetContextKeyString(c, constant.ContextKeyUsingGroup))
+	assert.Equal(t, sourceGroup, common.GetContextKeyString(c, constant.ContextKeyTokenGroup))
+	assert.Equal(t, channelID, common.GetContextKeyInt(c, constant.ContextKeyChannelId))
+	assert.Equal(t, modelName, common.GetContextKeyString(c, constant.ContextKeyOriginalModel))
+
+	retry := 1
+	channel, selectedGroup, err := service.CacheGetRandomSatisfiedChannel(&service.RetryParam{
+		Ctx:         c,
+		TokenGroup:  common.GetContextKeyString(c, constant.ContextKeyTokenGroup),
+		ModelName:   modelName,
+		RequestPath: c.Request.URL.Path,
+		Retry:       &retry,
+	})
+	require.NoError(t, err)
+	require.NotNil(t, channel)
+	assert.Equal(t, channelID, channel.Id)
+	assert.Equal(t, sourceGroup, selectedGroup)
 }

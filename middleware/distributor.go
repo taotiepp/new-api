@@ -71,6 +71,9 @@ func Distribute() func(c *gin.Context) {
 			}
 			modelRequest.Model = virtualResolution.SourceModel
 			common.SetContextKey(c, constant.ContextKeyUsingGroup, virtualResolution.SourceGroup)
+			// Retry selection reads the token group. A virtual catalog has no
+			// channels, so later attempts must use the source group too.
+			common.SetContextKey(c, constant.ContextKeyTokenGroup, virtualResolution.SourceGroup)
 		}
 		if pin, found, overridden := constraints.ResolvedPin(); found {
 			for _, lost := range overridden {
@@ -165,6 +168,7 @@ func Distribute() func(c *gin.Context) {
 							}
 						}
 						common.SetContextKey(c, constant.ContextKeyUsingGroup, usingGroup)
+						common.SetContextKey(c, constant.ContextKeyTokenGroup, usingGroup)
 					}
 				}
 

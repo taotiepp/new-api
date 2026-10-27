@@ -537,7 +537,11 @@ func processChannelError(c *gin.Context, channelError types.ChannelError, err *t
 
 	if constant.ErrorLogEnabled && types.IsRecordErrorLog(err) {
 		recordRelayErrorLog(c, err, channelError.ChannelId, relayInfo, retried)
-		c.Set(contextKeyErrorLogRecorded, true)
+		// Only the attempt returned to the client suppresses the request-level
+		// log. An intermediate retry must not drop a later, different failure.
+		if !retried {
+			c.Set(contextKeyErrorLogRecorded, true)
+		}
 	}
 
 }

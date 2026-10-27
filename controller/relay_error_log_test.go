@@ -223,6 +223,69 @@ func TestRecordTerminalRelayErrorSkipsWhenAttemptAlreadyLogged(t *testing.T) {
 	assert.Equal(t, int64(1), count)
 }
 
+func TestRecordTerminalRelayErrorPersistsFinalFailureAfterRetriedAttempt(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	previousDB, previousLogDB := model.DB, model.LOG_DB
+	previousRedisEnabled := common.RedisEnabled
+	previousMainDatabaseType := common.MainDatabaseType()
+	previousLogDatabaseType := common.LogDatabaseType()
+	previousErrorLogEnabled := constant.ErrorLogEnabled
+
+	database, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	require.NoError(t, err)
+	sqlDB, err := database.DB()
+	require.NoError(t, err)
+	sqlDB.SetMaxOpenConns(1)
+	require.NoError(t, database.AutoMigrate(&model.User{}, &model.Log{}))
+	model.DB, model.LOG_DB = database, database
+	common.RedisEnabled = false
+	common.SetDatabaseTypes(common.DatabaseTypeSQLite, common.DatabaseTypeSQLite)
+	constant.ErrorLogEnabled = true
+	t.Cleanup(func() {
+		model.DB, model.LOG_DB = previousDB, previousLogDB
+		common.RedisEnabled = previousRedisEnabled
+		common.SetDatabaseTypes(previousMainDatabaseType, previousLogDatabaseType)
+		constant.ErrorLogEnabled = previousErrorLogEnabled
+		require.NoError(t, sqlDB.Close())
+	})
+
+	require.NoError(t, database.Create(&model.User{Id: 13, Username: "final-user", Group: "default"}).Error)
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	ctx.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", nil)
+	ctx.Set("id", 13)
+	ctx.Set("username", "final-user")
+	ctx.Set("token_name", "final-token")
+	ctx.Set("token_id", 71)
+	ctx.Set("original_model", "deepseek-v4.1-flash-1017")
+	ctx.Set("group", "default")
+	common.SetContextKey(ctx, constant.ContextKeyRequestStartTime, time.Now().Add(-time.Second))
+
+	attemptErr := types.NewOpenAIError(errors.New("upstream failed"), types.ErrorCodeBadResponseStatusCode, http.StatusBadGateway)
+	processChannelError(ctx, types.ChannelError{ChannelId: 44}, attemptErr, nil, true)
+	finalErr := types.NewError(
+		errors.New("分组 vip 下模型 deepseek-v4.1-flash-1017 的可用渠道不存在（retry）"),
+		types.ErrorCodeGetChannelFailed,
+		types.ErrOptionWithSkipRetry(),
+	)
+	recordTerminalRelayError(ctx, finalErr, nil)
+
+	var stored []model.Log
+	require.NoError(t, database.Order("id asc").Find(&stored).Error)
+	require.Len(t, stored, 2)
+	assert.Contains(t, stored[0].Content, "upstream failed")
+	assert.Contains(t, stored[0].Other, `"retried":true`)
+	assert.Contains(t, stored[1].Content, "可用渠道不存在（retry）")
+	assert.Contains(t, stored[1].Other, `"retried":false`)
+	assert.Equal(t, "deepseek-v4.1-flash-1017", stored[1].ModelName)
+
+	logs, total, err := model.GetUserLogs(13, model.LogTypeError, 0, 0, "", "", 0, 10, "", "", "")
+	require.NoError(t, err)
+	require.Equal(t, int64(1), total)
+	require.Len(t, logs, 1)
+	assert.Contains(t, logs[0].Content, "可用渠道不存在（retry）")
+}
+
 func TestRecordTerminalRelayErrorAllowsRelayInfoWithoutChannelMeta(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	previousDB, previousLogDB := model.DB, model.LOG_DB
