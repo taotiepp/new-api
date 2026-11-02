@@ -23,18 +23,54 @@ func CloseResponseBodyGracefully(httpResponse *http.Response) {
 	}
 }
 
+// maxUpstreamRequestIDLength matches logs.upstream_request_id varchar(128).
+const maxUpstreamRequestIDLength = 128
+
+// upstreamRequestIDHeaders prefers the provider's own request id. X-Oneapi-Request-Id
+// remains the fallback when the upstream hop is another new-api instance.
+var upstreamRequestIDHeaders = []string{
+	"x-request-id",
+	"request-id",
+	common.RequestIdKey,
+}
+
+// CaptureUpstreamRequestID stores the original upstream request id for the usage log.
+// Provider headers such as OpenAI x-request-id and Anthropic request-id win over
+// X-Oneapi-Request-Id when both are present.
+func CaptureUpstreamRequestID(c *gin.Context, header http.Header) {
+	if c == nil || header == nil {
+		return
+	}
+	for _, name := range upstreamRequestIDHeaders {
+		id := strings.TrimSpace(header.Get(name))
+		if id == "" {
+			continue
+		}
+		if len(id) > maxUpstreamRequestIDLength {
+			id = id[:maxUpstreamRequestIDLength]
+		}
+		c.Set(common.UpstreamRequestIdKey, id)
+		return
+	}
+}
+
 // ShouldCopyUpstreamHeader checks whether a given upstream response header
 // should be copied to the client response. It returns false for Content-Length
 // (managed separately) and X-Oneapi-Request-Id (to preserve the local instance
-// ID). When the upstream header is X-Oneapi-Request-Id, the value is captured
-// into the Gin context for later logging.
+// ID). X-Oneapi-Request-Id is recorded only when no provider request id was captured.
 func ShouldCopyUpstreamHeader(c *gin.Context, k string, v []string) bool {
 	if strings.EqualFold(k, "Content-Length") {
 		return false
 	}
 	if strings.EqualFold(k, common.RequestIdKey) {
-		if c != nil && len(v) > 0 {
-			c.Set(common.UpstreamRequestIdKey, v[0])
+		if c != nil && len(v) > 0 && strings.TrimSpace(c.GetString(common.UpstreamRequestIdKey)) == "" {
+			id := strings.TrimSpace(v[0])
+			if len(id) > maxUpstreamRequestIDLength {
+				id = id[:maxUpstreamRequestIDLength]
+			}
+			if id != "" {
+				c.Set(common.UpstreamRequestIdKey, id)
+			}
 		}
 		return false
 	}
