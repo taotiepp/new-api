@@ -18,6 +18,7 @@ import (
 	"github.com/QuantumNous/new-api/relay/constant"
 	relayhelper "github.com/QuantumNous/new-api/relay/helper"
 	"github.com/QuantumNous/new-api/relaykit/dto"
+	"github.com/QuantumNous/new-api/relaykit/types"
 	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting/system_setting"
 	"github.com/gin-gonic/gin"
@@ -136,6 +137,45 @@ func TestConvertOpenAIRequestPreservesExplicitZeroForMappedQwenModel(t *testing.
 	value := gjson.GetBytes(encoded, "thinking_budget")
 	assert.True(t, value.Exists())
 	assert.Equal(t, int64(0), value.Int())
+}
+
+func TestAliKeepsNativeChatResponsesAndClaudeURLs(t *testing.T) {
+	baseURL := "https://dashscope.aliyuncs.com"
+	adaptor := &Adaptor{}
+
+	claudeInfo := &relaycommon.RelayInfo{
+		RelayFormat: types.RelayFormatClaude,
+		ChannelMeta: &relaycommon.ChannelMeta{
+			ChannelBaseUrl:    baseURL,
+			UpstreamModelName: "some-other-model",
+		},
+	}
+	claudeURL, err := adaptor.GetRequestURL(claudeInfo)
+	require.NoError(t, err)
+	assert.Equal(t, baseURL+"/apps/anthropic/v1/messages", claudeURL)
+
+	request := &dto.ClaudeRequest{Model: "some-other-model"}
+	converted, err := adaptor.ConvertClaudeRequest(nil, claudeInfo, request)
+	require.NoError(t, err)
+	assert.Same(t, request, converted)
+
+	responsesInfo := &relaycommon.RelayInfo{
+		RelayFormat: types.RelayFormatOpenAIResponses,
+		RelayMode:   constant.RelayModeResponses,
+		ChannelMeta: &relaycommon.ChannelMeta{ChannelBaseUrl: baseURL},
+	}
+	responsesURL, err := adaptor.GetRequestURL(responsesInfo)
+	require.NoError(t, err)
+	assert.Equal(t, baseURL+"/api/v2/apps/protocols/compatible-mode/v1/responses", responsesURL)
+
+	chatInfo := &relaycommon.RelayInfo{
+		RelayFormat: types.RelayFormatOpenAI,
+		RelayMode:   constant.RelayModeChatCompletions,
+		ChannelMeta: &relaycommon.ChannelMeta{ChannelBaseUrl: baseURL},
+	}
+	chatURL, err := adaptor.GetRequestURL(chatInfo)
+	require.NoError(t, err)
+	assert.Equal(t, baseURL+"/compatible-mode/v1/chat/completions", chatURL)
 }
 
 func TestMappedAliImageModelUsesUpstreamProtocol(t *testing.T) {

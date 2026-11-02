@@ -91,6 +91,26 @@ func TestGetEndpointTypesByChannelTypeDetectsModelKind(t *testing.T) {
 			want:        []constant.EndpointType{constant.EndpointTypeOpenAIResponse},
 		},
 		{
+			name:        "ali chat keeps openai responses and claude",
+			channelType: constant.ChannelTypeAli,
+			modelName:   "qwen-plus",
+			want: []constant.EndpointType{
+				constant.EndpointTypeOpenAI,
+				constant.EndpointTypeOpenAIResponse,
+				constant.EndpointTypeAnthropic,
+			},
+		},
+		{
+			name:        "tencent chat keeps openai responses and claude",
+			channelType: constant.ChannelTypeTencent,
+			modelName:   "hunyuan-turbo",
+			want: []constant.EndpointType{
+				constant.EndpointTypeOpenAI,
+				constant.EndpointTypeOpenAIResponse,
+				constant.EndpointTypeAnthropic,
+			},
+		},
+		{
 			name:        "new-api chat keeps multiprotocol list",
 			channelType: constant.ChannelTypeNewAPI,
 			modelName:   "gpt-5",
