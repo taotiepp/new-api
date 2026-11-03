@@ -131,6 +131,7 @@ import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth-store'
 
 import {
+  detectAdvancedCustomProtocols,
   fetchModels,
   getAllModels,
   getChannel,
@@ -156,6 +157,7 @@ import {
 } from '../../constants'
 import { useChannelKeyDisclosure } from '../../hooks/use-channel-key-disclosure'
 import { useChannelMutateForm } from '../../hooks/use-channel-mutate-form'
+import { AdvancedCustomProtocolFields } from '../advanced-custom-protocols'
 import {
   CHANNEL_FORM_DEFAULT_VALUES,
   CHANNEL_TYPE_ADVANCED_CUSTOM,
@@ -2914,6 +2916,48 @@ export function ChannelMutateDrawer({
                                 name='advanced_custom'
                                 render={({ field }) => (
                                   <FormItem className='space-y-3 border-y py-4'>
+                                    <AdvancedCustomProtocolFields
+                                      value={field.value}
+                                      onChange={field.onChange}
+                                      onDetect={async () => {
+                                        const baseURL =
+                                          form.getValues('base_url')?.trim() ??
+                                          ''
+                                        const key =
+                                          form.getValues('key')?.trim() ?? ''
+                                        if (baseURL === '') {
+                                          throw new Error(
+                                            t(
+                                              'Enter a base URL before detecting protocols'
+                                            )
+                                          )
+                                        }
+                                        if (!isEditing && key === '') {
+                                          throw new Error(
+                                            t('Please enter API key first')
+                                          )
+                                        }
+                                        const response = requireServerSuccess(
+                                          await detectAdvancedCustomProtocols({
+                                            base_url: baseURL,
+                                            key,
+                                            channel_id: isEditing
+                                              ? (channelId ?? undefined)
+                                              : undefined,
+                                            proxy:
+                                              form.getValues('proxy') ||
+                                              undefined,
+                                            header_override:
+                                              form.getValues(
+                                                'header_override'
+                                              ) || undefined,
+                                          })
+                                        )
+                                        return (response.data ?? [])
+                                          .filter((item) => item.available)
+                                          .map((item) => item.id)
+                                      }}
+                                    />
                                     <div className='flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between'>
                                       <div className='space-y-2'>
                                         <FormLabel>

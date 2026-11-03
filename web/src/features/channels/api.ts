@@ -548,6 +548,25 @@ export async function getTagModels(
 /**
  * Fetch models from the current unsaved channel form configuration.
  */
+export async function detectAdvancedCustomProtocols(data: {
+  base_url: string
+  key?: string
+  channel_id?: number
+  header_override?: string
+  proxy?: string
+}): Promise<{
+  success: boolean
+  message?: string
+  data?: Array<{ id: string; available: boolean }>
+}> {
+  const res = await api.post(
+    '/api/channel/detect_protocols',
+    data,
+    channelActionConfig()
+  )
+  return res.data
+}
+
 export async function fetchModels(data: {
   base_url: string
   type: number

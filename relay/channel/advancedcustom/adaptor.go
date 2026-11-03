@@ -456,6 +456,14 @@ func resolveUpstreamTargetURL(upstreamPath string, info *relaycommon.RelayInfo) 
 	return parsedURL, nil
 }
 
+func JoinUpstreamURL(baseURL string, upstreamPath string) (string, error) {
+	parsedURL, err := joinBaseURLAndUpstreamPath(baseURL, upstreamPath)
+	if err != nil {
+		return "", err
+	}
+	return parsedURL.String(), nil
+}
+
 func joinBaseURLAndUpstreamPath(baseURL string, upstreamPath string) (*url.URL, error) {
 	parsedBaseURL, err := url.Parse(strings.TrimSpace(baseURL))
 	if err != nil {

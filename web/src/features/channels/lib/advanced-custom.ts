@@ -410,6 +410,109 @@ export function createAdvancedCustomConfig(): AdvancedCustomConfig {
   }
 }
 
+export const ADVANCED_CUSTOM_SELECTABLE_PROTOCOLS = [
+  {
+    id: 'openai-chat',
+    incomingPath: openAIChatPath,
+  },
+  {
+    id: 'openai-responses',
+    incomingPath: openAIResponsesPath,
+  },
+  {
+    id: 'claude-messages',
+    incomingPath: claudeMessagesPath,
+  },
+] as const
+
+export type AdvancedCustomSelectableProtocol =
+  (typeof ADVANCED_CUSTOM_SELECTABLE_PROTOCOLS)[number]['id']
+
+export function selectedAdvancedCustomProtocols(
+  value: string | undefined
+): AdvancedCustomSelectableProtocol[] {
+  const routes = parseAdvancedCustomConfig(value)?.advanced_routes ?? []
+  return ADVANCED_CUSTOM_SELECTABLE_PROTOCOLS.filter((protocol) =>
+    routes.some((route) =>
+      isNativeCatchAllRoute(route, protocol.incomingPath)
+    )
+  ).map((protocol) => protocol.id)
+}
+
+export function applyDetectedProtocols(
+  value: string | undefined,
+  availableIds: readonly string[]
+): string {
+  const available = new Set(availableIds)
+  let next = value ?? ''
+  for (const protocol of ADVANCED_CUSTOM_SELECTABLE_PROTOCOLS) {
+    next = withAdvancedCustomProtocol(
+      next,
+      protocol.id,
+      available.has(protocol.id)
+    )
+  }
+  return next
+}
+
+export function withAdvancedCustomProtocol(
+  value: string | undefined,
+  protocolId: AdvancedCustomSelectableProtocol,
+  enabled: boolean
+): string {
+  const incomingPath = ADVANCED_CUSTOM_SELECTABLE_PROTOCOLS.find(
+    (protocol) => protocol.id === protocolId
+  )?.incomingPath
+  if (!incomingPath) return value ?? ''
+  const routes = [
+    ...(parseAdvancedCustomConfig(value)?.advanced_routes ?? []),
+  ]
+  const nextRoutes = enabled
+    ? insertNativeCatchAllRoute(routes, incomingPath)
+    : routes.filter(
+        (route) => !isNativeCatchAllRoute(route, incomingPath)
+      )
+  return stringifyAdvancedCustomConfig({ advanced_routes: nextRoutes })
+}
+
+function isNativeCatchAllRoute(
+  route: AdvancedCustomRoute,
+  incomingPath: string
+): boolean {
+  return (
+    isCatchAllRoute(route, incomingPath) && (route.converter || 'none') === 'none'
+  )
+}
+
+function isCatchAllRoute(
+  route: AdvancedCustomRoute,
+  incomingPath: string
+): boolean {
+  const models = (route.models ?? []).map((model) => model.trim()).filter(Boolean)
+  return (route.incoming_path?.trim() || '') === incomingPath && models.length === 0
+}
+
+function insertNativeCatchAllRoute(
+  routes: AdvancedCustomRoute[],
+  incomingPath: string
+): AdvancedCustomRoute[] {
+  const kept = routes.filter((route) => !isCatchAllRoute(route, incomingPath))
+  const nativeRoute: AdvancedCustomRoute = {
+    incoming_path: incomingPath,
+    upstream_path: incomingPath,
+    converter: 'none',
+    auth: getAdvancedCustomNativeAuth(incomingPath),
+  }
+  let insertAt = kept.length
+  for (let index = kept.length - 1; index >= 0; index -= 1) {
+    if ((kept[index]?.incoming_path?.trim() || '') === incomingPath) {
+      insertAt = index + 1
+      break
+    }
+  }
+  return [...kept.slice(0, insertAt), nativeRoute, ...kept.slice(insertAt)]
+}
+
 export function createAdvancedCustomManagementRoute(
   path: string
 ): AdvancedCustomRoute {
