@@ -4663,6 +4663,8 @@
     "Rename deployment": "Rename deployment",
     "Rename failed": "Rename failed",
     "Renamed successfully": "Renamed successfully",
+    "Renamed to {{alias}}. You can edit the alias.": "Renamed to {{alias}}. You can edit the alias.",
+    "Renamed to {{aliases}}. You can edit the aliases.": "Renamed to {{aliases}}. You can edit the aliases.",
     "Renaming metadata does not rename channel models or move pricing. Existing prices stay with the original model name.": "Renaming metadata does not rename channel models or move pricing. Existing prices stay with the original model name.",
     "Repair": "Repair",
     "Repair Channel Consistency": "Repair Channel Consistency",

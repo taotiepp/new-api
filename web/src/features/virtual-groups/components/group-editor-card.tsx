@@ -149,6 +149,19 @@ export function GroupEditorCard(props: {
     if (result.skipped > 0) {
       toast.error(t('Some selected models are already in the virtual group'))
     }
+    if (result.renamed.length === 1) {
+      toast.info(
+        t('Renamed to {{alias}}. You can edit the alias.', {
+          alias: result.renamed[0],
+        })
+      )
+    } else if (result.renamed.length > 1) {
+      toast.info(
+        t('Renamed to {{aliases}}. You can edit the aliases.', {
+          aliases: result.renamed.join(', '),
+        })
+      )
+    }
     setModels(result.models)
     setSelectedModels([])
   }

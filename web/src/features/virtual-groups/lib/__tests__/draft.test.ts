@@ -72,9 +72,8 @@ describe('appendSourceModels', () => {
     expect(existing).toHaveLength(1)
   })
 
-  it('skips models already present by public name or source pair', () => {
+  it('skips a source model that is already in the group', () => {
     const existing = [
-      model({ name: 'gpt-4o' }),
       model({
         name: 'alias',
         source_group: 'vip',
@@ -84,17 +83,47 @@ describe('appendSourceModels', () => {
     const result = appendSourceModels(
       existing,
       'vip',
-      ['gpt-4o', 'claude-3', 'gemini', ' '],
+      ['claude-3', 'gemini', ' '],
       createId
     )
 
     expect(result.added).toBe(1)
-    expect(result.skipped).toBe(3)
-    expect(result.models.map((item) => item.name)).toEqual([
-      'gpt-4o',
-      'alias',
-      'gemini',
-    ])
+    expect(result.skipped).toBe(2)
+    expect(result.renamed).toEqual([])
+    expect(result.models.map((item) => item.name)).toEqual(['alias', 'gemini'])
+  })
+
+  it('renames a taken model to the model name and source group', () => {
+    const existing = [model({ name: 'gpt-4o', source_group: 'default' })]
+    const result = appendSourceModels(existing, 'vip', ['gpt-4o'], createId)
+
+    expect(result.added).toBe(1)
+    expect(result.skipped).toBe(0)
+    expect(result.renamed).toEqual(['gpt-4o-vip'])
+    expect(result.models[1]).toMatchObject({
+      name: 'gpt-4o-vip',
+      source_group: 'vip',
+      source_model: 'gpt-4o',
+    })
+  })
+
+  it('adds a numeric suffix when the source-group alias is also taken', () => {
+    const existing = [
+      model({ name: 'gpt-4o', source_group: 'default' }),
+      model({
+        name: 'gpt-4o-vip',
+        source_group: 'azure',
+        source_model: 'gpt-4o',
+      }),
+    ]
+    const result = appendSourceModels(existing, 'vip', ['gpt-4o'], createId)
+
+    expect(result.renamed).toEqual(['gpt-4o-vip-2'])
+    expect(result.models[2]).toMatchObject({
+      name: 'gpt-4o-vip-2',
+      source_group: 'vip',
+      source_model: 'gpt-4o',
+    })
   })
 })
 

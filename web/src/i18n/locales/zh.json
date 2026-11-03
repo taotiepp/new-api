@@ -4663,6 +4663,8 @@
     "Rename deployment": "重命名部署",
     "Rename failed": "重命名失败",
     "Renamed successfully": "重命名成功",
+    "Renamed to {{alias}}. You can edit the alias.": "已重命名为 {{alias}}。你可以自行调整别名。",
+    "Renamed to {{aliases}}. You can edit the aliases.": "已重命名为 {{aliases}}。你可以自行调整这些别名。",
     "Renaming metadata does not rename channel models or move pricing. Existing prices stay with the original model name.": "修改元信息名称不会重命名渠道模型或迁移定价，已有价格仍归原模型名称。",
     "Repair": "修复",
     "Repair Channel Consistency": "修复渠道一致性",

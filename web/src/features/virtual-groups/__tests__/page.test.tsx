@@ -65,6 +65,7 @@ describe('virtual groups page', () => {
             success: true,
             data: {
               default: { desc: 'Default', ratio: 0.4 },
+              vip: { desc: 'VIP', ratio: 1 },
               auto: { desc: 'Auto', ratio: 1 },
               mirrored: { desc: 'Mirror', ratio: 1, virtual: true },
             },
@@ -240,6 +241,53 @@ describe('virtual groups page', () => {
     expect(
       screen.queryByRole('button', { name: 'Edit spare' })
     ).not.toBeInTheDocument()
+  })
+
+  it('renames a duplicate model to the model and source group', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await user.click(await screen.findByRole('button', { name: 'Edit alias' }))
+    await user.click(screen.getByRole('combobox', { name: 'Source group' }))
+    await user.click(await screen.findByRole('option', { name: 'vip · VIP ×1' }))
+    await user.click(screen.getByRole('combobox', { name: 'Select models' }))
+    await user.click(await screen.findByRole('option', { name: 'gpt-4o' }))
+    await user.keyboard('{Escape}')
+    await user.click(
+      screen.getByRole('button', { name: 'Add selected models' })
+    )
+
+    const renamed = screen.getByDisplayValue('gpt-4o-vip')
+    expect(renamed).toBeVisible()
+    expect(
+      screen.getByText('Renamed to gpt-4o-vip. You can edit the alias.')
+    ).toBeVisible()
+    expect(screen.getByDisplayValue('gpt-4o')).toBeVisible()
+
+    await user.clear(renamed)
+    await user.type(renamed, 'my-gpt')
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    await screen.findByRole('button', { name: 'Edit alias' })
+    expect(api.put).toHaveBeenCalledWith(
+      '/api/user/self/virtual-groups',
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: 'alias',
+          models: [
+            expect.objectContaining({
+              name: 'gpt-4o',
+              source_group: 'default',
+              source_model: 'gpt-4o',
+            }),
+            expect.objectContaining({
+              name: 'my-gpt',
+              source_group: 'vip',
+              source_model: 'gpt-4o',
+            }),
+          ],
+        }),
+      ])
+    )
   })
 
   it('saves several aliases that all use the same source model', async () => {

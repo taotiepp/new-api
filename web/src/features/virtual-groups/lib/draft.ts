@@ -71,12 +71,17 @@ export function appendSourceModels(
   sourceGroup: string,
   sourceModels: readonly string[],
   createId: () => string
-): { models: EditorModel[]; added: number; skipped: number } {
-  const names = new Set(models.map((model) => model.name))
+): { models: EditorModel[]; added: number; skipped: number; renamed: string[] } {
+  const names = new Set<string>()
+  for (const model of models) {
+    const takenName = model.name.trim()
+    if (takenName !== '') names.add(takenName)
+  }
   const sources = new Set(
     models.map((model) => `${model.source_group}\0${model.source_model}`)
   )
   const next = models.map((model) => ({ ...model }))
+  const renamed: string[] = []
   let added = 0
   let skipped = 0
   const group = sourceGroup.trim()
@@ -87,14 +92,25 @@ export function appendSourceModels(
       continue
     }
     const sourceKey = `${group}\0${name}`
-    if (names.has(name) || sources.has(sourceKey)) {
+    if (sources.has(sourceKey)) {
       skipped += 1
       continue
     }
-    names.add(name)
+    let alias = name
+    if (names.has(name)) {
+      const base = `${name}-${group}`
+      alias = base
+      let suffix = 2
+      while (names.has(alias)) {
+        alias = `${base}-${suffix}`
+        suffix += 1
+      }
+      renamed.push(alias)
+    }
+    names.add(alias)
     sources.add(sourceKey)
     next.push({
-      name,
+      name: alias,
       source_group: group,
       source_model: name,
       redirect: '',
@@ -102,7 +118,7 @@ export function appendSourceModels(
     })
     added += 1
   }
-  return { models: next, added, skipped }
+  return { models: next, added, skipped, renamed }
 }
 
 export function insertModelAlias(
