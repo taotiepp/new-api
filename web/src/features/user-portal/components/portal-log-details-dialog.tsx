@@ -85,6 +85,7 @@ export function PortalLogDetailsDialog(props: PortalLogDetailsDialogProps) {
         { label: t('Type'), value: t(typeLabel) },
         { label: t('Model'), value: log.model_name || t('Unknown model') },
         { label: t('Token Name'), value: log.token_name || '—' },
+        { label: t('Group'), value: log.group || other?.group || '—' },
         { label: t('Request ID'), value: log.request_id || '—' },
         { label: t('Input tokens'), value: formatNumber(log.prompt_tokens) },
         {

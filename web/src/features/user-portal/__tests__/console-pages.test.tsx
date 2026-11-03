@@ -305,7 +305,7 @@ describe('portal console pages', () => {
             is_stream: true,
             channel: 3,
             token_id: 7,
-            group: '',
+            group: 'vip',
             ip: '127.0.0.1',
             other: JSON.stringify({
               cache_tokens: 5,
@@ -335,6 +335,10 @@ describe('portal console pages', () => {
     expect(await screen.findByText('gpt-4.1')).toBeInTheDocument()
     expect(screen.getByRole('table')).toBeInTheDocument()
     expect(
+      screen.getByRole('columnheader', { name: 'Group' })
+    ).toBeInTheDocument()
+    expect(screen.getByText('vip')).toBeInTheDocument()
+    expect(
       screen.getByRole('columnheader', { name: 'Input' })
     ).toBeInTheDocument()
     expect(
@@ -348,6 +352,8 @@ describe('portal console pages', () => {
     await waitFor(() => {
       expect(screen.getByText('req_1')).toBeInTheDocument()
     })
+    expect(screen.getAllByText('vip').length).toBeGreaterThan(1)
+    expect(screen.getAllByText('Group').length).toBeGreaterThan(1)
     expect(screen.getByText('Cost formula')).toBeInTheDocument()
     expect(screen.getByText(/Input 5 ×/)).toBeInTheDocument()
     expect(screen.getByText(/Output 20 ×/)).toBeInTheDocument()
@@ -623,6 +629,7 @@ describe('portal console pages', () => {
     ).toBeInTheDocument()
     const content = await screen.findByText('upstream timeout')
     expect(content).toHaveClass('text-red-600')
+    expect(screen.queryByText('User Group')).not.toBeInTheDocument()
     expect(content.closest('tr')).toHaveClass('bg-rose-50/40')
     expect(screen.getByText('Error')).toBeInTheDocument()
 

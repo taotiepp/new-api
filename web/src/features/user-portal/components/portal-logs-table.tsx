@@ -24,6 +24,7 @@ import {
   staticDataTableClassNames,
   type StaticDataTableColumn,
 } from '@/components/data-table'
+import { GroupBadge } from '@/components/group-badge'
 import {
   StatusBadge,
   type StatusBadgeProps,
@@ -85,6 +86,23 @@ export function PortalLogsTable(props: PortalLogsTableProps) {
         header: t('API Key'),
         cellClassName: staticDataTableClassNames.compactMutedCell,
         cell: (log) => log.token_name || DASH,
+      },
+      {
+        id: 'group',
+        header: t('Group'),
+        cellClassName: 'max-w-36',
+        cell: (log) => {
+          const group = log.group || parseLogOther(log.other)?.group || ''
+          if (!group) return DASH
+          return (
+            <GroupBadge
+              group={group}
+              size='sm'
+              copyable={false}
+              className='max-w-full'
+            />
+          )
+        },
       },
       {
         id: 'content',
