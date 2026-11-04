@@ -18,6 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { useTranslation } from 'react-i18next'
 
+import { CopyButton } from '@/components/copy-button'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -151,6 +152,18 @@ export function PortalLogDetailsDialog(props: PortalLogDetailsDialogProps) {
     }
   }
 
+  const conversionChain =
+    other && Array.isArray(other.request_conversion)
+      ? other.request_conversion.filter(Boolean)
+      : []
+  const conversionLabel =
+    conversionChain.length <= 1
+      ? t('Native format')
+      : conversionChain.join(' -> ')
+  const showConversion =
+    log != null &&
+    log.type !== LOG_TYPE_ENUM.REFUND &&
+    Boolean(other?.request_path || conversionChain.length > 0)
   const formula =
     log != null ? formatPortalCostFormula(log, other, t, formatQuota) : ''
 
@@ -169,6 +182,33 @@ export function PortalLogDetailsDialog(props: PortalLogDetailsDialogProps) {
               </dd>
             </div>
           ))}
+          {showConversion ? (
+            <div className='grid gap-3'>
+              <div className='text-muted-foreground text-sm'>
+                {t('Request Conversion')}
+              </div>
+              {other?.request_path ? (
+                <div className='grid gap-1 sm:grid-cols-[8rem_1fr]'>
+                  <dt className='text-muted-foreground text-sm'>{t('Path')}</dt>
+                  <dd className='font-mono text-sm break-all text-[var(--portal-ink)]'>
+                    {other.request_path}
+                  </dd>
+                </div>
+              ) : null}
+              <div className='grid gap-1 sm:grid-cols-[8rem_1fr]'>
+                <dt className='text-muted-foreground text-sm'>{t('Format')}</dt>
+                <dd className='flex min-w-0 items-start gap-2 text-sm break-all text-[var(--portal-ink)]'>
+                  <span className='min-w-0'>{conversionLabel}</span>
+                  <CopyButton
+                    value={conversionLabel}
+                    size='sm'
+                    className='size-6'
+                    iconClassName='size-3'
+                  />
+                </dd>
+              </div>
+            </div>
+          ) : null}
           {formula ? (
             <div className='grid gap-1'>
               <dt className='text-muted-foreground text-sm'>

@@ -47,6 +47,7 @@ const DASH = '—'
 type PortalLogsTableProps = {
   logs: UsageLog[]
   loading: boolean
+  hiddenColumnIds: ReadonlySet<string>
   onSelect: (log: UsageLog) => void
 }
 
@@ -185,9 +186,13 @@ export function PortalLogsTable(props: PortalLogsTableProps) {
     ],
     [numericClass, t]
   )
+  const visibleColumns = useMemo(
+    () => columns.filter((column) => !props.hiddenColumnIds.has(column.id)),
+    [columns, props.hiddenColumnIds]
+  )
 
   if (props.loading) {
-    const loadingColumns: StaticDataTableColumn<number>[] = columns.map(
+    const loadingColumns: StaticDataTableColumn<number>[] = visibleColumns.map(
       (column) => ({
         id: column.id,
         header: column.header,
@@ -209,7 +214,7 @@ export function PortalLogsTable(props: PortalLogsTableProps) {
     <StaticDataTable
       className='rounded-none border-x-0 border-b-0 border-t border-[var(--portal-hairline)] bg-transparent'
       headerRowClassName={staticDataTableClassNames.mutedHeaderRow}
-      columns={columns}
+      columns={visibleColumns}
       data={props.logs}
       getRowKey={(log) => log.id}
       emptyContent={t('No logs')}
@@ -226,7 +231,7 @@ export function PortalLogsTable(props: PortalLogsTableProps) {
             selectLogOnActivate(event, log, props.onSelect)
           }}
         >
-          {columns.map((column) => (
+          {visibleColumns.map((column) => (
             <TableCell
               key={column.id}
               className={cn(

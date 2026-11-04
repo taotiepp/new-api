@@ -64,6 +64,8 @@ import {
   createDefaultPortalBillingRange,
   isPortalBillingRangeTooLong,
 } from '../lib/billing'
+import { usePortalLogColumnVisibility } from '../lib/portal-log-columns'
+import { PortalLogColumnMenu } from './portal-log-column-menu'
 import { PortalLogDetailsDialog } from './portal-log-details-dialog'
 import { PortalLogsTable } from './portal-logs-table'
 import { PortalSubjectUserPicker } from './portal-subject-user-picker'
@@ -83,6 +85,7 @@ export function PortalLogsPanel() {
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE)
   const [selected, setSelected] = useState<UsageLog | null>(null)
+  const columnVisibility = usePortalLogColumnVisibility()
   const subjectUser = usePortalSubjectUser()
 
   const rangeTooLong = isPortalBillingRangeTooLong(start, end)
@@ -206,6 +209,7 @@ export function PortalLogsPanel() {
       <PortalLogsTable
         logs={[]}
         loading
+        hiddenColumnIds={columnVisibility.hiddenColumnIds}
         onSelect={() => {
           return
         }}
@@ -213,7 +217,12 @@ export function PortalLogsPanel() {
     )
   } else {
     listBody = (
-      <PortalLogsTable logs={items} loading={false} onSelect={setSelected} />
+      <PortalLogsTable
+        logs={items}
+        loading={false}
+        hiddenColumnIds={columnVisibility.hiddenColumnIds}
+        onSelect={setSelected}
+      />
     )
   }
 
@@ -299,6 +308,10 @@ export function PortalLogsPanel() {
               setKeyName(value)
               setPage(1)
             }}
+          />
+          <PortalLogColumnMenu
+            hiddenColumnIds={columnVisibility.hiddenColumnIds}
+            onColumnVisibleChange={columnVisibility.setColumnVisible}
           />
           <Button
             type='button'

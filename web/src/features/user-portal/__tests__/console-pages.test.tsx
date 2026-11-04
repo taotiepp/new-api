@@ -31,6 +31,7 @@ import { apiKeySchema } from '@/features/keys/types'
 import { usageLogSchema } from '@/features/usage-logs/data/schema'
 
 import { PortalKeysPanel } from '../components/portal-keys-panel'
+import { PortalLogDetailsDialog } from '../components/portal-log-details-dialog'
 import { PortalLogsPanel } from '../components/portal-logs-panel'
 
 const getApiKeys = vi.hoisted(() => vi.fn())
@@ -92,6 +93,7 @@ function renderPanel(ui: ReactElement) {
 }
 
 afterEach(() => {
+  localStorage.removeItem('portal-logs:column-visibility')
   for (const client of clients) client.clear()
   clients.length = 0
   vi.clearAllMocks()
@@ -312,6 +314,8 @@ describe('portal console pages', () => {
               model_ratio: 0.075,
               completion_ratio: 4,
               group_ratio: 1,
+              request_path: '/v1/messages',
+              request_conversion: ['openai', 'claude'],
             }),
             request_id: 'req_1',
             upstream_request_id: '',
@@ -354,6 +358,9 @@ describe('portal console pages', () => {
     })
     expect(screen.getAllByText('vip').length).toBeGreaterThan(1)
     expect(screen.getAllByText('Group').length).toBeGreaterThan(1)
+    expect(screen.getByText('Request Conversion')).toBeInTheDocument()
+    expect(screen.getByText('/v1/messages')).toBeInTheDocument()
+    expect(screen.getByText('openai -> claude')).toBeInTheDocument()
     expect(screen.getByText('Cost formula')).toBeInTheDocument()
     expect(screen.getByText(/Input 5 ×/)).toBeInTheDocument()
     expect(screen.getByText(/Output 20 ×/)).toBeInTheDocument()
@@ -640,5 +647,130 @@ describe('portal console pages', () => {
         expect.objectContaining({ type: 5 })
       )
     })
+  })
+
+  test('hides a log column and keeps that choice for the next visit', async () => {
+    getUserModels.mockResolvedValue({ success: true, data: [] })
+    getUserLogs.mockResolvedValue({
+      success: true,
+      data: {
+        items: [
+          usageLogSchema.parse({
+            id: 12,
+            user_id: 1,
+            created_at: 1_700_000_000,
+            type: 2,
+            content: 'visible note',
+            username: 'alice',
+            token_name: 'production',
+            model_name: 'gpt-4.1',
+            quota: 1,
+            prompt_tokens: 1,
+            completion_tokens: 1,
+            use_time: 1,
+            is_stream: false,
+            channel: 1,
+            token_id: 1,
+            group: 'default',
+            ip: '',
+            other: '{}',
+            request_id: 'req_cols',
+            upstream_request_id: '',
+          }),
+        ],
+        total: 1,
+        page: 1,
+        page_size: 20,
+      },
+    })
+    getUserLogStats.mockResolvedValue({
+      success: true,
+      data: { quota: 0, rpm: 0, tpm: 0 },
+    })
+
+    const user = userEvent.setup()
+    const view = renderPanel(<PortalLogsPanel />)
+    expect(await screen.findByText('visible note')).toBeInTheDocument()
+    expect(
+      screen.getByRole('columnheader', { name: 'Content' })
+    ).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'View' }))
+    await user.click(screen.getByRole('menuitemcheckbox', { name: 'Content' }))
+
+    expect(
+      screen.queryByRole('columnheader', { name: 'Content' })
+    ).not.toBeInTheDocument()
+    expect(screen.queryByText('visible note')).not.toBeInTheDocument()
+    expect(
+      screen.getByRole('columnheader', { name: 'Model' })
+    ).toBeInTheDocument()
+
+    view.unmount()
+    renderPanel(<PortalLogsPanel />)
+    expect(
+      await screen.findByRole('columnheader', { name: 'Model' })
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByRole('columnheader', { name: 'Content' })
+    ).not.toBeInTheDocument()
+  })
+})
+
+function portalLog(type: number, other: Record<string, unknown>) {
+  return usageLogSchema.parse({
+    id: 21,
+    user_id: 1,
+    created_at: 1_700_000_000,
+    type,
+    content: '',
+    username: 'alice',
+    token_name: 'production',
+    model_name: 'gpt-4.1',
+    quota: 1,
+    prompt_tokens: 1,
+    completion_tokens: 1,
+    use_time: 1,
+    is_stream: false,
+    channel: 1,
+    token_id: 1,
+    group: 'default',
+    ip: '',
+    request_id: 'req_conversion',
+    upstream_request_id: '',
+    other: JSON.stringify(other),
+  })
+}
+
+describe('portal log request conversion', () => {
+  test('shows the path and native format when the request was not converted', () => {
+    renderPanel(
+      <PortalLogDetailsDialog
+        log={portalLog(2, {
+          request_path: '/v1/chat/completions',
+          request_conversion: ['openai'],
+        })}
+        onOpenChange={() => {}}
+      />
+    )
+
+    expect(screen.getByText('Request Conversion')).toBeInTheDocument()
+    expect(screen.getByText('/v1/chat/completions')).toBeInTheDocument()
+    expect(screen.getByText('Native format')).toBeInTheDocument()
+  })
+
+  test('hides request conversion on a refund log', () => {
+    renderPanel(
+      <PortalLogDetailsDialog
+        log={portalLog(6, {
+          request_path: '/v1/chat/completions',
+          request_conversion: ['openai', 'claude'],
+        })}
+        onOpenChange={() => {}}
+      />
+    )
+
+    expect(screen.queryByText('Request Conversion')).not.toBeInTheDocument()
+    expect(screen.queryByText('/v1/chat/completions')).not.toBeInTheDocument()
   })
 })
