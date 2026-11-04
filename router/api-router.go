@@ -128,7 +128,6 @@ func SetApiRouter(router *gin.Engine) {
 				selfRoute.POST("/waffo-pancake/pay", middleware.CriticalRateLimit(), controller.RequestWaffoPancakePay)
 				selfRoute.POST("/aff_transfer", middleware.UserCriticalRateLimit("aff-transfer"), controller.TransferAffQuota)
 				selfRoute.PUT("/setting", controller.UpdateUserSetting)
-				selfRoute.PUT("/invoice-profile", controller.UpdateSelfInvoiceProfile)
 				selfRoute.POST("/setting/test", middleware.UserCriticalRateLimit("notify-test"), controller.TestUserNotification)
 
 				// 2FA routes
@@ -158,6 +157,7 @@ func SetApiRouter(router *gin.Engine) {
 				adminRoute.DELETE("/:id/oauth/bindings/:provider_id", controller.UnbindCustomOAuthByAdmin)
 				adminRoute.DELETE("/:id/bindings/:binding_type", controller.AdminClearUserBinding)
 				adminRoute.GET("/:id", controller.GetUser)
+				adminRoute.PUT("/:id/invoice-profile", controller.UpdateUserInvoiceProfile)
 				adminRoute.GET("/:id/operations", controller.GetUserOperations)
 				adminRoute.PUT("/:id/operations", controller.UpdateUserOperations)
 				adminRoute.POST("/", controller.CreateUser)
@@ -349,9 +349,13 @@ func SetApiRouter(router *gin.Engine) {
 		dataRoute.GET("/flow/self", middleware.UserAuth(), controller.GetUserFlowQuotaDates)
 
 		billsRoute := apiRouter.Group("/bills")
-		billsRoute.GET("/self", middleware.UserAuth(), controller.GetUserBills)
-		billsRoute.GET("/invoices", middleware.UserAuth(), controller.ListUserInvoices)
-		billsRoute.POST("/invoices", middleware.UserAuth(), controller.IssueUserInvoice)
+		billsRoute.Use(middleware.AdminAuth())
+		{
+			billsRoute.GET("/self", controller.GetUserBills)
+			billsRoute.GET("/invoices", controller.ListUserInvoices)
+			billsRoute.POST("/invoices", controller.IssueUserInvoice)
+			billsRoute.POST("/adjustments", controller.CreateUserMonthAdjustment)
+		}
 
 		logRoute.Use(middleware.CORS(), middleware.CriticalRateLimit())
 		{

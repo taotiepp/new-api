@@ -26,11 +26,17 @@ import type { AccountOperations } from '../types'
 
 const getAccountOperations = vi.fn()
 const updateAccountOperations = vi.fn()
+const updateUserInvoiceProfile = vi.fn()
 
 vi.mock('../api', () => ({
   getAccountOperations: (...args: unknown[]) => getAccountOperations(...args),
   updateAccountOperations: (...args: unknown[]) =>
     updateAccountOperations(...args),
+}))
+
+vi.mock('@/features/profile/api', () => ({
+  updateUserInvoiceProfile: (...args: unknown[]) =>
+    updateUserInvoiceProfile(...args),
 }))
 
 const settings: AccountOperations = {
@@ -68,6 +74,17 @@ const settings: AccountOperations = {
       discount: 0.4,
     },
   ],
+  invoice_profile: {
+    name: 'Ada Labs',
+    line1: '1 Road',
+    line2: '',
+    city: 'Shanghai',
+    region: '',
+    postal_code: '200000',
+    country: 'CN',
+    phone: '',
+    email: 'ada@example.com',
+  },
 }
 
 function renderDialog() {
@@ -101,8 +118,10 @@ describe('account operations dialog', () => {
   beforeEach(() => {
     getAccountOperations.mockReset()
     updateAccountOperations.mockReset()
+    updateUserInvoiceProfile.mockReset()
     getAccountOperations.mockResolvedValue(settings)
     updateAccountOperations.mockResolvedValue(undefined)
+    updateUserInvoiceProfile.mockResolvedValue({ success: true })
   })
 
   test('shows default and custom discounts only for groups the account can use', async () => {
@@ -140,6 +159,29 @@ describe('account operations dialog', () => {
       custom: true,
       groups: ['default', 'svip'],
       discounts: { default: null, svip: null },
+    })
+  })
+
+  test('saves billing details for the account', async () => {
+    const user = userEvent.setup()
+    renderDialog()
+
+    const name = await screen.findByLabelText(/Billing name/)
+    expect(name).toHaveValue('Ada Labs')
+    await user.clear(name)
+    await user.type(name, 'Ada Lovelace')
+    await user.click(screen.getByRole('button', { name: 'Save billing details' }))
+
+    expect(updateUserInvoiceProfile).toHaveBeenCalledWith(2, {
+      name: 'Ada Lovelace',
+      line1: '1 Road',
+      line2: '',
+      city: 'Shanghai',
+      region: '',
+      postal_code: '200000',
+      country: 'CN',
+      phone: '',
+      email: 'ada@example.com',
     })
   })
 })

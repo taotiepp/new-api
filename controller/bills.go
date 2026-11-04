@@ -10,9 +10,21 @@ import (
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
+func requireBillAdmin(c *gin.Context) bool {
+	if c.GetInt("role") < common.RoleAdminUser {
+		common.ApiErrorMsg(c, "access denied")
+		return false
+	}
+	return true
+}
+
 func GetUserBills(c *gin.Context) {
+	if !requireBillAdmin(c) {
+		return
+	}
 	subject, ok := resolveScopedUser(c)
 	if !ok {
 		return
@@ -63,6 +75,9 @@ func billPeriod(c *gin.Context) (string, bool) {
 }
 
 func ListUserInvoices(c *gin.Context) {
+	if !requireBillAdmin(c) {
+		return
+	}
 	subject, ok := resolveScopedUser(c)
 	if !ok {
 		return
@@ -84,6 +99,9 @@ func ListUserInvoices(c *gin.Context) {
 }
 
 func IssueUserInvoice(c *gin.Context) {
+	if !requireBillAdmin(c) {
+		return
+	}
 	subject, ok := resolveScopedUser(c)
 	if !ok {
 		return
@@ -111,6 +129,61 @@ func IssueUserInvoice(c *gin.Context) {
 		return
 	}
 	common.ApiSuccess(c, invoice)
+}
+
+type monthAdjustmentRequest struct {
+	UserID int    `json:"user_id"`
+	Period string `json:"period"`
+	Bucket string `json:"bucket"`
+	Quota  int    `json:"quota"`
+	Note   string `json:"note"`
+}
+
+func CreateUserMonthAdjustment(c *gin.Context) {
+	if !requireBillAdmin(c) {
+		return
+	}
+	var req monthAdjustmentRequest
+	if err := common.DecodeJson(c.Request.Body, &req); err != nil {
+		common.ApiErrorMsg(c, "invalid month adjustment")
+		return
+	}
+	userID := req.UserID
+	if userID == 0 {
+		userID = c.GetInt("id")
+	}
+	if userID != c.GetInt("id") {
+		user, err := model.GetUserById(userID, false)
+		if err != nil || user == nil || user.Id != userID {
+			common.ApiErrorMsg(c, "user not found")
+			return
+		}
+	}
+	adjustment, err := model.CreateUserMonthAdjustment(
+		c.GetInt("id"),
+		c.GetInt("role"),
+		userID,
+		req.Period,
+		req.Bucket,
+		req.Quota,
+		req.Note,
+	)
+	if err != nil {
+		switch {
+		case errors.Is(err, model.ErrInvalidMonthAdjustment), errors.Is(err, gorm.ErrRecordNotFound):
+			common.ApiErrorMsg(c, "invalid month adjustment")
+		case errors.Is(err, model.ErrMonthAdjustmentBalance):
+			common.ApiErrorMsg(c, "adjustment exceeds the balance")
+		case errors.Is(err, model.ErrWalletQuotaLimitExceeded):
+			common.ApiErrorMsg(c, "wallet quota limit exceeded")
+		case errors.Is(err, model.ErrUserQuotaPermission):
+			common.ApiErrorMsg(c, "access denied")
+		default:
+			common.ApiError(c, err)
+		}
+		return
+	}
+	common.ApiSuccess(c, adjustment)
 }
 
 func fillInvoiceParties(userId int, history *model.UserInvoiceHistory) error {

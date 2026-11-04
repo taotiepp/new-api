@@ -96,6 +96,7 @@ type User struct {
 	AccessToken          *string                    `json:"-" gorm:"type:char(32);column:access_token;uniqueIndex"` // this token is for system management
 	AccessTokenCreatedAt *int64                     `json:"-" gorm:"type:bigint;column:access_token_created_at"`
 	Quota                int                        `json:"quota" gorm:"type:int;default:0"`
+	TestQuota            int                        `json:"test_quota" gorm:"type:int;default:0;column:test_quota"` // 测试额度，开票时作为抵扣券
 	UsedQuota            int                        `json:"used_quota" gorm:"type:int;default:0;column:used_quota"` // used quota
 	RequestCount         int                        `json:"request_count" gorm:"type:int;default:0;"`               // request number
 	Group                string                     `json:"group" gorm:"type:varchar(64);default:'default'"`
@@ -560,7 +561,7 @@ func GetSelfUserById(id int) (*User, error) {
 		"github_id", "discord_id", "oidc_id", "wechat_id", "telegram_id",
 		"group", "discount", "model_discounts", "group_discounts", "group_model_discounts",
 		"usable_groups",
-		"quota", "used_quota", "request_count",
+		"quota", "test_quota", "used_quota", "request_count",
 		"aff_code", "aff_count", "aff_quota", "aff_history", "inviter_id", "linux_do_id",
 		"setting",
 		"stripe_customer", "auth_version",

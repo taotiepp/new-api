@@ -29,6 +29,8 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
+import { readInvoiceParty } from '@/features/profile/lib/invoice-party'
+import { PortalSettingsInvoice } from '@/features/user-portal/components/portal-settings-invoice'
 import { formatGroupRate } from '@/features/virtual-groups/lib/group-rate'
 import { handleServerError } from '@/lib/handle-server-error'
 
@@ -268,6 +270,13 @@ export function AccountOperationsDialog(props: AccountOperationsDialogProps) {
               </div>
             )}
           </section>
+          <PortalSettingsInvoice
+            userId={userId}
+            party={readInvoiceParty(settings.data.invoice_profile)}
+            onSaved={() => {
+              void settings.refetch()
+            }}
+          />
         </>
       ) : null}
     </Dialog>

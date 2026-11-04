@@ -90,6 +90,9 @@ export async function getUserBills(params: {
         count: number
         token_used: number
       }>
+      regular_balance?: number
+      test_credit?: number
+      adjustments?: UserMonthAdjustment[]
     }
   }>('/api/bills/self', { params })
   return res.data
@@ -138,6 +141,32 @@ export async function listUserInvoices(params: {
     message?: string
     data: UserInvoiceHistory
   }>('/api/bills/invoices', { params })
+  return res.data
+}
+
+export type UserMonthAdjustment = {
+  id: number
+  user_id: number
+  period: string
+  bucket: 'regular' | 'test' | string
+  quota: number
+  note: string
+  created_at: number
+  invoice_id: number
+}
+
+export async function createMonthAdjustment(body: {
+  user_id?: number
+  period: string
+  bucket: 'regular' | 'test'
+  quota: number
+  note: string
+}) {
+  const res = await api.post<{
+    success: boolean
+    message?: string
+    data: UserMonthAdjustment
+  }>('/api/bills/adjustments', body)
   return res.data
 }
 

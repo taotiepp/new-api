@@ -41,6 +41,7 @@ export interface AuthUser {
   group_discounts?: string
   group_model_discounts?: string
   quota?: number
+  test_quota?: number
   used_quota?: number
   request_count?: number
   aff_code?: string

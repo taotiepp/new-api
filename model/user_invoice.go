@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
@@ -14,6 +15,8 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
+
+const invoiceTestCreditName = "Test credit"
 
 // ErrNothingToInvoice means every quota row in the period is already covered.
 var ErrNothingToInvoice = errors.New("nothing new to invoice")
@@ -220,13 +223,13 @@ func ListUserInvoices(userId int, period string) (*UserInvoiceHistory, error) {
 		invoices[i].Issuer = decodeInvoiceParty(invoices[i].IssuerSnapshot)
 		invoices[i].BillTo = decodeInvoiceParty(invoices[i].BillToSnapshot)
 	}
-	deltas, err := collectInvoiceDeltas(DB, userId, period)
+	uninvoiced, _, _, err := previewUninvoiced(DB, userId, period)
 	if err != nil {
 		return nil, err
 	}
 	return &UserInvoiceHistory{
 		Invoices:   invoices,
-		Uninvoiced: summarizeInvoiceDeltas(deltas),
+		Uninvoiced: uninvoiced,
 	}, nil
 }
 
@@ -235,15 +238,39 @@ func IssueUserInvoice(userId int, period string, now time.Time, issuer dto.Invoi
 		return nil, fmt.Errorf("invalid period")
 	}
 	var issued *UserInvoice
+	var credited int
 	err := DB.Transaction(func(tx *gorm.DB) error {
-		deltas, err := collectInvoiceDeltas(lockForUpdate(tx), userId, period)
+		var account User
+		accountErr := lockForUpdate(tx).First(&account, userId).Error
+		if accountErr != nil && !errors.Is(accountErr, gorm.ErrRecordNotFound) {
+			return accountErr
+		}
+		deltas, adjustments, summary, deduction, err := loadInvoiceCharge(lockForUpdate(tx), userId, period, account.TestQuota)
 		if err != nil {
 			return err
 		}
-		if len(deltas) == 0 {
+		if len(deltas) == 0 && len(adjustments) == 0 {
 			return ErrNothingToInvoice
 		}
-		summary := summarizeInvoiceDeltas(deltas)
+		if deduction > 0 {
+			if account.Id == 0 {
+				return gorm.ErrRecordNotFound
+			}
+			if int64(account.Quota) > int64(common.MaxWalletQuota)-int64(deduction) {
+				return ErrWalletQuotaLimitExceeded
+			}
+			result := tx.Model(&User{}).Where("id = ? AND test_quota >= ?", userId, deduction).Updates(map[string]any{
+				"test_quota": gorm.Expr("test_quota - ?", deduction),
+				"quota":      gorm.Expr("quota + ?", deduction),
+			})
+			if result.Error != nil {
+				return result.Error
+			}
+			if result.RowsAffected != 1 {
+				return ErrMonthAdjustmentBalance
+			}
+			credited = deduction
+		}
 
 		var last UserInvoice
 		if err := lockForUpdate(tx).
@@ -321,12 +348,84 @@ func IssueUserInvoice(userId int, period string, now time.Time, issuer dto.Invoi
 		}
 		invoice.Items = summary.Items
 		issued = invoice
+		if len(adjustments) > 0 {
+			ids := make([]int, 0, len(adjustments))
+			for _, row := range adjustments {
+				ids = append(ids, row.Id)
+			}
+			if err := tx.Model(&UserMonthAdjustment{}).Where("id IN ?", ids).Update("invoice_id", invoice.Id).Error; err != nil {
+				return err
+			}
+		}
 		return nil
 	})
 	if err != nil {
 		return nil, err
 	}
+	if credited > 0 {
+		if err := cacheIncrUserQuota(userId, int64(credited)); err != nil {
+			common.SysError("failed to sync invoiced test credit to user quota cache: " + err.Error())
+		}
+	}
 	return issued, nil
+}
+
+func previewUninvoiced(db *gorm.DB, userId int, period string) (UserInvoiceSlice, []UserMonthAdjustment, int, error) {
+	var account User
+	err := invoiceQuery(db).Select("test_quota").First(&account, userId).Error
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return UserInvoiceSlice{}, nil, 0, err
+	}
+	deltas, adjustments, summary, deduction, err := loadInvoiceCharge(db, userId, period, account.TestQuota)
+	if err != nil {
+		return UserInvoiceSlice{}, nil, 0, err
+	}
+	if len(deltas) == 0 && len(adjustments) == 0 {
+		return UserInvoiceSlice{Items: []UserInvoiceItem{}}, nil, 0, nil
+	}
+	return summary, adjustments, deduction, nil
+}
+
+func loadInvoiceCharge(db *gorm.DB, userId int, period string, testQuota int) ([]invoiceDelta, []UserMonthAdjustment, UserInvoiceSlice, int, error) {
+	deltas, err := collectInvoiceDeltas(db, userId, period)
+	if err != nil {
+		return nil, nil, UserInvoiceSlice{}, 0, err
+	}
+	adjustments, err := listOpenRegularAdjustments(db, userId, period)
+	if err != nil {
+		return nil, nil, UserInvoiceSlice{}, 0, err
+	}
+	summary := summarizeInvoiceDeltas(deltas)
+	for _, row := range adjustments {
+		summary.Quota -= row.Quota
+		summary.Items = append(summary.Items, UserInvoiceItem{
+			ModelName: adjustmentInvoiceName(row.Note),
+			Quota:     -row.Quota,
+		})
+	}
+	deduction := 0
+	if summary.Quota > 0 && testQuota > 0 {
+		deduction = min(summary.Quota, testQuota)
+		summary.Quota -= deduction
+		summary.Items = append(summary.Items, UserInvoiceItem{
+			ModelName: invoiceTestCreditName,
+			Quota:     -deduction,
+		})
+	}
+	return deltas, adjustments, summary, deduction, nil
+}
+
+func adjustmentInvoiceName(note string) string {
+	note = strings.TrimSpace(note)
+	if note == "" {
+		return "Adjustment"
+	}
+	label := "Adjustment: " + note
+	runes := []rune(label)
+	if len(runes) > 64 {
+		return string(runes[:64])
+	}
+	return label
 }
 
 func decodeInvoiceParty(raw string) dto.InvoiceParty {

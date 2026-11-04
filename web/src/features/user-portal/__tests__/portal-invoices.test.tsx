@@ -272,13 +272,15 @@ describe('portal invoice history', () => {
 
     expect(
       await screen.findByText(
-        'Set your billing details before exporting an invoice.'
+        'Billing details are required before an invoice can be issued.'
       )
     ).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Set billing details' })).toHaveAttribute(
-      'href',
-      '/app/settings'
-    )
+    expect(
+      screen.getByRole('link', { name: 'Operations management' })
+    ).toHaveAttribute('href', '/app/operations')
+    expect(
+      screen.queryByRole('heading', { name: 'Billing details' })
+    ).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Export invoice' })).toBeDisabled()
     expect(issueUserInvoice).not.toHaveBeenCalled()
   })

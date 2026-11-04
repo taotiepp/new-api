@@ -107,9 +107,10 @@ export async function updateUserLanguage(
 }
 
 export async function updateUserInvoiceProfile(
+  userId: number,
   data: InvoiceParty
 ): Promise<ApiResponse> {
-  const res = await api.put('/api/user/invoice-profile', data)
+  const res = await api.put(`/api/user/${userId}/invoice-profile`, data)
   return res.data
 }
 

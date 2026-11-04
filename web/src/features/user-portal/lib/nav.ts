@@ -115,6 +115,7 @@ export const USER_PORTAL_CONSOLE_NAV_ITEMS: UserPortalNavItem[] = [
     href: '/app/bills',
     icon: Receipt,
     match: 'prefix',
+    adminOnly: true,
   },
   {
     titleKey: 'System Settings',

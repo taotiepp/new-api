@@ -16,6 +16,8 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import type { InvoiceParty } from '@/features/profile/types'
+
 export type AccountMonthCost = {
   user_id: number
   username: string
@@ -50,6 +52,7 @@ export type AccountOperations = {
   group: string
   custom: boolean
   groups: AccountOperationsGroup[]
+  invoice_profile?: InvoiceParty
 }
 
 export type AccountOperationsUpdate = {

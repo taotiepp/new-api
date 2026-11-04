@@ -49,8 +49,10 @@ export interface UserProfile {
   email?: string
   /** User group */
   group: string
-  /** Current quota balance */
+  /** Current regular balance */
   quota: number
+  /** Test credit voucher, applied when an invoice is issued */
+  test_quota?: number
   /** Total used quota */
   used_quota: number
   /** Total request count */

@@ -26,6 +26,7 @@ func setupUserBillControllerTestDB(t *testing.T) {
 	setupFlowControllerTestDB(t)
 	require.NoError(t, model.DB.AutoMigrate(&model.UserBillItem{}))
 	require.NoError(t, model.DB.AutoMigrate(&model.UserInvoice{}, &model.UserInvoiceItem{}, &model.UserInvoiceAllocation{}))
+	require.NoError(t, model.DB.AutoMigrate(&model.User{}, &model.UserMonthAdjustment{}))
 }
 
 func requestUserBills(t *testing.T, userId int, query string) userBillResponse {
@@ -33,6 +34,7 @@ func requestUserBills(t *testing.T, userId int, query string) userBillResponse {
 	recorder := httptest.NewRecorder()
 	ctx, _ := gin.CreateTestContext(recorder)
 	ctx.Set("id", userId)
+	ctx.Set("role", common.RoleAdminUser)
 	ctx.Request = httptest.NewRequest(http.MethodGet, "/api/bills/self?"+query, nil)
 	GetUserBills(ctx)
 	require.Equal(t, http.StatusOK, recorder.Code)
@@ -434,7 +436,7 @@ func TestIssueUserInvoiceKeepsHistoryAndBillsOnlyTheIncrease(t *testing.T) {
 		TokenUsed: 90,
 	}).Error)
 
-	first := requestIssueInvoice(t, 1, common.RoleCommonUser, "period="+period)
+	first := requestIssueInvoice(t, 1, common.RoleAdminUser, "period="+period)
 	require.True(t, first.Success, first.Message)
 	require.Equal(t, "INV-"+period+"-0001-01", first.Data.Number)
 	require.Equal(t, 1, first.Data.Sequence)
@@ -448,14 +450,14 @@ func TestIssueUserInvoiceKeepsHistoryAndBillsOnlyTheIncrease(t *testing.T) {
 	require.Len(t, first.Data.Items, 1)
 	require.Equal(t, "gpt-a", first.Data.Items[0].ModelName)
 
-	again := requestIssueInvoice(t, 1, common.RoleCommonUser, "period="+period)
+	again := requestIssueInvoice(t, 1, common.RoleAdminUser, "period="+period)
 	require.False(t, again.Success)
 	require.Equal(t, "nothing new to invoice", again.Message)
 
 	require.NoError(t, model.DB.Model(&model.QuotaData{}).Where("id = ?", row.Id).
 		Updates(map[string]any{"quota": 150, "count": 3, "token_used": 55}).Error)
 
-	second := requestIssueInvoice(t, 1, common.RoleCommonUser, "period="+period)
+	second := requestIssueInvoice(t, 1, common.RoleAdminUser, "period="+period)
 	require.True(t, second.Success, second.Message)
 	require.Equal(t, "INV-"+period+"-0001-02", second.Data.Number)
 	require.Equal(t, 50, second.Data.Quota)
@@ -466,7 +468,7 @@ func TestIssueUserInvoiceKeepsHistoryAndBillsOnlyTheIncrease(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	ctx, _ := gin.CreateTestContext(recorder)
 	ctx.Set("id", 1)
-	ctx.Set("role", common.RoleCommonUser)
+	ctx.Set("role", common.RoleAdminUser)
 	ctx.Request = httptest.NewRequest(http.MethodGet, "/api/bills/invoices?period="+period, nil)
 	ListUserInvoices(ctx)
 	require.Equal(t, http.StatusOK, recorder.Code)
@@ -498,21 +500,37 @@ func TestIssueUserInvoiceRequiresBillingDetails(t *testing.T) {
 		TokenUsed: 4,
 	}).Error)
 
-	payload := requestIssueInvoice(t, 1, common.RoleCommonUser, "")
+	payload := requestIssueInvoice(t, 1, common.RoleAdminUser, "")
 	require.False(t, payload.Success)
 	require.Equal(t, "invoice profile required", payload.Message)
 }
 
-func TestUpdateSelfInvoiceProfileStoresTheBillToParty(t *testing.T) {
+func TestUpdateUserInvoiceProfileIsAdminOnly(t *testing.T) {
 	setupUserBillControllerTestDB(t)
 	seedInvoiceUser(t)
+
+	denied := httptest.NewRecorder()
+	deniedCtx, _ := gin.CreateTestContext(denied)
+	deniedCtx.Set("id", 1)
+	deniedCtx.Set("role", common.RoleCommonUser)
+	deniedCtx.Params = gin.Params{{Key: "id", Value: "1"}}
+	deniedCtx.Request = httptest.NewRequest(http.MethodPut, "/api/user/1/invoice-profile", strings.NewReader(`{"name":"Ada","email":"ada@example.com"}`))
+	deniedCtx.Request.Header.Set("Content-Type", "application/json")
+	UpdateUserInvoiceProfile(deniedCtx)
+	require.Equal(t, http.StatusOK, denied.Code)
+	var deniedPayload userBillResponse
+	require.NoError(t, common.Unmarshal(denied.Body.Bytes(), &deniedPayload))
+	require.False(t, deniedPayload.Success)
+	require.Equal(t, "access denied", deniedPayload.Message)
 
 	recorder := httptest.NewRecorder()
 	ctx, _ := gin.CreateTestContext(recorder)
 	ctx.Set("id", 1)
-	ctx.Request = httptest.NewRequest(http.MethodPut, "/api/user/invoice-profile", strings.NewReader(`{"name":"Ada","email":"ada@example.com"}`))
+	ctx.Set("role", common.RoleAdminUser)
+	ctx.Params = gin.Params{{Key: "id", Value: "1"}}
+	ctx.Request = httptest.NewRequest(http.MethodPut, "/api/user/1/invoice-profile", strings.NewReader(`{"name":"Ada","email":"ada@example.com"}`))
 	ctx.Request.Header.Set("Content-Type", "application/json")
-	UpdateSelfInvoiceProfile(ctx)
+	UpdateUserInvoiceProfile(ctx)
 	require.Equal(t, http.StatusOK, recorder.Code)
 	var rejected userBillResponse
 	require.NoError(t, common.Unmarshal(recorder.Body.Bytes(), &rejected))
@@ -523,9 +541,11 @@ func TestUpdateSelfInvoiceProfileStoresTheBillToParty(t *testing.T) {
 	saved := httptest.NewRecorder()
 	savedCtx, _ := gin.CreateTestContext(saved)
 	savedCtx.Set("id", 1)
-	savedCtx.Request = httptest.NewRequest(http.MethodPut, "/api/user/invoice-profile", strings.NewReader(body))
+	savedCtx.Set("role", common.RoleAdminUser)
+	savedCtx.Params = gin.Params{{Key: "id", Value: "1"}}
+	savedCtx.Request = httptest.NewRequest(http.MethodPut, "/api/user/1/invoice-profile", strings.NewReader(body))
 	savedCtx.Request.Header.Set("Content-Type", "application/json")
-	UpdateSelfInvoiceProfile(savedCtx)
+	UpdateUserInvoiceProfile(savedCtx)
 	require.Equal(t, http.StatusOK, saved.Code)
 	var accepted userBillResponse
 	require.NoError(t, common.Unmarshal(saved.Body.Bytes(), &accepted))
@@ -535,4 +555,112 @@ func TestUpdateSelfInvoiceProfileStoresTheBillToParty(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "it@baichuan-inc.com", user.GetSetting().InvoiceProfile.Email)
 	require.Equal(t, "haidian", user.GetSetting().InvoiceProfile.Line2)
+}
+
+func TestIssueUserInvoiceDeductsTestCreditFromTheBill(t *testing.T) {
+	setupUserBillControllerTestDB(t)
+	seedInvoiceUser(t)
+	useInvoiceIssuer(t)
+	require.NoError(t, model.DB.Model(&model.User{}).Where("id = ?", 1).Updates(map[string]any{
+		"quota":      1000,
+		"test_quota": 150,
+	}).Error)
+
+	now := time.Now()
+	period := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.Local).Format("2006-01")
+	require.NoError(t, model.DB.Create(&model.QuotaData{
+		UserID:    1,
+		Username:  "alice",
+		ModelName: "gpt-a",
+		CreatedAt: now.Unix(),
+		Count:     2,
+		Quota:     100,
+		TokenUsed: 20,
+	}).Error)
+
+	payload := requestIssueInvoice(t, 1, common.RoleAdminUser, "period="+period)
+	require.True(t, payload.Success, payload.Message)
+	require.Equal(t, 0, payload.Data.Quota)
+	require.Len(t, payload.Data.Items, 2)
+	require.Equal(t, "gpt-a", payload.Data.Items[0].ModelName)
+	require.Equal(t, 100, payload.Data.Items[0].Quota)
+	require.Equal(t, "Test credit", payload.Data.Items[1].ModelName)
+	require.Equal(t, -100, payload.Data.Items[1].Quota)
+
+	var user model.User
+	require.NoError(t, model.DB.First(&user, 1).Error)
+	require.Equal(t, 50, user.TestQuota)
+	require.Equal(t, 1100, user.Quota)
+
+	again := requestIssueInvoice(t, 1, common.RoleAdminUser, "period="+period)
+	require.False(t, again.Success)
+	require.Equal(t, "nothing new to invoice", again.Message)
+	require.NoError(t, model.DB.First(&user, 1).Error)
+	require.Equal(t, 50, user.TestQuota)
+	require.Equal(t, 1100, user.Quota)
+}
+
+func TestIssueUserInvoiceRejectsCommonUser(t *testing.T) {
+	setupUserBillControllerTestDB(t)
+	seedInvoiceUser(t)
+	payload := requestIssueInvoice(t, 1, common.RoleCommonUser, "")
+	require.False(t, payload.Success)
+	require.Equal(t, "access denied", payload.Message)
+}
+
+func TestMonthAdjustmentCreditsBalanceAndTheNextInvoice(t *testing.T) {
+	setupUserBillControllerTestDB(t)
+	seedInvoiceUser(t)
+	useInvoiceIssuer(t)
+	require.NoError(t, model.DB.Model(&model.User{}).Where("id = ?", 1).Update("quota", 500).Error)
+
+	now := time.Now()
+	period := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.Local).Format("2006-01")
+	require.NoError(t, model.DB.Create(&model.QuotaData{
+		UserID:    1,
+		Username:  "alice",
+		ModelName: "gpt-a",
+		CreatedAt: now.Unix(),
+		Count:     1,
+		Quota:     100,
+		TokenUsed: 4,
+	}).Error)
+
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	ctx.Set("id", 1)
+	ctx.Set("role", common.RoleAdminUser)
+	ctx.Request = httptest.NewRequest(http.MethodPost, "/api/bills/adjustments", strings.NewReader(
+		`{"user_id":1,"period":"`+period+`","bucket":"regular","quota":-30,"note":"late usage"}`,
+	))
+	ctx.Request.Header.Set("Content-Type", "application/json")
+	CreateUserMonthAdjustment(ctx)
+	require.Equal(t, http.StatusOK, recorder.Code)
+	var created userBillResponse
+	require.NoError(t, common.Unmarshal(recorder.Body.Bytes(), &created))
+	require.True(t, created.Success, created.Message)
+
+	var user model.User
+	require.NoError(t, model.DB.First(&user, 1).Error)
+	require.Equal(t, 470, user.Quota)
+
+	over := httptest.NewRecorder()
+	overCtx, _ := gin.CreateTestContext(over)
+	overCtx.Set("id", 1)
+	overCtx.Set("role", common.RoleAdminUser)
+	overCtx.Request = httptest.NewRequest(http.MethodPost, "/api/bills/adjustments", strings.NewReader(
+		`{"user_id":1,"period":"`+period+`","bucket":"regular","quota":-100000,"note":"too much"}`,
+	))
+	overCtx.Request.Header.Set("Content-Type", "application/json")
+	CreateUserMonthAdjustment(overCtx)
+	var rejected userBillResponse
+	require.NoError(t, common.Unmarshal(over.Body.Bytes(), &rejected))
+	require.False(t, rejected.Success)
+	require.Equal(t, "adjustment exceeds the balance", rejected.Message)
+
+	payload := requestIssueInvoice(t, 1, common.RoleAdminUser, "period="+period)
+	require.True(t, payload.Success, payload.Message)
+	require.Equal(t, 130, payload.Data.Quota)
+	require.Equal(t, "Adjustment: late usage", payload.Data.Items[1].ModelName)
+	require.Equal(t, 30, payload.Data.Items[1].Quota)
 }

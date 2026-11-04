@@ -35,6 +35,7 @@ import {
 } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { issueUserInvoice, type UserInvoice } from '@/features/dashboard/api'
+import { useAuthStore } from '@/stores/auth-store'
 import { usePricingCurrency } from '@/lib/currency'
 import dayjs from '@/lib/dayjs'
 import { formatNumber } from '@/lib/format'
@@ -56,6 +57,7 @@ import {
   listPortalBillMonths,
   summarizePortalBillingByModel,
 } from '../lib/billing'
+import { PortalBillAdmin } from './portal-bill-admin'
 import { PortalBillInvoiceDialog } from './portal-bill-invoice-dialog'
 import { PortalInvoiceHistory } from './portal-invoice-history'
 import { PortalBillModelChart } from './portal-bill-model-chart'
@@ -70,6 +72,7 @@ type PortalBillPanelProps = {
 export function PortalBillPanel(props: PortalBillPanelProps) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
+  const selfUserId = useAuthStore((state) => state.auth.user?.id ?? 0)
   const { currency: catalogCurrency, formatQuota } = usePricingCurrency()
   const months = useMemo(() => listPortalBillMonths(), [])
   const [monthValue, setMonthValue] = useState(
@@ -193,7 +196,7 @@ export function PortalBillPanel(props: PortalBillPanelProps) {
           </h1>
           <p className='text-muted-foreground text-sm'>
             {t(
-              'Monthly statements group consumption by calendar month. Open usage statistics for custom ranges and daily trends.'
+              'Administrators issue invoices here. Test credit is deducted from the invoice automatically.'
             )}
           </p>
           {subjectUser.subject ? (
@@ -271,17 +274,13 @@ export function PortalBillPanel(props: PortalBillPanelProps) {
 
       {needsBillingDetails ? (
         <p className='text-sm text-[var(--portal-ink)]'>
-          {subjectUser.subject
-            ? t('This account has not set billing details.')
-            : t('Set your billing details before exporting an invoice.')}{' '}
-          {subjectUser.subject ? null : (
-            <Link
-              to='/app/settings'
-              className='underline underline-offset-2'
-            >
-              {t('Set billing details')}
-            </Link>
-          )}
+          {t('Billing details are required before an invoice can be issued.')}{' '}
+          <Link
+            to='/app/operations'
+            className='underline-offset-2 hover:underline'
+          >
+            {t('Operations management')}
+          </Link>
         </p>
       ) : null}
 
@@ -332,6 +331,20 @@ export function PortalBillPanel(props: PortalBillPanelProps) {
         />
       </div>
 
+      <PortalBillAdmin
+        userId={subjectUser.subjectUserId ?? selfUserId}
+        period={monthValue}
+        adjustments={overview?.adjustments ?? []}
+        formatQuota={formatQuota}
+        onChanged={() => {
+          void queryClient.invalidateQueries({
+            queryKey: ['user-portal', 'invoices', monthValue],
+          })
+          void queryClient.invalidateQueries({
+            queryKey: ['user-portal', 'bills', monthValue],
+          })
+        }}
+      />
       <PortalInvoiceHistory
         loading={invoices.isLoading}
         error={invoices.isError}

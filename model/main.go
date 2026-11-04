@@ -354,6 +354,7 @@ func migrateDB() error {
 		&UserInvoice{},
 		&UserInvoiceItem{},
 		&UserInvoiceAllocation{},
+		&UserMonthAdjustment{},
 		&Task{},
 		&TaskPlugin{},
 		&Model{},

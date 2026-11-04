@@ -43,6 +43,19 @@ type PortalBillInvoiceDialogProps = {
   billTo?: InvoiceParty
 }
 
+function invoiceLineLabel(
+  name: string,
+  translate: (key: string) => string
+): string {
+  if (name === 'Test credit') return translate('Test credit')
+  const prefix = 'Adjustment: '
+  if (name.startsWith(prefix)) {
+    return `${translate('Adjustment')}: ${name.slice(prefix.length)}`
+  }
+  if (name === 'Adjustment') return translate('Adjustment')
+  return name || translate('Unknown model')
+}
+
 const INVOICE_CSV_LABELS = {
   title: 'Invoice',
   disclaimer: 'This is a computer-generated invoice. No signature is required.',
@@ -261,9 +274,12 @@ export function PortalBillInvoiceDialog(props: PortalBillInvoiceDialogProps) {
             </tr>
           </thead>
           <tbody>
-            {items.map((item) => (
-              <tr key={item.model_name} className='border-b border-neutral-200'>
-                <td className='py-2'>{item.model_name || 'Unknown model'}</td>
+            {items.map((item, index) => (
+              <tr
+                key={`${item.model_name}-${index}`}
+                className='border-b border-neutral-200'
+              >
+                <td className='py-2'>{invoiceLineLabel(item.model_name, t)}</td>
                 <td className='py-2 text-right tabular-nums'>
                   {formatNumber(item.token_used, 'en-US')}
                 </td>

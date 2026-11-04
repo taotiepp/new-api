@@ -2,6 +2,7 @@ package model
 
 import (
 	"cmp"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -31,12 +32,15 @@ type UserBillMonthTotal struct {
 }
 
 type UserBillOverview struct {
-	Period    string               `json:"period"`
-	Quota     int                  `json:"quota"`
-	Count     int                  `json:"count"`
-	TokenUsed int                  `json:"token_used"`
-	Items     []*UserBillItem      `json:"items"`
-	Trend     []UserBillMonthTotal `json:"trend"`
+	Period         string                `json:"period"`
+	Quota          int                   `json:"quota"`
+	Count          int                   `json:"count"`
+	TokenUsed      int                   `json:"token_used"`
+	Items          []*UserBillItem       `json:"items"`
+	Trend          []UserBillMonthTotal  `json:"trend"`
+	RegularBalance int                   `json:"regular_balance"`
+	TestCredit     int                   `json:"test_credit"`
+	Adjustments    []UserMonthAdjustment `json:"adjustments"`
 }
 
 func ParseBillPeriod(period string) (time.Time, time.Time, bool) {
@@ -245,15 +249,29 @@ func LoadUserBillOverview(userId int, period string, months int) (*UserBillOverv
 	}
 
 	overview := &UserBillOverview{
-		Period: period,
-		Items:  items,
-		Trend:  trend,
+		Period:      period,
+		Items:       items,
+		Trend:       trend,
+		Adjustments: []UserMonthAdjustment{},
 	}
 	for _, item := range items {
 		overview.Quota += item.Quota
 		overview.Count += item.Count
 		overview.TokenUsed += item.TokenUsed
 	}
+	var account User
+	err = DB.Select("quota", "test_quota").First(&account, userId).Error
+	if err == nil {
+		overview.RegularBalance = account.Quota
+		overview.TestCredit = account.TestQuota
+	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, err
+	}
+	adjustments, err := ListUserMonthAdjustments(userId, period)
+	if err != nil {
+		return nil, err
+	}
+	overview.Adjustments = adjustments
 	return overview, nil
 }
 

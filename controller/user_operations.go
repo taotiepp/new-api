@@ -11,6 +11,7 @@ import (
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/i18n"
 	"github.com/QuantumNous/new-api/model"
+	"github.com/QuantumNous/new-api/relaykit/dto"
 	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
@@ -29,12 +30,13 @@ type userOperationsGroup struct {
 }
 
 type userOperationsView struct {
-	UserId      int                   `json:"user_id"`
-	Username    string                `json:"username"`
-	DisplayName string                `json:"display_name"`
-	Group       string                `json:"group"`
-	Custom      bool                  `json:"custom"`
-	Groups      []userOperationsGroup `json:"groups"`
+	UserId         int                   `json:"user_id"`
+	Username       string                `json:"username"`
+	DisplayName    string                `json:"display_name"`
+	Group          string                `json:"group"`
+	Custom         bool                  `json:"custom"`
+	Groups         []userOperationsGroup `json:"groups"`
+	InvoiceProfile dto.InvoiceParty      `json:"invoice_profile"`
 }
 
 type userOperationsUpdate struct {
@@ -136,12 +138,13 @@ func buildUserOperations(user *model.User) userOperationsView {
 		groups = append(groups, group)
 	}
 	return userOperationsView{
-		UserId:      user.Id,
-		Username:    user.Username,
-		DisplayName: user.DisplayName,
-		Group:       user.Group,
-		Custom:      custom,
-		Groups:      groups,
+		UserId:         user.Id,
+		Username:       user.Username,
+		DisplayName:    user.DisplayName,
+		Group:          user.Group,
+		Custom:         custom,
+		Groups:         groups,
+		InvoiceProfile: user.GetSetting().InvoiceProfile,
 	}
 }
 

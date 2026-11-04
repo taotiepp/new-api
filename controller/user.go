@@ -512,6 +512,7 @@ func buildSelfUserData(user *model.User) map[string]any {
 		"group_discounts":       user.GroupDiscounts,
 		"group_model_discounts": user.GroupModelDiscounts,
 		"quota":                 user.Quota,
+		"test_quota":            user.TestQuota,
 		"used_quota":            user.UsedQuota,
 		"request_count":         user.RequestCount,
 		"aff_code":              user.AffCode,
@@ -1530,7 +1531,16 @@ func invoicePartiesForUser(userId int) (dto.InvoiceParty, dto.InvoiceParty, stri
 	return operation_setting.InvoiceIssuer(), billTo, "", nil
 }
 
-func UpdateSelfInvoiceProfile(c *gin.Context) {
+func UpdateUserInvoiceProfile(c *gin.Context) {
+	if c.GetInt("role") < common.RoleAdminUser {
+		common.ApiErrorMsg(c, "access denied")
+		return
+	}
+	userID, err := strconv.Atoi(c.Param("id"))
+	if err != nil || userID <= 0 {
+		common.ApiErrorMsg(c, "invalid user id")
+		return
+	}
 	var party dto.InvoiceParty
 	if err := common.DecodeJson(c.Request.Body, &party); err != nil {
 		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
@@ -1541,15 +1551,18 @@ func UpdateSelfInvoiceProfile(c *gin.Context) {
 		common.ApiErrorMsg(c, message)
 		return
 	}
-	userId := c.GetInt("id")
-	user, err := model.GetUserById(userId, false)
-	if err != nil {
-		common.ApiError(c, err)
+	user, err := model.GetUserById(userID, false)
+	if err != nil || user == nil || user.Id != userID {
+		common.ApiErrorMsg(c, "user not found")
+		return
+	}
+	if userID != c.GetInt("id") && !canManageTargetRole(c.GetInt("role"), user.Role) {
+		common.ApiErrorMsg(c, "access denied")
 		return
 	}
 	settings := user.GetSetting()
 	settings.InvoiceProfile = party
-	if err := model.UpdateUserSetting(userId, settings); err != nil {
+	if err := model.UpdateUserSetting(userID, settings); err != nil {
 		common.ApiError(c, err)
 		return
 	}

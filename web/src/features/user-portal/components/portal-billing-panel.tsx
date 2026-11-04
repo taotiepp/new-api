@@ -52,6 +52,7 @@ import dayjs from '@/lib/dayjs'
 import { formatNumber } from '@/lib/format'
 import { requireServerSuccess } from '@/lib/server-error-message'
 import { getEndOfDay, getStartOfDay } from '@/lib/time'
+import { useIsAdmin } from '@/hooks/use-admin'
 import { useAuthStore } from '@/stores/auth-store'
 
 import {
@@ -97,6 +98,7 @@ export function PortalBillingPanel(props: PortalBillingPanelProps) {
   const { t } = useTranslation()
   const { currency: catalogCurrency, formatQuota } = usePricingCurrency()
   const user = useAuthStore((state) => state.auth.user)
+  const isAdmin = useIsAdmin()
   const subjectUser = usePortalSubjectUser(props.initialSubject)
   const subjectAccount = useQuery({
     queryKey: [
@@ -193,15 +195,19 @@ export function PortalBillingPanel(props: PortalBillingPanelProps) {
     (parseUserSettings(settingJson).quota_warning_threshold ?? 0) === 0
   const balanceLoading = viewingOther && subjectAccount.isLoading
   let quotaBalance = user?.quota ?? 0
+  let testBalance = user?.test_quota ?? 0
   let usedBalance = user?.used_quota ?? 0
   if (viewingOther && subjectAccount.data) {
     quotaBalance = subjectAccount.data.quota
+    testBalance = subjectAccount.data.test_quota ?? 0
     usedBalance = subjectAccount.data.used_quota
   }
   let quotaLabel = formatQuota(quotaBalance)
+  let testLabel = formatQuota(testBalance)
   let usedLabel = formatQuota(usedBalance)
   if (viewingOther && subjectAccount.isError) {
     quotaLabel = t('Unset')
+    testLabel = t('Unset')
     usedLabel = t('Unset')
   }
   const filtersAreDefault = isDefaultPortalBillingRange(start, end, modelName)
@@ -279,20 +285,35 @@ export function PortalBillingPanel(props: PortalBillingPanelProps) {
             </p>
           ) : null}
         </div>
-        <Link
-          to='/app/bills'
-          className='text-muted-foreground hover:text-foreground text-sm underline-offset-2 hover:underline'
-        >
-          {t('Bill Management')}
-        </Link>
+        {isAdmin ? (
+          <Link
+            to='/app/bills'
+            className='text-muted-foreground hover:text-foreground text-sm underline-offset-2 hover:underline'
+          >
+            {t('Bill Management')}
+          </Link>
+        ) : null}
       </header>
 
-      <div className='grid gap-3 sm:grid-cols-2'>
+      <div className='grid gap-3 sm:grid-cols-3'>
+        <article className='border-b border-[var(--portal-hairline)] py-5'>
+          <p className='text-muted-foreground text-sm'>{t('Test credit')}</p>
+          {balanceLoading ? (
+            <Skeleton className='mt-3 h-9 w-28' />
+          ) : (
+            <p className='mt-3 text-3xl font-semibold tracking-tight tabular-nums'>
+              {testLabel}
+              <span className='text-muted-foreground ml-2 text-sm font-medium'>
+                {catalogCurrency}
+              </span>
+            </p>
+          )}
+        </article>
         <article className='border-b border-[var(--portal-hairline)] py-5'>
           <div className='flex items-start justify-between gap-3'>
             <div>
               <p className='text-muted-foreground flex items-center gap-1 text-sm'>
-                {t('Recharge balance')}
+                {t('Regular balance')}
               </p>
               {warningOff ? (
                 <p className='mt-1 text-xs text-amber-700 dark:text-amber-400'>

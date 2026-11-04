@@ -57,6 +57,7 @@ func TestUserOperationsSettingsReadAndUpdate(t *testing.T) {
 		Quota: 42, AuthVersion: 3, Remark: "keep",
 		GroupDiscounts: `{"vip":0.4}`, GroupModelDiscounts: `{"vip":{"gpt":0.2}}`,
 		AffCode: "ops-member",
+		Setting: `{"invoice_profile":{"name":"Ada Labs","line1":"1 Road","city":"Shanghai","postal_code":"200000","country":"CN","email":"ada@example.com"}}`,
 	}
 	require.NoError(t, db.Create(&user).Error)
 
@@ -68,6 +69,8 @@ func TestUserOperationsSettingsReadAndUpdate(t *testing.T) {
 	}
 	require.NoError(t, common.Unmarshal(recorder.Body.Bytes(), &read))
 	assert.True(t, read.Success)
+	assert.Equal(t, "Ada Labs", read.Data.InvoiceProfile.Name)
+	assert.Equal(t, "ada@example.com", read.Data.InvoiceProfile.Email)
 	assert.False(t, read.Data.Custom)
 	byName := map[string]userOperationsGroup{}
 	for _, group := range read.Data.Groups {

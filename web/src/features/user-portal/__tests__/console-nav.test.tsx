@@ -77,10 +77,7 @@ describe('portal console navigation', () => {
       'href',
       '/app/logs',
     )
-    expect(screen.getByRole('link', { name: 'Bill Management' })).toHaveAttribute(
-      'href',
-      '/app/bills',
-    )
+    expect(screen.queryByRole('link', { name: 'Bill Management' })).not.toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'System Settings' })).toHaveAttribute(
       'href',
       '/app/settings',
@@ -115,6 +112,10 @@ describe('portal console navigation', () => {
     expect(
       screen.getByRole('link', { name: 'Operations management' })
     ).toHaveAttribute('href', '/app/operations')
+    expect(screen.getByRole('link', { name: 'Bill Management' })).toHaveAttribute(
+      'href',
+      '/app/bills',
+    )
   })
 
   test('sits on the chrome canvas beside the white stage, not inside it', () => {

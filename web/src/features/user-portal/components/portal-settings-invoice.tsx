@@ -25,12 +25,11 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { updateUserInvoiceProfile } from '@/features/profile/api'
-import { parseUserSettings } from '@/features/profile/lib/format'
 import {
   invoicePartyReady,
   readInvoiceParty,
 } from '@/features/profile/lib/invoice-party'
-import type { InvoiceParty, UserProfile } from '@/features/profile/types'
+import type { InvoiceParty } from '@/features/profile/types'
 import { handleServerError } from '@/lib/handle-server-error'
 
 const FIELDS: Array<{
@@ -50,22 +49,20 @@ const FIELDS: Array<{
 ]
 
 type PortalSettingsInvoiceProps = {
-  profile: UserProfile
+  userId: number
+  party: InvoiceParty
   onSaved: () => void
 }
 
 export function PortalSettingsInvoice(props: PortalSettingsInvoiceProps) {
   const { t } = useTranslation()
   const [saving, setSaving] = useState(false)
-  const [party, setParty] = useState(() =>
-    readInvoiceParty(parseUserSettings(props.profile.setting).invoice_profile)
-  )
+  const source = JSON.stringify(readInvoiceParty(props.party))
+  const [party, setParty] = useState(() => readInvoiceParty(props.party))
 
   useEffect(() => {
-    setParty(
-      readInvoiceParty(parseUserSettings(props.profile.setting).invoice_profile)
-    )
-  }, [props.profile.setting])
+    setParty(readInvoiceParty(JSON.parse(source) as InvoiceParty))
+  }, [source])
 
   const save = async () => {
     const next = readInvoiceParty(party)
@@ -79,7 +76,7 @@ export function PortalSettingsInvoice(props: PortalSettingsInvoiceProps) {
     }
     setSaving(true)
     try {
-      const result = await updateUserInvoiceProfile(next)
+      const result = await updateUserInvoiceProfile(props.userId, next)
       if (!result.success) {
         throw new Error(result.message || 'request failed')
       }
@@ -93,18 +90,14 @@ export function PortalSettingsInvoice(props: PortalSettingsInvoiceProps) {
   }
 
   return (
-    <section className='border-t border-[var(--portal-hairline)] pt-6'>
-      <div className='max-w-xl'>
-        <h2 className='text-base font-semibold text-[var(--portal-ink)]'>
-          {t('Billing details')}
-        </h2>
-        <p className='text-muted-foreground mt-1 text-sm'>
-          {t(
-            'These details are printed on your invoices as the bill-to party. Fill them in before exporting an invoice.'
-          )}
+    <section className='space-y-3 border-t pt-6'>
+      <div className='space-y-1'>
+        <h3 className='text-sm font-medium'>{t('Billing details')}</h3>
+        <p className='text-muted-foreground text-xs'>
+          {t('These billing details are printed on the invoice.')}
         </p>
       </div>
-      <div className='mt-4 grid max-w-3xl gap-4 sm:grid-cols-2'>
+      <div className='grid max-w-3xl gap-4 sm:grid-cols-2'>
         {FIELDS.map((field) => (
           <div
             key={field.key}
@@ -131,7 +124,6 @@ export function PortalSettingsInvoice(props: PortalSettingsInvoiceProps) {
       </div>
       <Button
         type='button'
-        className='mt-4'
         size='sm'
         disabled={saving}
         onClick={() => {
