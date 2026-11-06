@@ -196,6 +196,13 @@ export type ModelSettings = {
   'global.chat_completions_to_responses_policy': string
   'general_setting.ping_interval_enabled': boolean
   'general_setting.ping_interval_seconds': number
+  'general_setting.first_progress_timeout_enabled': boolean
+  'general_setting.first_progress_base_seconds': number
+  'general_setting.first_progress_input_token_divisor': number
+  'general_setting.first_progress_cap_seconds': number
+  'general_setting.first_progress_effort_low_seconds': number
+  'general_setting.first_progress_effort_medium_seconds': number
+  'general_setting.first_progress_effort_high_seconds': number
   'gemini.safety_settings': string
   'gemini.version_settings': string
   'gemini.supported_imagine_models': string

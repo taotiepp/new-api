@@ -9,68 +9,65 @@ function stableStringify(obj) {
 
 const newKeys = {
   en: {
-    'Account, balance, notifications, and language.':
-      'Account, balance, notifications, and language.',
-    'Add credit': 'Add credit',
-    Adjustment: 'Adjustment',
-    'Adjustment note': 'Adjustment note',
-    'Adjustment saved': 'Adjustment saved',
-    'Administrators issue invoices here. Test credit is deducted from the invoice automatically.':
-      'Administrators issue invoices here. Test credit is deducted from the invoice automatically.',
-    'Apply adjustment': 'Apply adjustment',
-    'Billing details are required before an invoice can be issued.':
-      'Billing details are required before an invoice can be issued.',
-    Deduct: 'Deduct',
-    'Enter an amount': 'Enter an amount',
-    'Monthly adjustment': 'Monthly adjustment',
-    'Regular balance': 'Regular balance',
-    'Test credit': 'Test credit',
-    'Test credit is a voucher. It is deducted automatically when an invoice is issued.':
-      'Test credit is a voucher. It is deducted automatically when an invoice is issued.',
-    'These billing details are printed on the invoice.':
-      'These billing details are printed on the invoice.',
+    'Add one second for each group of this many estimated input tokens.':
+      'Add one second for each group of this many estimated input tokens.',
+    'Base seconds': 'Base seconds',
+    'Before any text, reasoning, or tool output, fail the stream after the minimum of the cap and base plus input tokens divided by the divisor plus reasoning-effort seconds. Retry only if the client has not received any response bytes.':
+      'Before any text, reasoning, or tool output, fail the stream after the minimum of the cap and base plus input tokens divided by the divisor plus reasoning-effort seconds. Retry only if the client has not received any response bytes.',
+    'Extra seconds for low, medium, and high reasoning effort. xhigh and max use the high value.':
+      'Extra seconds for low, medium, and high reasoning effort. xhigh and max use the high value.',
+    'First-progress timeout': 'First-progress timeout',
+    'High reasoning-effort seconds': 'High reasoning-effort seconds',
+    'Input token divisor': 'Input token divisor',
+    'Low reasoning-effort seconds': 'Low reasoning-effort seconds',
+    'Maximum seconds': 'Maximum seconds',
+    'Medium reasoning-effort seconds': 'Medium reasoning-effort seconds',
+    'Starting wait for every streaming request.':
+      'Starting wait for every streaming request.',
+    'The calculated wait cannot exceed this value or the streaming idle timeout.':
+      'The calculated wait cannot exceed this value or the streaming idle timeout.',
+    'The cap must be at least the base seconds.':
+      'The cap must be at least the base seconds.',
   },
   zh: {
-    'Account, balance, notifications, and language.': '账号、余额、通知和语言。',
-    'Add credit': '增加',
-    Adjustment: '调账',
-    'Adjustment note': '调账说明',
-    'Adjustment saved': '调账已保存',
-    'Administrators issue invoices here. Test credit is deducted from the invoice automatically.':
-      '管理员在这里开具 invoice。测试额度会在开票时自动抵扣。',
-    'Apply adjustment': '提交调账',
-    'Billing details are required before an invoice can be issued.':
-      '开具 invoice 前需要先填写开票信息。',
-    Deduct: '扣减',
-    'Enter an amount': '请输入金额',
-    'Monthly adjustment': '月度调账',
-    'Regular balance': '普通余额',
-    'Test credit': '测试额度',
-    'Test credit is a voucher. It is deducted automatically when an invoice is issued.':
-      '测试额度是抵扣券，开具 invoice 时会自动从账单金额中扣掉。',
-    'These billing details are printed on the invoice.':
-      '这些开票信息会印在 invoice 上。',
+    'Add one second for each group of this many estimated input tokens.':
+      '每这么多估算输入 token 增加 1 秒。',
+    'Base seconds': '基础秒数',
+    'Before any text, reasoning, or tool output, fail the stream after the minimum of the cap and base plus input tokens divided by the divisor plus reasoning-effort seconds. Retry only if the client has not received any response bytes.':
+      '在出现文本、推理或工具输出之前，按上限与“基础秒数 + 输入 token / 除数 + 推理强度附加秒数”中的较小值判定失败。只有客户端还没收到任何响应正文时才会重试。',
+    'Extra seconds for low, medium, and high reasoning effort. xhigh and max use the high value.':
+      '按 low、medium、high 推理强度追加的秒数。xhigh 和 max 使用 high 的值。',
+    'First-progress timeout': '首个进展时限',
+    'High reasoning-effort seconds': '高推理强度附加秒数',
+    'Input token divisor': '输入 token 除数',
+    'Low reasoning-effort seconds': '低推理强度附加秒数',
+    'Maximum seconds': '上限秒数',
+    'Medium reasoning-effort seconds': '中推理强度附加秒数',
+    'Starting wait for every streaming request.':
+      '每个流式请求的起始等待时间。',
+    'The calculated wait cannot exceed this value or the streaming idle timeout.':
+      '计算结果不能超过这个值，也不能超过流式空闲超时。',
+    'The cap must be at least the base seconds.': '上限不能小于基础秒数。',
   },
   'zh-TW': {
-    'Account, balance, notifications, and language.': '帳號、餘額、通知和語言。',
-    'Add credit': '增加',
-    Adjustment: '調帳',
-    'Adjustment note': '調帳說明',
-    'Adjustment saved': '調帳已儲存',
-    'Administrators issue invoices here. Test credit is deducted from the invoice automatically.':
-      '管理員在這裡開具 invoice。測試額度會在開票時自動抵扣。',
-    'Apply adjustment': '提交調帳',
-    'Billing details are required before an invoice can be issued.':
-      '開具 invoice 前需要先填寫開票資訊。',
-    Deduct: '扣減',
-    'Enter an amount': '請輸入金額',
-    'Monthly adjustment': '月度調帳',
-    'Regular balance': '普通餘額',
-    'Test credit': '測試額度',
-    'Test credit is a voucher. It is deducted automatically when an invoice is issued.':
-      '測試額度是抵扣券，開具 invoice 時會自動從帳單金額中扣掉。',
-    'These billing details are printed on the invoice.':
-      '這些開票資訊會印在 invoice 上。',
+    'Add one second for each group of this many estimated input tokens.':
+      '每這麼多估算輸入 token 增加 1 秒。',
+    'Base seconds': '基礎秒數',
+    'Before any text, reasoning, or tool output, fail the stream after the minimum of the cap and base plus input tokens divided by the divisor plus reasoning-effort seconds. Retry only if the client has not received any response bytes.':
+      '在出現文字、推理或工具輸出之前，按上限與「基礎秒數 + 輸入 token / 除數 + 推理強度附加秒數」中的較小值判定失敗。只有客戶端還沒收到任何回應正文時才會重試。',
+    'Extra seconds for low, medium, and high reasoning effort. xhigh and max use the high value.':
+      '按 low、medium、high 推理強度追加的秒數。xhigh 和 max 使用 high 的值。',
+    'First-progress timeout': '首個進展時限',
+    'High reasoning-effort seconds': '高推理強度附加秒數',
+    'Input token divisor': '輸入 token 除數',
+    'Low reasoning-effort seconds': '低推理強度附加秒數',
+    'Maximum seconds': '上限秒數',
+    'Medium reasoning-effort seconds': '中推理強度附加秒數',
+    'Starting wait for every streaming request.':
+      '每個流式請求的起始等待時間。',
+    'The calculated wait cannot exceed this value or the streaming idle timeout.':
+      '計算結果不能超過這個值，也不能超過流式空閒逾時。',
+    'The cap must be at least the base seconds.': '上限不能小於基礎秒數。',
   },
 }
 

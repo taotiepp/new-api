@@ -2,11 +2,13 @@ package openai
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
@@ -329,4 +331,45 @@ func TestOaiResponsesStreamHandlerKeepsStartedOutputOnFailure(t *testing.T) {
 	assert.Contains(t, apiErr.UpstreamBody(), `"delta":"hello"`)
 	assert.Contains(t, w.Body.String(), "hello")
 	assert.False(t, common.GetContextKeyBool(c, constant.ContextKeyRetryIncompleteResponsesStream))
+}
+
+func TestOaiResponsesStreamHandlerFirstProgressTimeoutRetriesBeforeOutput(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	oldTimeout := constant.StreamingTimeout
+	constant.StreamingTimeout = 30
+	t.Cleanup(func() { constant.StreamingTimeout = oldTimeout })
+
+	pr, pw := io.Pipe()
+	go func() {
+		fmt.Fprint(pw, "data: {\"type\":\"response.created\",\"response\":{\"id\":\"resp_1\",\"status\":\"in_progress\"}}\n\n")
+		time.Sleep(5 * time.Second)
+		_ = pw.Close()
+	}()
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", nil)
+	c.Set(common.RequestIdKey, "responses-first-progress-timeout")
+	info := &relaycommon.RelayInfo{
+		OriginModelName: "gpt-6-astra",
+		DisablePing:     true,
+		ChannelMeta: &relaycommon.ChannelMeta{
+			UpstreamModelName: "gpt-6-astra",
+		},
+	}
+	info.SetEstimatePromptTokens(1000)
+	info.SetFirstProgressTimeoutForTest(time.Second)
+	resp := &http.Response{
+		StatusCode: http.StatusOK,
+		Body:       pr,
+		Header:     http.Header{"Content-Type": []string{"text/event-stream"}},
+	}
+
+	_, apiErr := OaiResponsesStreamHandler(c, info, resp)
+	require.NotNil(t, apiErr)
+	assert.Equal(t, http.StatusBadGateway, apiErr.StatusCode)
+	assert.Contains(t, apiErr.Error(), "no progress before the first-progress timeout")
+	assert.Contains(t, apiErr.UpstreamBody(), `"type":"response.created"`)
+	assert.Empty(t, w.Body.String())
+	assert.True(t, common.GetContextKeyBool(c, constant.ContextKeyRetryIncompleteResponsesStream))
 }

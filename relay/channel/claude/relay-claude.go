@@ -306,6 +306,9 @@ func ClaudeStreamHandler(c *gin.Context, resp *http.Response, info *relaycommon.
 	if err != nil {
 		return nil, err
 	}
+	if progressErr := helper.FirstProgressTimeoutError(info); progressErr != nil {
+		return nil, progressErr
+	}
 
 	HandleStreamFinalResponse(c, info, claudeInfo)
 	return claudeInfo.Usage, nil

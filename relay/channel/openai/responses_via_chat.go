@@ -167,6 +167,9 @@ func OaiChatToResponsesStreamHandler(c *gin.Context, info *relaycommon.RelayInfo
 	if streamErr != nil {
 		return nil, streamErr
 	}
+	if progressErr := helper.FirstProgressTimeoutError(info); progressErr != nil {
+		return nil, progressErr
+	}
 
 	usage := state.Usage()
 	if usage == nil || usage.TotalTokens == 0 {

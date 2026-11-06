@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { zodResolver } from '@hookform/resolvers/zod'
-import { useEffect } from 'react'
+import { useEffect, useMemo } from 'react'
 import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -76,31 +76,59 @@ const chatToResponsesPolicyAllChannelsExample = JSON.stringify(
   2
 )
 
-const jsonString = z.string().refine((value) => {
-  const trimmed = value.trim()
-  if (!trimmed) return true
-  try {
-    JSON.parse(trimmed)
-    return true
-  } catch {
-    return false
-  }
-}, 'Invalid JSON format')
+const jsonString = (invalidMessage: string) =>
+  z.string().refine((value) => {
+    const trimmed = value.trim()
+    if (!trimmed) return true
+    try {
+      JSON.parse(trimmed)
+      return true
+    } catch {
+      return false
+    }
+  }, invalidMessage)
 
-const schema = z.object({
-  global: z.object({
-    pass_through_request_enabled: z.boolean(),
-    thinking_model_blacklist: jsonString,
-    chat_completions_to_responses_policy: jsonString,
-  }),
-  general_setting: z.object({
-    ping_interval_enabled: z.boolean(),
-    ping_interval_seconds: z.coerce.number().min(1),
-  }),
-})
+function createGlobalModelSettingsSchema(t: (key: string) => string) {
+  return z.object({
+    global: z.object({
+      pass_through_request_enabled: z.boolean(),
+      thinking_model_blacklist: jsonString(t('Invalid JSON format')),
+      chat_completions_to_responses_policy: jsonString(
+        t('Invalid JSON format')
+      ),
+    }),
+    general_setting: z
+      .object({
+        ping_interval_enabled: z.boolean(),
+        ping_interval_seconds: z.coerce.number().min(1),
+        first_progress_timeout_enabled: z.boolean(),
+        first_progress_base_seconds: z.coerce.number().int().min(1),
+        first_progress_input_token_divisor: z.coerce.number().int().min(1),
+        first_progress_cap_seconds: z.coerce.number().int().min(1),
+        first_progress_effort_low_seconds: z.coerce.number().int().min(0),
+        first_progress_effort_medium_seconds: z.coerce.number().int().min(0),
+        first_progress_effort_high_seconds: z.coerce.number().int().min(0),
+      })
+      .superRefine((value, ctx) => {
+        if (
+          value.first_progress_cap_seconds < value.first_progress_base_seconds
+        ) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['first_progress_cap_seconds'],
+            message: t('The cap must be at least the base seconds.'),
+          })
+        }
+      }),
+  })
+}
 
-type GlobalModelSettingsFormValues = z.output<typeof schema>
-type GlobalModelSettingsFormInput = z.input<typeof schema>
+type GlobalModelSettingsFormValues = z.output<
+  ReturnType<typeof createGlobalModelSettingsSchema>
+>
+type GlobalModelSettingsFormInput = z.input<
+  ReturnType<typeof createGlobalModelSettingsSchema>
+>
 
 type FlatGlobalModelSettings = {
   'global.pass_through_request_enabled': boolean
@@ -108,6 +136,13 @@ type FlatGlobalModelSettings = {
   'global.chat_completions_to_responses_policy': string
   'general_setting.ping_interval_enabled': boolean
   'general_setting.ping_interval_seconds': number
+  'general_setting.first_progress_timeout_enabled': boolean
+  'general_setting.first_progress_base_seconds': number
+  'general_setting.first_progress_input_token_divisor': number
+  'general_setting.first_progress_cap_seconds': number
+  'general_setting.first_progress_effort_low_seconds': number
+  'general_setting.first_progress_effort_medium_seconds': number
+  'general_setting.first_progress_effort_high_seconds': number
 }
 
 const flattenGlobalValues = (
@@ -127,11 +162,65 @@ const flattenGlobalValues = (
     values.general_setting.ping_interval_enabled,
   'general_setting.ping_interval_seconds':
     values.general_setting.ping_interval_seconds,
+  'general_setting.first_progress_timeout_enabled':
+    values.general_setting.first_progress_timeout_enabled,
+  'general_setting.first_progress_base_seconds':
+    values.general_setting.first_progress_base_seconds,
+  'general_setting.first_progress_input_token_divisor':
+    values.general_setting.first_progress_input_token_divisor,
+  'general_setting.first_progress_cap_seconds':
+    values.general_setting.first_progress_cap_seconds,
+  'general_setting.first_progress_effort_low_seconds':
+    values.general_setting.first_progress_effort_low_seconds,
+  'general_setting.first_progress_effort_medium_seconds':
+    values.general_setting.first_progress_effort_medium_seconds,
+  'general_setting.first_progress_effort_high_seconds':
+    values.general_setting.first_progress_effort_high_seconds,
 })
 
 function normalizeJsonText(value: string, fallback: string) {
   const trimmed = (value ?? '').toString().trim()
   return trimmed ? trimmed : fallback
+}
+
+const firstProgressEnabledKey =
+  'general_setting.first_progress_timeout_enabled' as const
+const firstProgressBaseKey =
+  'general_setting.first_progress_base_seconds' as const
+const firstProgressCapKey =
+  'general_setting.first_progress_cap_seconds' as const
+
+function orderFirstProgressUpdates(
+  updates: Array<
+    [string, FlatGlobalModelSettings[keyof FlatGlobalModelSettings]]
+  >,
+  current: FlatGlobalModelSettings,
+  next: FlatGlobalModelSettings
+) {
+  const rest = updates.filter(
+    ([key]) =>
+      key !== firstProgressEnabledKey &&
+      key !== firstProgressBaseKey &&
+      key !== firstProgressCapKey
+  )
+  const enabled = updates.find(([key]) => key === firstProgressEnabledKey)
+  const base = updates.find(([key]) => key === firstProgressBaseKey)
+  const cap = updates.find(([key]) => key === firstProgressCapKey)
+  const limits: typeof updates = []
+  if (
+    base &&
+    cap &&
+    next[firstProgressCapKey] >= current[firstProgressBaseKey]
+  ) {
+    limits.push(cap, base)
+  } else {
+    if (base) limits.push(base)
+    if (cap) limits.push(cap)
+  }
+  if (enabled?.[1] === false) {
+    return [enabled, ...limits, ...rest]
+  }
+  return [...rest, ...limits, ...(enabled ? [enabled] : [])]
 }
 
 type GlobalSettingsCardProps = {
@@ -141,6 +230,7 @@ type GlobalSettingsCardProps = {
 export function GlobalSettingsCard({ defaultValues }: GlobalSettingsCardProps) {
   const { t } = useTranslation()
   const updateOption = useUpdateOption()
+  const schema = useMemo(() => createGlobalModelSettingsSchema(t), [t])
 
   const form = useForm<
     GlobalModelSettingsFormInput,
@@ -156,13 +246,20 @@ export function GlobalSettingsCard({ defaultValues }: GlobalSettingsCardProps) {
   }, [defaultValues, form])
 
   const pingEnabled = form.watch('general_setting.ping_interval_enabled')
+  const firstProgressEnabled = form.watch(
+    'general_setting.first_progress_timeout_enabled'
+  )
 
   const onSubmit = async (values: GlobalModelSettingsFormValues) => {
     const flattenedDefaults = flattenGlobalValues(defaultValues)
     const flattenedValues = flattenGlobalValues(values)
-    const updates = Object.entries(flattenedValues).filter(
-      ([key, value]) =>
-        value !== flattenedDefaults[key as keyof FlatGlobalModelSettings]
+    const updates = orderFirstProgressUpdates(
+      Object.entries(flattenedValues).filter(
+        ([key, value]) =>
+          value !== flattenedDefaults[key as keyof FlatGlobalModelSettings]
+      ),
+      flattenedDefaults,
+      flattenedValues
     )
 
     if (updates.length === 0) {
@@ -369,6 +466,217 @@ export function GlobalSettingsCard({ defaultValues }: GlobalSettingsCardProps) {
                     'Recommended to keep this high to avoid upstream throttling.'
                   )}
                 </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <Separator />
+
+          <FormField
+            control={form.control}
+            name='general_setting.first_progress_timeout_enabled'
+            render={({ field }) => (
+              <SettingsSwitchItem>
+                <SettingsSwitchContent>
+                  <FormLabel>{t('First-progress timeout')}</FormLabel>
+                  <FormDescription>
+                    {t(
+                      'Before any text, reasoning, or tool output, fail the stream after the minimum of the cap and base plus input tokens divided by the divisor plus reasoning-effort seconds. Retry only if the client has not received any response bytes.'
+                    )}
+                  </FormDescription>
+                </SettingsSwitchContent>
+                <FormControl>
+                  <Switch
+                    checked={field.value}
+                    onCheckedChange={field.onChange}
+                  />
+                </FormControl>
+              </SettingsSwitchItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name='general_setting.first_progress_base_seconds'
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>{t('Base seconds')}</FormLabel>
+                <FormControl>
+                  <Input
+                    type='number'
+                    min={1}
+                    disabled={!firstProgressEnabled}
+                    className='w-28'
+                    value={
+                      field.value === undefined || field.value === null
+                        ? ''
+                        : String(field.value)
+                    }
+                    onChange={(event) => field.onChange(event.target.value)}
+                    onBlur={field.onBlur}
+                    name={field.name}
+                    ref={field.ref}
+                  />
+                </FormControl>
+                <FormDescription>
+                  {t('Starting wait for every streaming request.')}
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name='general_setting.first_progress_input_token_divisor'
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>{t('Input token divisor')}</FormLabel>
+                <FormControl>
+                  <Input
+                    type='number'
+                    min={1}
+                    disabled={!firstProgressEnabled}
+                    className='w-28'
+                    value={
+                      field.value === undefined || field.value === null
+                        ? ''
+                        : String(field.value)
+                    }
+                    onChange={(event) => field.onChange(event.target.value)}
+                    onBlur={field.onBlur}
+                    name={field.name}
+                    ref={field.ref}
+                  />
+                </FormControl>
+                <FormDescription>
+                  {t(
+                    'Add one second for each group of this many estimated input tokens.'
+                  )}
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name='general_setting.first_progress_cap_seconds'
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>{t('Maximum seconds')}</FormLabel>
+                <FormControl>
+                  <Input
+                    type='number'
+                    min={1}
+                    disabled={!firstProgressEnabled}
+                    className='w-28'
+                    value={
+                      field.value === undefined || field.value === null
+                        ? ''
+                        : String(field.value)
+                    }
+                    onChange={(event) => field.onChange(event.target.value)}
+                    onBlur={field.onBlur}
+                    name={field.name}
+                    ref={field.ref}
+                  />
+                </FormControl>
+                <FormDescription>
+                  {t(
+                    'The calculated wait cannot exceed this value or the streaming idle timeout.'
+                  )}
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name='general_setting.first_progress_effort_low_seconds'
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>{t('Low reasoning-effort seconds')}</FormLabel>
+                <FormControl>
+                  <Input
+                    type='number'
+                    min={0}
+                    disabled={!firstProgressEnabled}
+                    className='w-28'
+                    value={
+                      field.value === undefined || field.value === null
+                        ? ''
+                        : String(field.value)
+                    }
+                    onChange={(event) => field.onChange(event.target.value)}
+                    onBlur={field.onBlur}
+                    name={field.name}
+                    ref={field.ref}
+                  />
+                </FormControl>
+                <FormDescription>
+                  {t(
+                    'Extra seconds for low, medium, and high reasoning effort. xhigh and max use the high value.'
+                  )}
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name='general_setting.first_progress_effort_medium_seconds'
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>{t('Medium reasoning-effort seconds')}</FormLabel>
+                <FormControl>
+                  <Input
+                    type='number'
+                    min={0}
+                    disabled={!firstProgressEnabled}
+                    className='w-28'
+                    value={
+                      field.value === undefined || field.value === null
+                        ? ''
+                        : String(field.value)
+                    }
+                    onChange={(event) => field.onChange(event.target.value)}
+                    onBlur={field.onBlur}
+                    name={field.name}
+                    ref={field.ref}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name='general_setting.first_progress_effort_high_seconds'
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>{t('High reasoning-effort seconds')}</FormLabel>
+                <FormControl>
+                  <Input
+                    type='number'
+                    min={0}
+                    disabled={!firstProgressEnabled}
+                    className='w-28'
+                    value={
+                      field.value === undefined || field.value === null
+                        ? ''
+                        : String(field.value)
+                    }
+                    onChange={(event) => field.onChange(event.target.value)}
+                    onBlur={field.onBlur}
+                    name={field.name}
+                    ref={field.ref}
+                  />
+                </FormControl>
                 <FormMessage />
               </FormItem>
             )}

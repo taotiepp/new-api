@@ -157,6 +157,9 @@ func ClaudeResponsesStreamHandler(c *gin.Context, resp *http.Response, info *rel
 	if streamErr != nil {
 		return nil, streamErr
 	}
+	if progressErr := helper.FirstProgressTimeoutError(info); progressErr != nil {
+		return nil, progressErr
+	}
 	if streamFailed {
 		return claudeInfo.Usage, nil
 	}

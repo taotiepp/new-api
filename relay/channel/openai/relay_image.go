@@ -139,6 +139,10 @@ func OpenaiImageStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp 
 		}
 	})
 
+	if progressErr := helper.FirstProgressTimeoutError(info); progressErr != nil {
+		return nil, progressErr
+	}
+
 	// StreamScannerHandler consumes the upstream [DONE]; re-emit it so the
 	// client still receives a terminal data: [DONE].
 	if info.StreamStatus != nil && info.StreamStatus.EndReason == relaycommon.StreamEndReasonDone {

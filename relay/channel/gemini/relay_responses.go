@@ -148,6 +148,11 @@ func GeminiResponsesStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, r
 		return sendChunk(geminiResponse)
 	})
 	if streamAPIError != nil {
+		if info.StreamStatus != nil &&
+			info.StreamStatus.EndReason == relaycommon.StreamEndReasonFirstProgressTimeout &&
+			(c.Writer == nil || !c.Writer.Written()) {
+			return nil, streamAPIError
+		}
 		if failResponsesStream(streamAPIError) && streamErr == nil {
 			return usage, nil
 		}

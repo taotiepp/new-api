@@ -82,20 +82,28 @@ func StreamScannerHandler(c *gin.Context, resp *http.Response, info *relaycommon
 
 	// 无条件新建 StreamStatus
 	info.StreamStatus = relaycommon.NewStreamStatus()
+	info.BeginStreamProgressAttempt()
 
 	ctx, cancel := context.WithCancel(context.Background())
 
 	streamingTimeout := time.Duration(constant.StreamingTimeout) * time.Second
+	firstProgressTimeout, firstProgressEnabled := operation_setting.FirstProgressTimeout(info.GetEstimatePromptTokens(), info.GetReasoningEffort())
+	if override, ok := info.FirstProgressTimeoutOverride(); ok {
+		firstProgressTimeout = override
+		firstProgressEnabled = true
+	}
 
 	var (
-		stopChan    = make(chan bool, 3) // 增加缓冲区避免阻塞
-		scanner     = NewStreamScanner(resp.Body)
-		ticker      = time.NewTicker(streamingTimeout)
-		pingTicker  *time.Ticker
-		writeMutex  sync.Mutex     // Mutex to protect concurrent writes
-		wg          sync.WaitGroup // 用于等待所有 goroutine 退出
-		cleanupOnce sync.Once
-		stopOnce    sync.Once
+		stopChan           = make(chan bool, 3) // 增加缓冲区避免阻塞
+		scanner            = NewStreamScanner(resp.Body)
+		ticker             = time.NewTicker(streamingTimeout)
+		firstProgressTimer *time.Timer
+		firstProgressC     <-chan time.Time
+		pingTicker         *time.Ticker
+		writeMutex         sync.Mutex     // Mutex to protect concurrent writes
+		wg                 sync.WaitGroup // 用于等待所有 goroutine 退出
+		cleanupOnce        sync.Once
+		stopOnce           sync.Once
 	)
 
 	stop := func() {
@@ -119,12 +127,21 @@ func StreamScannerHandler(c *gin.Context, resp *http.Response, info *relaycommon
 	logger.LogDebug(c, "relay max idle conns: %d", common.RelayMaxIdleConns)
 	logger.LogDebug(c, "relay max idle conns per host: %d", common.RelayMaxIdleConnsPerHost)
 	logger.LogDebug(c, "streaming timeout seconds: %d", int64(streamingTimeout.Seconds()))
+	if firstProgressEnabled {
+		firstProgressTimer = time.NewTimer(firstProgressTimeout)
+		firstProgressC = firstProgressTimer.C
+		logger.LogDebug(c, "first progress timeout seconds: %d", int64(firstProgressTimeout.Seconds()))
+	}
 	logger.LogDebug(c, "ping interval seconds: %d", int64(pingInterval.Seconds()))
 
 	cleanup := func() {
 		cleanupOnce.Do(func() {
+			info.FinishStreamProgressAttempt()
 			cancel()
 			stop()
+			if firstProgressTimer != nil {
+				firstProgressTimer.Stop()
+			}
 			if resp.Body != nil {
 				_ = resp.Body.Close()
 			}
@@ -208,7 +225,7 @@ func StreamScannerHandler(c *gin.Context, resp *http.Response, info *relaycommon
 			stop()
 			wg.Done()
 		}()
-		sr := newStreamResult(info.StreamStatus)
+		sr := newStreamResult(info.StreamStatus, info.MarkStreamProgress)
 		for data := range dataChan {
 			sr.reset()
 			func() {
@@ -265,6 +282,9 @@ func StreamScannerHandler(c *gin.Context, resp *http.Response, info *relaycommon
 			if !strings.HasPrefix(data, "[DONE]") {
 				info.SetFirstResponseTime()
 				info.ReceivedResponseCount++
+				if !info.DefersStreamProgress() {
+					info.MarkStreamProgress()
+				}
 
 				select {
 				case dataChan <- data:
@@ -289,16 +309,29 @@ func StreamScannerHandler(c *gin.Context, resp *http.Response, info *relaycommon
 		info.StreamStatus.SetEndReason(relaycommon.StreamEndReasonEOF, nil)
 	})
 
-	// 主循环等待完成或超时
-	select {
-	case <-ticker.C:
-		info.StreamStatus.SetEndReason(relaycommon.StreamEndReasonTimeout, nil)
-	case <-stopChan:
-		// EndReason already set by the goroutine that triggered stopChan
-	case <-c.Request.Context().Done():
-		// 客户端断开：立即 cleanup 关闭上游 resp.Body，解除 scanner 阻塞并让上游停止生成，
-		// 避免为已放弃的请求继续消费上游 token。
-		info.StreamStatus.SetEndReason(relaycommon.StreamEndReasonClientGone, c.Request.Context().Err())
+	// 主循环等待完成或超时。首个进展计时只在还没有文本、推理或工具输出时生效。
+waitForStream:
+	for {
+		select {
+		case <-ticker.C:
+			info.StreamStatus.SetEndReason(relaycommon.StreamEndReasonTimeout, nil)
+			break waitForStream
+		case <-firstProgressC:
+			if info.StreamProgressSeen() {
+				firstProgressC = nil
+				continue
+			}
+			info.StreamStatus.SetEndReason(relaycommon.StreamEndReasonFirstProgressTimeout, nil)
+			break waitForStream
+		case <-stopChan:
+			// EndReason already set by the goroutine that triggered stopChan
+			break waitForStream
+		case <-c.Request.Context().Done():
+			// 客户端断开：立即 cleanup 关闭上游 resp.Body，解除 scanner 阻塞并让上游停止生成，
+			// 避免为已放弃的请求继续消费上游 token。
+			info.StreamStatus.SetEndReason(relaycommon.StreamEndReasonClientGone, c.Request.Context().Err())
+			break waitForStream
+		}
 	}
 
 	cleanup()

@@ -67,6 +67,10 @@ func xAIStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Re
 		}
 	})
 
+	if progressErr := helper.FirstProgressTimeoutError(info); progressErr != nil {
+		return nil, progressErr
+	}
+
 	if !containStreamUsage {
 		usage = service.ResponseText2Usage(c, responseTextBuilder.String(), info.UpstreamModelName, info.GetPromptTokensForUsage())
 		usage.CompletionTokens += toolCount * 7

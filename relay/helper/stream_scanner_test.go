@@ -488,6 +488,76 @@ func TestStreamScannerHandler_StreamStatus_Timeout(t *testing.T) {
 	assert.False(t, info.StreamStatus.IsNormalEnd())
 }
 
+func TestStreamScannerHandler_FirstProgressTimeout(t *testing.T) {
+	oldTimeout := constant.StreamingTimeout
+	constant.StreamingTimeout = 30
+	t.Cleanup(func() { constant.StreamingTimeout = oldTimeout })
+
+	pr, pw := io.Pipe()
+	go func() {
+		fmt.Fprint(pw, "data: {\"type\":\"response.created\"}\n\n")
+		time.Sleep(5 * time.Second)
+		_ = pw.Close()
+	}()
+
+	c, resp, info := setupStreamTest(t, pr)
+	resp.Body = pr
+	info.HoldStreamProgressUntilMarked()
+	info.SetFirstProgressTimeoutForTest(time.Second)
+
+	done := make(chan struct{})
+	go func() {
+		StreamScannerHandler(c, resp, info, func(data string, sr *StreamResult) {})
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(4 * time.Second):
+		t.Fatal("timed out waiting for first-progress timeout")
+	}
+
+	require.NotNil(t, info.StreamStatus)
+	assert.Equal(t, relaycommon.StreamEndReasonFirstProgressTimeout, info.StreamStatus.EndReason)
+	assert.False(t, info.StreamProgressSeen())
+}
+
+func TestStreamScannerHandler_FirstProgressTimeoutStopsAfterOutput(t *testing.T) {
+	oldTimeout := constant.StreamingTimeout
+	constant.StreamingTimeout = 30
+	t.Cleanup(func() { constant.StreamingTimeout = oldTimeout })
+
+	pr, pw := io.Pipe()
+	go func() {
+		fmt.Fprint(pw, "data: {\"type\":\"response.output_text.delta\",\"delta\":\"hi\"}\n\n")
+		time.Sleep(2 * time.Second)
+		_ = pw.Close()
+	}()
+
+	c, resp, info := setupStreamTest(t, pr)
+	resp.Body = pr
+	info.HoldStreamProgressUntilMarked()
+	info.SetFirstProgressTimeoutForTest(time.Second)
+
+	done := make(chan struct{})
+	go func() {
+		StreamScannerHandler(c, resp, info, func(data string, sr *StreamResult) {
+			sr.MarkProgress()
+		})
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(4 * time.Second):
+		t.Fatal("timed out waiting for stream to finish after progress")
+	}
+
+	require.NotNil(t, info.StreamStatus)
+	assert.Equal(t, relaycommon.StreamEndReasonEOF, info.StreamStatus.EndReason)
+	assert.True(t, info.StreamProgressSeen())
+}
+
 func TestStreamScannerHandler_StreamStatus_SoftErrors(t *testing.T) {
 	t.Parallel()
 

@@ -441,6 +441,10 @@ func UpdateOption(c *gin.Context) {
 			return
 		}
 	}
+	if err = operation_setting.ValidateFirstProgressOption(option.Key, option.Value.(string)); err != nil {
+		common.ApiErrorMsg(c, err.Error())
+		return
+	}
 	err = model.UpdateOption(option.Key, option.Value.(string))
 	if err != nil {
 		common.ApiError(c, err)

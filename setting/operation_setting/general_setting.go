@@ -14,6 +14,16 @@ type GeneralSetting struct {
 	DocsLink            string `json:"docs_link"`
 	PingIntervalEnabled bool   `json:"ping_interval_enabled"`
 	PingIntervalSeconds int    `json:"ping_interval_seconds"`
+	// First-progress timeout is off unless an administrator enables it.
+	// The wait is min(cap, base + estimated input tokens / divisor + effort seconds)
+	// and only applies before the stream produces text, reasoning, or tool output.
+	FirstProgressTimeoutEnabled      bool `json:"first_progress_timeout_enabled"`
+	FirstProgressBaseSeconds         int  `json:"first_progress_base_seconds"`
+	FirstProgressInputTokenDivisor   int  `json:"first_progress_input_token_divisor"`
+	FirstProgressCapSeconds          int  `json:"first_progress_cap_seconds"`
+	FirstProgressEffortLowSeconds    int  `json:"first_progress_effort_low_seconds"`
+	FirstProgressEffortMediumSeconds int  `json:"first_progress_effort_medium_seconds"`
+	FirstProgressEffortHighSeconds   int  `json:"first_progress_effort_high_seconds"`
 	// 当前站点额度展示类型：USD / CNY / TOKENS
 	QuotaDisplayType string `json:"quota_display_type"`
 	// 模型定价展示币种：USD / CNY。空值表示跟随额度展示（人民币额度则人民币定价，否则美元）。
@@ -26,12 +36,19 @@ type GeneralSetting struct {
 
 // 默认配置
 var generalSetting = GeneralSetting{
-	DocsLink:                   "https://docs.newapi.pro",
-	PingIntervalEnabled:        false,
-	PingIntervalSeconds:        60,
-	QuotaDisplayType:           QuotaDisplayTypeUSD,
-	CustomCurrencySymbol:       "¤",
-	CustomCurrencyExchangeRate: 1.0,
+	DocsLink:                         "https://docs.newapi.pro",
+	PingIntervalEnabled:              false,
+	PingIntervalSeconds:              60,
+	FirstProgressTimeoutEnabled:      false,
+	FirstProgressBaseSeconds:         20,
+	FirstProgressInputTokenDivisor:   20000,
+	FirstProgressCapSeconds:          60,
+	FirstProgressEffortLowSeconds:    0,
+	FirstProgressEffortMediumSeconds: 15,
+	FirstProgressEffortHighSeconds:   30,
+	QuotaDisplayType:                 QuotaDisplayTypeUSD,
+	CustomCurrencySymbol:             "¤",
+	CustomCurrencyExchangeRate:       1.0,
 }
 
 func init() {

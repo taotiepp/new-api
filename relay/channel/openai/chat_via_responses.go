@@ -180,6 +180,7 @@ func OaiResponsesToChatStreamHandler(c *gin.Context, info *relaycommon.RelayInfo
 		return nil, types.NewOpenAIError(err, types.ErrorCodeBadResponse, http.StatusInternalServerError)
 	}
 	streamErr := (*types.NewAPIError)(nil)
+	info.HoldStreamProgressUntilMarked()
 
 	if info.RelayFormat == types.RelayFormatClaude && info.ClaudeConvertInfo == nil {
 		info.ClaudeConvertInfo = &relaycommon.ClaudeConvertInfo{LastMessagesType: relaycommon.LastMessageTypeNone}
@@ -256,6 +257,9 @@ func OaiResponsesToChatStreamHandler(c *gin.Context, info *relaycommon.RelayInfo
 			sr.Error(err)
 			return
 		}
+		if responsesStreamEventReportsProgress(streamResp) {
+			sr.MarkProgress()
+		}
 
 		if streamResp.Type == "response.error" || streamResp.Type == "response.failed" {
 			if streamResp.Response != nil {
@@ -286,6 +290,12 @@ func OaiResponsesToChatStreamHandler(c *gin.Context, info *relaycommon.RelayInfo
 
 	if streamErr != nil {
 		return nil, streamErr
+	}
+	if progressErr := helper.FirstProgressTimeoutError(info); progressErr != nil {
+		if c.Writer == nil || !c.Writer.Written() {
+			markIncompleteResponsesStreamForRetry(c, info, false)
+		}
+		return nil, progressErr
 	}
 
 	usage := state.Usage()

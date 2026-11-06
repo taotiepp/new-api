@@ -103,6 +103,8 @@ type RelayInfo struct {
 	isFirstResponse         bool
 	//SendLastReasoningResponse bool
 	IsStream               bool
+	streamProgress         *streamProgressGate
+	firstProgressTimeout   time.Duration
 	IsGeminiBatchEmbedding bool
 	IsPlayground           bool
 	UsePrice               bool

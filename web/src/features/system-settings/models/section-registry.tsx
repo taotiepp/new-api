@@ -60,6 +60,20 @@ const MODELS_SECTIONS = [
               settings['general_setting.ping_interval_enabled'],
             ping_interval_seconds:
               settings['general_setting.ping_interval_seconds'],
+            first_progress_timeout_enabled:
+              settings['general_setting.first_progress_timeout_enabled'],
+            first_progress_base_seconds:
+              settings['general_setting.first_progress_base_seconds'],
+            first_progress_input_token_divisor:
+              settings['general_setting.first_progress_input_token_divisor'],
+            first_progress_cap_seconds:
+              settings['general_setting.first_progress_cap_seconds'],
+            first_progress_effort_low_seconds:
+              settings['general_setting.first_progress_effort_low_seconds'],
+            first_progress_effort_medium_seconds:
+              settings['general_setting.first_progress_effort_medium_seconds'],
+            first_progress_effort_high_seconds:
+              settings['general_setting.first_progress_effort_high_seconds'],
           },
         }}
       />

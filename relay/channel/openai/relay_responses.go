@@ -86,6 +86,7 @@ func OaiResponsesStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp
 	sawCompleted := false
 	committed := false
 	common.SetContextKey(c, constant.ContextKeyRetryIncompleteResponsesStream, false)
+	info.HoldStreamProgressUntilMarked()
 
 	commitEvents := func() {
 		if committed {
@@ -121,6 +122,9 @@ func OaiResponsesStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp
 			return
 		}
 		writeEvent(streamResponse, data)
+		if responsesStreamEventReportsProgress(streamResponse) {
+			sr.MarkProgress()
+		}
 		switch streamResponse.Type {
 		case "response.completed", "response.done":
 			if streamResponse.Response != nil && relaycommon.IsNonBillableResponsesStatus(streamResponse.Response.Status) {
@@ -188,6 +192,17 @@ func OaiResponsesStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp
 		}
 	})
 
+	if terminalErr != nil {
+		markIncompleteResponsesStreamForRetry(c, info, committed)
+		terminalErr.SetUpstreamBody(received.String())
+		return nil, terminalErr
+	}
+	if progressErr := helper.FirstProgressTimeoutError(info); progressErr != nil {
+		markIncompleteResponsesStreamForRetry(c, info, committed)
+		progressErr.SetUpstreamBody(received.String())
+		return nil, progressErr
+	}
+
 	if usage.CompletionTokens == 0 {
 		// 计算输出文本的 token 数量
 		tempStr := responseTextBuilder.String()
@@ -207,11 +222,6 @@ func OaiResponsesStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp
 		usage.BillingUsage = dto.CloneBillingUsageWithEstimatedCompletion(usage.BillingUsage, usage.CompletionTokens)
 	}
 
-	if terminalErr != nil {
-		markIncompleteResponsesStreamForRetry(c, info, committed)
-		terminalErr.SetUpstreamBody(received.String())
-		return nil, terminalErr
-	}
 	if !sawCompleted || !responsesStreamHasBillableUsage(info, usage) {
 		if sawCompleted && (info.PriceData.FreeModel || info.PriceData.UsePrice) {
 			commitEvents()
@@ -243,6 +253,29 @@ func markIncompleteResponsesStreamForRetry(c *gin.Context, info *relaycommon.Rel
 		}
 	}
 	common.SetContextKey(c, constant.ContextKeyRetryIncompleteResponsesStream, true)
+}
+
+func responsesStreamEventReportsProgress(streamResponse dto.ResponsesStreamResponse) bool {
+	switch streamResponse.Type {
+	case "response.completed", "response.done",
+		"response.output_text.done",
+		"response.function_call_arguments.delta",
+		"response.function_call_arguments.done",
+		"response.content_part.added",
+		"response.content_part.delta",
+		"response.content_part.done",
+		"response.reasoning_text.delta",
+		"response.reasoning_text.done",
+		"response.reasoning_summary_text.delta",
+		"response.reasoning_summary_text.done",
+		"response.image_generation_call.partial_image",
+		dto.ResponsesOutputTypeItemDone:
+		return true
+	case "response.output_text.delta":
+		return streamResponse.Delta != ""
+	default:
+		return false
+	}
 }
 
 func responsesStreamEventCommitsOutput(streamResponse dto.ResponsesStreamResponse) bool {

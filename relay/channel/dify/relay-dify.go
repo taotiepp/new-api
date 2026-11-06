@@ -255,6 +255,9 @@ func difyStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.R
 			sr.Error(err)
 		}
 	})
+	if progressErr := helper.FirstProgressTimeoutError(info); progressErr != nil {
+		return nil, progressErr
+	}
 	helper.Done(c)
 	if usage.TotalTokens == 0 {
 		usage = service.ResponseText2Usage(c, responseText, info.UpstreamModelName, info.GetPromptTokensForUsage())
