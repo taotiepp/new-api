@@ -180,6 +180,7 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 	}
 
 	relayInfo.SetEstimatePromptTokens(tokens)
+	recordFirstProgressPromptScan(relayInfo, request, meta)
 
 	priceData, err := helper.ModelPriceHelper(c, relayInfo, tokens, meta)
 	if err != nil {
@@ -395,6 +396,28 @@ func addUsedChannel(c *gin.Context, channelId int) {
 	useChannel := c.GetStringSlice("use_channel")
 	useChannel = append(useChannel, fmt.Sprintf("%d", channelId))
 	c.Set("use_channel", useChannel)
+}
+
+// recordFirstProgressPromptScan stores a character-scan prompt size for the
+// first-progress timeout. Billing keeps its own estimate and may use a tokenizer.
+func recordFirstProgressPromptScan(info *relaycommon.RelayInfo, request dto.Request, meta *types.TokenCountMeta) {
+	if info == nil || !info.IsStream {
+		return
+	}
+	setting := operation_setting.GetGeneralSetting()
+	if setting == nil || !setting.FirstProgressTimeoutEnabled {
+		return
+	}
+	text := ""
+	if meta != nil {
+		text = meta.CombineText
+	}
+	if text == "" && request != nil {
+		if countMeta := request.GetTokenCountMeta(); countMeta != nil {
+			text = countMeta.CombineText
+		}
+	}
+	info.SetFirstProgressPromptTokens(service.EstimateTokenByModel(info.OriginModelName, text))
 }
 
 func fastTokenCountMetaForPricing(request dto.Request) *types.TokenCountMeta {

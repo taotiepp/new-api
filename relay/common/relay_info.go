@@ -102,14 +102,15 @@ type RelayInfo struct {
 	FirstResponseTime       time.Time
 	isFirstResponse         bool
 	//SendLastReasoningResponse bool
-	IsStream               bool
-	streamProgress         *streamProgressGate
-	firstProgressTimeout   time.Duration
-	IsGeminiBatchEmbedding bool
-	IsPlayground           bool
-	UsePrice               bool
-	RelayMode              int
-	OriginModelName        string
+	IsStream                  bool
+	streamProgress            *streamProgressGate
+	firstProgressTimeout      time.Duration
+	firstProgressPromptTokens int
+	IsGeminiBatchEmbedding    bool
+	IsPlayground              bool
+	UsePrice                  bool
+	RelayMode                 int
+	OriginModelName           string
 
 	// BillingModelName is the pricing identity for this request. It is kept
 	// separate from OriginModelName and UpstreamModelName so virtual pricing
@@ -804,6 +805,25 @@ func (info *RelayInfo) GetEstimatePromptTokens() int {
 		return 0
 	}
 	return info.estimatePromptTokens
+}
+
+// SetFirstProgressPromptTokens stores the character-scanned prompt size used
+// only by the first-progress timeout. It is separate from billing estimation.
+func (info *RelayInfo) SetFirstProgressPromptTokens(tokens int) {
+	if info == nil {
+		return
+	}
+	if tokens < 0 {
+		tokens = 0
+	}
+	info.firstProgressPromptTokens = tokens
+}
+
+func (info *RelayInfo) GetFirstProgressPromptTokens() int {
+	if info == nil {
+		return 0
+	}
+	return info.firstProgressPromptTokens
 }
 
 // GetPromptTokensForUsage resolves deferred counting for settlement fallbacks.

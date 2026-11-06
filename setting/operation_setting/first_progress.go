@@ -11,7 +11,8 @@ import (
 
 // FirstProgressTimeout is the deadline for the first text, reasoning, or tool
 // output on a streaming response. It is disabled unless an administrator turns
-// it on. The result is also clamped to STREAMING_TIMEOUT.
+// it on. promptTokens is a character scan of the prompt, not a tokenizer count.
+// The result is also clamped to STREAMING_TIMEOUT.
 func FirstProgressTimeout(promptTokens int, effort string) (time.Duration, bool) {
 	setting := GetGeneralSetting()
 	if setting == nil || !setting.firstProgressConfigured() {

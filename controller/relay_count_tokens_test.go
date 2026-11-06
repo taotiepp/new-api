@@ -17,6 +17,7 @@ import (
 	"github.com/QuantumNous/new-api/relaykit/dto"
 	"github.com/QuantumNous/new-api/relaykit/types"
 	"github.com/QuantumNous/new-api/service"
+	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -117,6 +118,44 @@ func BenchmarkTrustedPromptEstimation(b *testing.B) {
 			}
 		})
 	}
+}
+
+func TestFirstProgressPromptScanUsesCharacters(t *testing.T) {
+	service.InitTokenEncoders()
+	setting := operation_setting.GetGeneralSetting()
+	original := *setting
+	t.Cleanup(func() { *operation_setting.GetGeneralSetting() = original })
+	setting.FirstProgressTimeoutEnabled = true
+
+	request := &observedTokenRequest{}
+	request.Messages = []dto.Message{{Role: "user", Content: strings.Repeat("hello world 你好", 40)}}
+	info := &relaycommon.RelayInfo{OriginModelName: "gpt-6-astra", IsStream: true}
+	recordFirstProgressPromptScan(info, request, &types.TokenCountMeta{})
+
+	text := request.GeneralOpenAIRequest.GetTokenCountMeta().CombineText
+	scanned := service.EstimateTokenByModel("gpt-6-astra", text)
+	require.Positive(t, scanned)
+	assert.Equal(t, scanned, info.GetFirstProgressPromptTokens())
+	assert.NotEqual(t, service.CountTextToken(text, "gpt-6-astra"), scanned)
+	assert.Equal(t, 1, request.metaCalls)
+	assert.Zero(t, info.GetEstimatePromptTokens())
+
+	info.SetFirstProgressPromptTokens(0)
+	request.metaCalls = 0
+	recordFirstProgressPromptScan(info, request, &types.TokenCountMeta{CombineText: text})
+	assert.Equal(t, scanned, info.GetFirstProgressPromptTokens())
+	assert.Zero(t, request.metaCalls)
+
+	info.IsStream = false
+	info.SetFirstProgressPromptTokens(0)
+	recordFirstProgressPromptScan(info, request, &types.TokenCountMeta{})
+	assert.Zero(t, info.GetFirstProgressPromptTokens())
+
+	setting.FirstProgressTimeoutEnabled = false
+	info.IsStream = true
+	recordFirstProgressPromptScan(info, request, &types.TokenCountMeta{})
+	assert.Zero(t, info.GetFirstProgressPromptTokens())
+	assert.Zero(t, request.metaCalls)
 }
 
 func TestUntrustedBillingRestoresFullPromptPrice(t *testing.T) {

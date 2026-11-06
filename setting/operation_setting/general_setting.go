@@ -15,7 +15,7 @@ type GeneralSetting struct {
 	PingIntervalEnabled bool   `json:"ping_interval_enabled"`
 	PingIntervalSeconds int    `json:"ping_interval_seconds"`
 	// First-progress timeout is off unless an administrator enables it.
-	// The wait is min(cap, base + estimated input tokens / divisor + effort seconds)
+	// The wait is min(cap, base + character-scanned input tokens / divisor + effort seconds)
 	// and only applies before the stream produces text, reasoning, or tool output.
 	FirstProgressTimeoutEnabled      bool `json:"first_progress_timeout_enabled"`
 	FirstProgressBaseSeconds         int  `json:"first_progress_base_seconds"`
