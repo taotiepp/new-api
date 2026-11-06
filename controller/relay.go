@@ -621,7 +621,11 @@ func recordRelayErrorLog(c *gin.Context, err *types.NewAPIError, channelId int, 
 	if relayInfo != nil {
 		isStream = relayInfo.IsStream
 	}
-	model.RecordErrorLog(c, userId, channelId, modelName, tokenName, err.MaskSensitiveErrorWithStatusCode(), tokenId, useTimeSeconds, isStream, userGroup, other)
+	promptTokens := 0
+	if relayInfo != nil && strings.Contains(err.Error(), "no HTTP status before the first-progress timeout") {
+		promptTokens = relayInfo.GetFirstProgressPromptTokens()
+	}
+	model.RecordErrorLog(c, userId, channelId, modelName, tokenName, err.MaskSensitiveErrorWithStatusCode(), tokenId, useTimeSeconds, isStream, userGroup, other, promptTokens)
 }
 
 // relayErrorServerLog is the process log line. The stored error content stays

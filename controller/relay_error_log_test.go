@@ -11,6 +11,7 @@ import (
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/model"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
+	"github.com/QuantumNous/new-api/relay/helper"
 	"github.com/QuantumNous/new-api/relaykit/types"
 
 	"github.com/gin-gonic/gin"
@@ -77,6 +78,7 @@ func TestProcessChannelErrorUsesSnapshotWithoutLeakingChannelMetadata(t *testing
 	require.NoError(t, database.First(&stored).Error)
 	assert.Equal(t, channelSnapshot.ChannelId, stored.ChannelId)
 	assert.Contains(t, stored.Content, "upstream failed")
+	assert.NotContains(t, stored.Content, "estimated_input_tokens=")
 	assert.NotContains(t, stored.Content, "upstream_body")
 	assert.NotContains(t, stored.Content, "original upstream failure")
 	storedOther, err := common.StrToMap(stored.Other)
@@ -103,6 +105,57 @@ func TestProcessChannelErrorUsesSnapshotWithoutLeakingChannelMetadata(t *testing
 	for _, key := range []string{"channel_id", "channel_name", "channel_type"} {
 		assert.NotContains(t, userOther, key)
 	}
+}
+
+func TestProcessChannelErrorLogsEstimatedInputTokensOnStatusTimeout(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	previousDB, previousLogDB := model.DB, model.LOG_DB
+	previousRedisEnabled := common.RedisEnabled
+	previousMainDatabaseType := common.MainDatabaseType()
+	previousLogDatabaseType := common.LogDatabaseType()
+	previousErrorLogEnabled := constant.ErrorLogEnabled
+
+	database, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	require.NoError(t, err)
+	sqlDB, err := database.DB()
+	require.NoError(t, err)
+	sqlDB.SetMaxOpenConns(1)
+	require.NoError(t, database.AutoMigrate(&model.User{}, &model.Log{}))
+	model.DB, model.LOG_DB = database, database
+	common.RedisEnabled = false
+	common.SetDatabaseTypes(common.DatabaseTypeSQLite, common.DatabaseTypeSQLite)
+	constant.ErrorLogEnabled = true
+	t.Cleanup(func() {
+		model.DB, model.LOG_DB = previousDB, previousLogDB
+		common.RedisEnabled = previousRedisEnabled
+		common.SetDatabaseTypes(previousMainDatabaseType, previousLogDatabaseType)
+		constant.ErrorLogEnabled = previousErrorLogEnabled
+		require.NoError(t, sqlDB.Close())
+	})
+
+	require.NoError(t, database.Create(&model.User{Id: 8, Username: "timeout-owner", Group: "default"}).Error)
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	ctx.Request = httptest.NewRequest(http.MethodPost, "/v1/messages", nil)
+	ctx.Set("id", 8)
+	ctx.Set("username", "timeout-owner")
+	ctx.Set("token_name", "test-token")
+	ctx.Set("token_id", 12)
+	ctx.Set("original_model", "claude-test")
+	ctx.Set("group", "default")
+	common.SetContextKey(ctx, constant.ContextKeyRequestStartTime, time.Now().Add(-time.Second))
+
+	info := &relaycommon.RelayInfo{}
+	info.SetFirstProgressPromptTokens(48231)
+	apiErr := helper.StreamStatusTimeoutError()
+	assert.NotContains(t, apiErr.Error(), "48231")
+
+	processChannelError(ctx, types.ChannelError{ChannelId: 4, AutoBan: false}, apiErr, info, false)
+
+	var stored model.Log
+	require.NoError(t, database.First(&stored).Error)
+	assert.Equal(t, 48231, stored.PromptTokens)
+	assert.Equal(t, "status_code=502, upstream stream produced no HTTP status before the first-progress timeout", stored.Content)
 }
 
 func TestRecordTerminalRelayErrorPersistsFailureReasonWithoutFlag(t *testing.T) {

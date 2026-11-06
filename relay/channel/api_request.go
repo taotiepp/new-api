@@ -556,7 +556,7 @@ func doRequest(c *gin.Context, req *http.Request, info *common.RelayInfo) (*http
 		if resp != nil && resp.Body != nil {
 			_ = resp.Body.Close()
 		}
-		logger.LogError(c, "stream status timeout: upstream produced no HTTP status before the first-progress timeout")
+		logger.LogError(c, fmt.Sprintf("stream status timeout: upstream produced no HTTP status before the first-progress timeout, estimated_input_tokens=%d", info.GetFirstProgressPromptTokens()))
 		return nil, helper.StreamStatusTimeoutError()
 	}
 	if err != nil {
