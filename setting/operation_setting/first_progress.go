@@ -9,10 +9,11 @@ import (
 	"github.com/QuantumNous/new-api/constant"
 )
 
-// FirstProgressTimeout is the deadline for the first text, reasoning, or tool
-// output on a streaming response. It is disabled unless an administrator turns
-// it on. promptTokens is a character scan of the prompt, not a tokenizer count.
-// The divisor is the assumed prefill speed in input tokens per second.
+// FirstProgressTimeout is one streaming allowance. It is disabled unless an
+// administrator turns it on. A stream request uses it twice: once while waiting
+// for the upstream HTTP status, then again, from zero, while waiting for the
+// first packet. promptTokens is a character scan of the prompt, not a tokenizer
+// count. The divisor is the assumed prefill speed in input tokens per second.
 // The result is also clamped to STREAMING_TIMEOUT.
 func FirstProgressTimeout(promptTokens int, effort string) (time.Duration, bool) {
 	return FirstProgressTimeoutForModel(promptTokens, effort, "")

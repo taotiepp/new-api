@@ -335,9 +335,17 @@ func DoApiRequest(a Adaptor, c *gin.Context, info *common.RelayInfo, requestBody
 	applyHeaderOverrideToRequest(req, headerOverride)
 	resp, err := doRequest(c, req, info)
 	if err != nil {
-		return nil, fmt.Errorf("do request failed: %w", err)
+		return nil, wrapDoRequestError(err)
 	}
 	return resp, nil
+}
+
+func wrapDoRequestError(err error) error {
+	var apiErr *types.NewAPIError
+	if errors.As(err, &apiErr) {
+		return err
+	}
+	return fmt.Errorf("do request failed: %w", err)
 }
 
 func DoFormRequest(a Adaptor, c *gin.Context, info *common.RelayInfo, requestBody io.Reader) (*http.Response, error) {
@@ -367,7 +375,7 @@ func DoFormRequest(a Adaptor, c *gin.Context, info *common.RelayInfo, requestBod
 	applyHeaderOverrideToRequest(req, headerOverride)
 	resp, err := doRequest(c, req, info)
 	if err != nil {
-		return nil, fmt.Errorf("do request failed: %w", err)
+		return nil, wrapDoRequestError(err)
 	}
 	return resp, nil
 }
@@ -529,7 +537,28 @@ func doRequest(c *gin.Context, req *http.Request, info *common.RelayInfo) (*http
 		}
 	}
 
+	var stopStatusTimeout func() bool
+	if info != nil && info.IsStream && req != nil {
+		parent := context.Background()
+		if c.Request != nil {
+			parent = c.Request.Context()
+		}
+		ctx, stop := helper.ArmStreamStatusTimeout(parent, info)
+		if ctx != parent {
+			req = req.WithContext(ctx)
+			stopStatusTimeout = stop
+		}
+	}
+
 	resp, err := relayClient.Do(req)
+	statusTimedOut := stopStatusTimeout != nil && stopStatusTimeout()
+	if statusTimedOut {
+		if resp != nil && resp.Body != nil {
+			_ = resp.Body.Close()
+		}
+		logger.LogError(c, "stream status timeout: upstream produced no HTTP status before the first-progress timeout")
+		return nil, helper.StreamStatusTimeoutError()
+	}
 	if err != nil {
 		logger.LogError(c, "do request failed: "+err.Error())
 		return nil, types.NewError(err, types.ErrorCodeDoRequestFailed, types.ErrOptionWithHideErrMsg("upstream error: do request failed"))

@@ -6,8 +6,10 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/service"
@@ -85,4 +87,70 @@ func TestDoRequestReturnsUpstreamRedirectWithoutFollowing(t *testing.T) {
 	}
 
 	assert.Equal(t, originalRedirectPolicy, reflect.ValueOf(sharedClient.CheckRedirect).Pointer(), "the cached client must not be mutated")
+}
+
+func TestDoRequestStreamStatusTimeoutCancelsHungUpstream(t *testing.T) {
+	service.InitHttpClient()
+	gin.SetMode(gin.TestMode)
+
+	release := make(chan struct{})
+	var releaseOnce sync.Once
+	upstream := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		<-release
+	}))
+	t.Cleanup(func() {
+		releaseOnce.Do(func() { close(release) })
+		upstream.CloseClientConnections()
+		upstream.Close()
+	})
+
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	ctx.Request = httptest.NewRequest(http.MethodPost, "/v1/messages", nil)
+	req, err := http.NewRequest(http.MethodPost, upstream.URL, bytes.NewReader([]byte(`{"stream":true}`)))
+	require.NoError(t, err)
+	info := &relaycommon.RelayInfo{
+		IsStream:    true,
+		ChannelMeta: &relaycommon.ChannelMeta{},
+	}
+	info.SetFirstProgressTimeoutForTest(200 * time.Millisecond)
+
+	started := time.Now()
+	resp, err := doRequest(ctx, req, info)
+	if resp != nil && resp.Body != nil {
+		_ = resp.Body.Close()
+	}
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "no HTTP status before the first-progress timeout")
+	assert.Less(t, time.Since(started), 2*time.Second)
+}
+
+func TestDoRequestStreamStatusTimeoutLeavesAFastBodyReadable(t *testing.T) {
+	service.InitHttpClient()
+	gin.SetMode(gin.TestMode)
+
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = io.WriteString(w, "data: hi\n\n")
+	}))
+	t.Cleanup(upstream.Close)
+
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	ctx.Request = httptest.NewRequest(http.MethodPost, "/v1/messages", nil)
+	req, err := http.NewRequest(http.MethodPost, upstream.URL, bytes.NewReader([]byte(`{"stream":true}`)))
+	require.NoError(t, err)
+	info := &relaycommon.RelayInfo{
+		IsStream:    true,
+		ChannelMeta: &relaycommon.ChannelMeta{},
+	}
+	info.SetFirstProgressTimeoutForTest(2 * time.Second)
+
+	resp, err := doRequest(ctx, req, info)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Equal(t, "data: hi\n\n", string(body))
 }

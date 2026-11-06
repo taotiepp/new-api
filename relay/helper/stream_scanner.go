@@ -128,9 +128,11 @@ func StreamScannerHandler(c *gin.Context, resp *http.Response, info *relaycommon
 	logger.LogDebug(c, "relay max idle conns per host: %d", common.RelayMaxIdleConnsPerHost)
 	logger.LogDebug(c, "streaming timeout seconds: %d", int64(streamingTimeout.Seconds()))
 	if firstProgressEnabled {
+		// The status-code wait already used this allowance and has stopped.
+		// Start a fresh window for the first packet.
 		firstProgressTimer = time.NewTimer(firstProgressTimeout)
 		firstProgressC = firstProgressTimer.C
-		logger.LogDebug(c, "first progress timeout seconds: %d, scanned prompt tokens: %d", int64(firstProgressTimeout.Seconds()), info.GetFirstProgressPromptTokens())
+		logger.LogDebug(c, "first packet timeout seconds: %d, scanned prompt tokens: %d", int64(firstProgressTimeout.Seconds()), info.GetFirstProgressPromptTokens())
 	}
 	logger.LogDebug(c, "ping interval seconds: %d", int64(pingInterval.Seconds()))
 
