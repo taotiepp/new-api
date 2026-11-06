@@ -12,6 +12,7 @@ import (
 // FirstProgressTimeout is the deadline for the first text, reasoning, or tool
 // output on a streaming response. It is disabled unless an administrator turns
 // it on. promptTokens is a character scan of the prompt, not a tokenizer count.
+// The divisor is the assumed prefill speed in input tokens per second.
 // The result is also clamped to STREAMING_TIMEOUT.
 func FirstProgressTimeout(promptTokens int, effort string) (time.Duration, bool) {
 	setting := GetGeneralSetting()
@@ -88,7 +89,7 @@ func ValidateFirstProgressOption(key, value string) error {
 		}
 		next.FirstProgressBaseSeconds = parsed
 	case "first_progress_input_token_divisor":
-		parsed, err := parsePositiveSeconds(value, "输入 token 除数")
+		parsed, err := parsePositiveSeconds(value, "预填每秒 token 数")
 		if err != nil {
 			return err
 		}
@@ -124,7 +125,7 @@ func ValidateFirstProgressOption(key, value string) error {
 		return nil
 	}
 	if next.FirstProgressBaseSeconds < 1 || next.FirstProgressInputTokenDivisor < 1 || next.FirstProgressCapSeconds < 1 {
-		return fmt.Errorf("启用首个进展时限时，基础秒数、输入 token 除数和上限秒数都必须大于 0")
+		return fmt.Errorf("启用首个进展时限时，基础秒数、预填每秒 token 数和上限秒数都必须大于 0")
 	}
 	if next.FirstProgressCapSeconds < next.FirstProgressBaseSeconds {
 		return fmt.Errorf("首个进展上限不能小于基础秒数")

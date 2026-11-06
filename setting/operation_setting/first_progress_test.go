@@ -65,6 +65,33 @@ func TestFirstProgressTimeoutFormula(t *testing.T) {
 	assert.Equal(t, 30*time.Second, timeout)
 }
 
+func TestFirstProgressTimeoutCoversSlowPrefill(t *testing.T) {
+	original := generalSetting
+	oldStreamingTimeout := constant.StreamingTimeout
+	t.Cleanup(func() {
+		generalSetting = original
+		constant.StreamingTimeout = oldStreamingTimeout
+	})
+	constant.StreamingTimeout = 300
+	generalSetting.FirstProgressTimeoutEnabled = true
+	generalSetting.FirstProgressBaseSeconds = 20
+	generalSetting.FirstProgressInputTokenDivisor = 300
+	generalSetting.FirstProgressCapSeconds = 300
+	generalSetting.FirstProgressEffortLowSeconds = 0
+	generalSetting.FirstProgressEffortMediumSeconds = 15
+	generalSetting.FirstProgressEffortHighSeconds = 30
+
+	// 78,907 input tokens produced a first token at 179s on a slow model.
+	timeout, ok := FirstProgressTimeout(78907, "")
+	require.True(t, ok)
+	assert.Equal(t, 283*time.Second, timeout)
+	assert.Greater(t, timeout, 179*time.Second)
+
+	timeout, ok = FirstProgressTimeout(78907, "max")
+	require.True(t, ok)
+	assert.Equal(t, 300*time.Second, timeout)
+}
+
 func TestValidateFirstProgressOption(t *testing.T) {
 	original := generalSetting
 	oldStreamingTimeout := constant.StreamingTimeout

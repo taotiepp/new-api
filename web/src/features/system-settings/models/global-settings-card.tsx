@@ -482,7 +482,7 @@ export function GlobalSettingsCard({ defaultValues }: GlobalSettingsCardProps) {
                   <FormLabel>{t('First-progress timeout')}</FormLabel>
                   <FormDescription>
                     {t(
-                      'Before any text, reasoning, or tool output, fail the stream after the minimum of the cap and base plus input tokens divided by the divisor plus reasoning-effort seconds. Retry only if the client has not received any response bytes.'
+                      'Before any text, reasoning, or tool output, fail the stream after the minimum of the cap and base plus input tokens divided by the prefill speed plus reasoning-effort seconds. Retry only if the client has not received any response bytes.'
                     )}
                   </FormDescription>
                 </SettingsSwitchContent>
@@ -532,7 +532,7 @@ export function GlobalSettingsCard({ defaultValues }: GlobalSettingsCardProps) {
             name='general_setting.first_progress_input_token_divisor'
             render={({ field }) => (
               <FormItem>
-                <FormLabel>{t('Input token divisor')}</FormLabel>
+                <FormLabel>{t('Prefill tokens per second')}</FormLabel>
                 <FormControl>
                   <Input
                     type='number'
@@ -552,7 +552,7 @@ export function GlobalSettingsCard({ defaultValues }: GlobalSettingsCardProps) {
                 </FormControl>
                 <FormDescription>
                   {t(
-                    'Add one second for each group of this many estimated input tokens.'
+                    'Assumed input-token prefill speed. One second is allowed for each group of this many tokens. Use a lower value for slower models.'
                   )}
                 </FormDescription>
                 <FormMessage />
