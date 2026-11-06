@@ -38,6 +38,13 @@ export const createModelPricingSchema = (t: (key: string) => string) =>
     imageRatio: z.string().optional(),
     audioRatio: z.string().optional(),
     audioCompletionRatio: z.string().optional(),
+    prefillTokensPerSecond: z
+      .string()
+      .optional()
+      .refine((value) => {
+        const text = value?.trim() ?? ''
+        return text === '' || /^[1-9]\d*$/.test(text)
+      }, t('Prefill speed must be a positive integer.')),
   })
 
 export type ModelPricingFormValues = z.infer<
@@ -64,6 +71,7 @@ export type ModelRatioData = {
   imageRatio?: string
   audioRatio?: string
   audioCompletionRatio?: string
+  prefillTokensPerSecond?: string
   billingMode?: PricingMode
   billingExpr?: string
   requestRuleExpr?: string

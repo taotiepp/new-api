@@ -67,7 +67,10 @@ type ModelFormValues = {
 type ModelRatioFormProps = {
   form: UseFormReturn<ModelFormValues>
   savedValues: ModelFormValues
-  onSave: (values: ModelFormValues) => Promise<void>
+  onSave: (
+    values: ModelFormValues,
+    prefillEdits?: Record<string, number | null>
+  ) => Promise<void>
   onReset: () => void
   isSaving: boolean
   isResetting: boolean
@@ -180,6 +183,7 @@ export const ModelRatioForm = memo(function ModelRatioForm({
   const isUnsetVariant = variant === 'unset'
   const [editMode, setEditMode] = useState<'visual' | 'json'>('visual')
   const visualEditorRef = useRef<ModelRatioVisualEditorHandle>(null)
+  const prefillEdits = useRef<Record<string, number | null>>({})
 
   const enabledModelsQuery = useQuery({
     queryKey: ['enabled-models'],
@@ -219,6 +223,8 @@ export const ModelRatioForm = memo(function ModelRatioForm({
   )
 
   const toggleEditMode = useCallback(() => {
+    const current = visualEditorRef.current?.prefillEdits()
+    if (current) Object.assign(prefillEdits.current, current)
     setEditMode((prev) => (prev === 'visual' ? 'json' : 'visual'))
   }, [])
 
@@ -228,7 +234,13 @@ export const ModelRatioForm = memo(function ModelRatioForm({
       if (committed === false) return
     }
 
-    await form.handleSubmit(onSave)()
+    const current = visualEditorRef.current?.prefillEdits()
+    if (current) Object.assign(prefillEdits.current, current)
+    await form.handleSubmit(async (values) => {
+      await onSave(values, { ...prefillEdits.current })
+      prefillEdits.current = {}
+      visualEditorRef.current?.clearPrefillEdits()
+    })()
   }, [editMode, form, onSave])
 
   return (
@@ -347,7 +359,13 @@ export const ModelRatioForm = memo(function ModelRatioForm({
             />
           </div>
         ) : (
-          <SettingsForm onSubmit={form.handleSubmit(onSave)}>
+          <SettingsForm
+            onSubmit={form.handleSubmit(async (values) => {
+              await onSave(values, { ...prefillEdits.current })
+              prefillEdits.current = {}
+              visualEditorRef.current?.clearPrefillEdits()
+            })}
+          >
             <div className='grid min-w-0 gap-x-5 gap-y-8 lg:grid-cols-2 2xl:grid-cols-3'>
               {modelJsonFields.map((config) => (
                 <ModelJsonTextareaField

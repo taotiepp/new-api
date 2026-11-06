@@ -62,7 +62,11 @@ export function ModelPricingPanel(props: {
       values['billing_setting.billing_expr'] =
         entry.effective['billing_setting.billing_expr']
     }
-    return pricingRow(entry.model_name, values)
+    const row = pricingRow(entry.model_name, values)
+    if (entry.prefill_tokens_per_second != null) {
+      row.prefillTokensPerSecond = String(entry.prefill_tokens_per_second)
+    }
+    return row
   }, [entry])
 
   useEffect(() => {
@@ -79,12 +83,16 @@ export function ModelPricingPanel(props: {
     try {
       const draft = reset ? null : await editor.current?.commitDraft()
       if (!reset && !draft) return
+      const speedText = draft?.prefillTokensPerSecond?.trim() ?? ''
       await save.mutateAsync([
         {
           model_name: entry.model_name,
           expected_version: entry.version,
           pricing: draft ? pricingFromDraft(draft) : {},
           reset,
+          update_prefill: !reset,
+          prefill_tokens_per_second:
+            speedText === '' ? null : Number(speedText),
         },
       ])
       const refreshed = await query.refetch()

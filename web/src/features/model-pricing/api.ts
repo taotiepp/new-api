@@ -43,6 +43,7 @@ export type ModelPricingEntry = {
   configured: PricingValues
   effective: PricingValues
   usage_schema?: BillingUsageSchema
+  prefill_tokens_per_second?: number | null
 }
 
 export type ModelPricingConfig = {
@@ -55,6 +56,8 @@ export type ModelPricingChange = {
   expected_version: string
   pricing: PricingValues
   reset?: boolean
+  update_prefill?: boolean
+  prefill_tokens_per_second?: number | null
 }
 
 export function useCanEditModelPricing() {
@@ -146,4 +149,29 @@ export function buildPricingChanges(
     })
   }
   return changes
+}
+
+export function mergePrefillEdits(
+  changes: ModelPricingChange[],
+  edits: Record<string, number | null>,
+  snapshot: ModelPricingConfig
+): ModelPricingChange[] {
+  const next = changes.map((change) => ({ ...change }))
+  for (const [name, speed] of Object.entries(edits)) {
+    const existing = next.find((change) => change.model_name === name)
+    if (existing) {
+      existing.update_prefill = true
+      existing.prefill_tokens_per_second = speed
+      continue
+    }
+    const entry = snapshot.entries.find((item) => item.model_name === name)
+    next.push({
+      model_name: name,
+      expected_version: entry?.version ?? snapshot.empty_version,
+      pricing: { ...(entry?.configured) },
+      update_prefill: true,
+      prefill_tokens_per_second: speed,
+    })
+  }
+  return next
 }

@@ -15,6 +15,12 @@ import (
 // The divisor is the assumed prefill speed in input tokens per second.
 // The result is also clamped to STREAMING_TIMEOUT.
 func FirstProgressTimeout(promptTokens int, effort string) (time.Duration, bool) {
+	return FirstProgressTimeoutForModel(promptTokens, effort, "")
+}
+
+// FirstProgressTimeoutForModel uses the model's prefill speed when one is
+// configured, and the global speed otherwise.
+func FirstProgressTimeoutForModel(promptTokens int, effort, model string) (time.Duration, bool) {
 	setting := GetGeneralSetting()
 	if setting == nil || !setting.firstProgressConfigured() {
 		return 0, false
@@ -22,8 +28,12 @@ func FirstProgressTimeout(promptTokens int, effort string) (time.Duration, bool)
 	if promptTokens < 0 {
 		promptTokens = 0
 	}
+	divisor := setting.FirstProgressInputTokenDivisor
+	if speed, ok := ModelPrefillTokensPerSecond(model); ok {
+		divisor = speed
+	}
 	seconds := int64(setting.FirstProgressBaseSeconds) +
-		int64(promptTokens)/int64(setting.FirstProgressInputTokenDivisor) +
+		int64(promptTokens)/int64(divisor) +
 		int64(setting.effortSeconds(effort))
 	if seconds > int64(setting.FirstProgressCapSeconds) {
 		seconds = int64(setting.FirstProgressCapSeconds)

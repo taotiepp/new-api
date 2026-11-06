@@ -16,6 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { useQueryClient } from '@tanstack/react-query'
 import type {
   ColumnFiltersState,
   OnChangeFn,
@@ -47,7 +48,10 @@ import {
   useDataTable,
 } from '@/components/data-table'
 import { Button } from '@/components/ui/button'
-import { useModelPricing } from '@/features/model-pricing/api'
+import {
+  useModelPricing,
+  type ModelPricingConfig,
+} from '@/features/model-pricing/api'
 import {
   applyPricingDraft,
   pricingOptions,
@@ -105,6 +109,8 @@ type ModelRatioVisualEditorProps = {
 
 export type ModelRatioVisualEditorHandle = {
   commitOpenEditor: () => Promise<boolean>
+  prefillEdits: () => Record<string, number | null>
+  clearPrefillEdits: () => void
 }
 
 const STORAGE_KEY = 'model-ratio-column-visibility'
@@ -144,6 +150,8 @@ const ModelRatioVisualEditorComponent = forwardRef<
   ref
 ) {
   const { t } = useTranslation()
+  const queryClient = useQueryClient()
+  const prefillEdits = useRef<Record<string, number | null>>({})
   const { models: pricingModels } = usePricingData()
   const isMobile = useMediaQuery('(max-width: 767px)')
   const [sheetOpen, setSheetOpen] = useState(false)
@@ -328,6 +336,12 @@ const ModelRatioVisualEditorComponent = forwardRef<
       } else if (editableModel.price && editableModel.price !== '') {
         editBillingMode = 'per-request'
       }
+      const snapshot = queryClient.getQueryData<ModelPricingConfig>([
+        'model-pricing-config',
+      ])
+      const speed = snapshot?.entries.find(
+        (entry) => entry.model_name === editableModel.name
+      )?.prefill_tokens_per_second
       setEditData({
         name: editableModel.name,
         price: editableModel.price,
@@ -341,11 +355,12 @@ const ModelRatioVisualEditorComponent = forwardRef<
         billingMode: editBillingMode,
         billingExpr: editableModel.billingExpr,
         requestRuleExpr: editableModel.requestRuleExpr,
+        prefillTokensPerSecond: speed == null ? '' : String(speed),
       })
       setEditorOpen(true)
       if (isMobile) setSheetOpen(true)
     },
-    [isMobile]
+    [isMobile, queryClient]
   )
 
   const handleAdd = useCallback(() => {
@@ -525,6 +540,13 @@ const ModelRatioVisualEditorComponent = forwardRef<
         BillingExpr: billingExpr,
       })
       const updated = applyPricingDraft(options, data, targetNames)
+      if (data.prefillTokensPerSecond !== undefined) {
+        const text = data.prefillTokensPerSecond.trim()
+        const speed = text === '' ? null : Number(text)
+        for (const name of targetNames) {
+          prefillEdits.current[name] = speed
+        }
+      }
       for (const [key, value] of Object.entries(updated)) onChange(key, value)
     },
     [
@@ -589,6 +611,10 @@ const ModelRatioVisualEditorComponent = forwardRef<
         persistPricingData(data)
         setEditData(data)
         return true
+      },
+      prefillEdits: () => ({ ...prefillEdits.current }),
+      clearPrefillEdits: () => {
+        prefillEdits.current = {}
       },
     }),
     [editorOpen, persistPricingData]

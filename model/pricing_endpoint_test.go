@@ -7,6 +7,7 @@ import (
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/relaykit/dto"
+	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -291,4 +292,47 @@ func TestCacheUpdateChannelSyncsAdvancedCustomConfig(t *testing.T) {
 	CacheUpdateChannel(channel)
 
 	assert.Nil(t, channel2advancedCustomConfig[401])
+}
+
+func TestModelPricingStoresPrefillSpeed(t *testing.T) {
+	require.NoError(t, DB.AutoMigrate(&Option{}))
+	previousMap := common.OptionMap
+	common.OptionMap = map[string]string{}
+	t.Cleanup(func() {
+		require.NoError(t, DB.Exec("DELETE FROM options").Error)
+		require.NoError(t, operation_setting.LoadModelPrefillTokensPerSecond("{}"))
+		common.OptionMap = previousMap
+	})
+
+	snapshot, err := GetModelPricingSnapshot([]string{"prefill-model"})
+	require.NoError(t, err)
+	require.Len(t, snapshot.Entries, 1)
+	assert.Nil(t, snapshot.Entries[0].PrefillTokensPerSecond)
+
+	speed := 120
+	require.NoError(t, UpdateModelPricing([]ModelPricingChange{{
+		ModelName:              "prefill-model",
+		ExpectedVersion:        snapshot.Entries[0].Version,
+		Pricing:                PricingValues{"ModelPrice": float64(1)},
+		UpdatePrefill:          true,
+		PrefillTokensPerSecond: &speed,
+	}}))
+
+	stored, ok := operation_setting.ModelPrefillTokensPerSecond("prefill-model")
+	require.True(t, ok)
+	assert.Equal(t, 120, stored)
+
+	next, err := GetModelPricingSnapshot([]string{"prefill-model"})
+	require.NoError(t, err)
+	require.NotNil(t, next.Entries[0].PrefillTokensPerSecond)
+	assert.Equal(t, 120, *next.Entries[0].PrefillTokensPerSecond)
+
+	require.NoError(t, UpdateModelPricing([]ModelPricingChange{{
+		ModelName:       "prefill-model",
+		ExpectedVersion: next.Entries[0].Version,
+		Pricing:         PricingValues{"ModelPrice": float64(1)},
+		UpdatePrefill:   true,
+	}}))
+	_, ok = operation_setting.ModelPrefillTokensPerSecond("prefill-model")
+	assert.False(t, ok)
 }

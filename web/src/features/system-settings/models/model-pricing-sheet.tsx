@@ -223,6 +223,7 @@ export const ModelPricingEditorPanel = forwardRef<
       imageRatio: '',
       audioRatio: '',
       audioCompletionRatio: '',
+      prefillTokensPerSecond: '',
     },
   })
   const watchedValues = form.watch()
@@ -279,6 +280,7 @@ export const ModelPricingEditorPanel = forwardRef<
         imageRatio: editData.imageRatio || '',
         audioRatio: editData.audioRatio || '',
         audioCompletionRatio: editData.audioCompletionRatio || '',
+        prefillTokensPerSecond: editData.prefillTokensPerSecond || '',
       })
       let nextPricingMode: PricingMode = 'per-token'
       if (editData.billingMode === 'tiered_expr') {
@@ -300,6 +302,7 @@ export const ModelPricingEditorPanel = forwardRef<
         imageRatio: '',
         audioRatio: '',
         audioCompletionRatio: '',
+        prefillTokensPerSecond: '',
       })
       setPricingMode('per-token')
       setBillingExpr('')
@@ -593,6 +596,7 @@ export const ModelPricingEditorPanel = forwardRef<
         imageRatio: values.imageRatio || '',
         audioRatio: values.audioRatio || '',
         audioCompletionRatio: values.audioCompletionRatio || '',
+        prefillTokensPerSecond: values.prefillTokensPerSecond?.trim() || '',
       }
 
       if (pricingMode === 'tiered_expr') {
@@ -706,6 +710,33 @@ export const ModelPricingEditorPanel = forwardRef<
                     )}
                   />
                 )}
+
+                <FormField
+                  control={form.control}
+                  name='prefillTokensPerSecond'
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{t('Prefill tokens per second')}</FormLabel>
+                      <FormControl>
+                        <Input
+                          type='number'
+                          min={1}
+                          step={1}
+                          placeholder={t('Global prefill speed')}
+                          value={field.value ?? ''}
+                          onChange={field.onChange}
+                          onBlur={field.onBlur}
+                          name={field.name}
+                          ref={field.ref}
+                        />
+                      </FormControl>
+                      <FormDescription>
+                        {t('Leave empty to use the global prefill speed.')}
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
                 <PricingCurrencySelector siteCurrency={siteCurrency} />
 

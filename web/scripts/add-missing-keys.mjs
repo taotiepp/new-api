@@ -9,25 +9,23 @@ function stableStringify(obj) {
 
 const newKeys = {
   en: {
-    'Assumed input-token prefill speed. One second is allowed for each group of this many tokens. Use a lower value for slower models.':
-      'Assumed input-token prefill speed. One second is allowed for each group of this many tokens. Use a lower value for slower models.',
-    'Before any text, reasoning, or tool output, fail the stream after the minimum of the cap and base plus input tokens divided by the prefill speed plus reasoning-effort seconds. Retry only if the client has not received any response bytes.':
-      'Before any text, reasoning, or tool output, fail the stream after the minimum of the cap and base plus input tokens divided by the prefill speed plus reasoning-effort seconds. Retry only if the client has not received any response bytes.',
-    'Prefill tokens per second': 'Prefill tokens per second',
+    'Global prefill speed': 'Global prefill speed',
+    'Leave empty to use the global prefill speed.':
+      'Leave empty to use the global prefill speed.',
+    'Prefill speed must be a positive integer.':
+      'Prefill speed must be a positive integer.',
   },
   zh: {
-    'Assumed input-token prefill speed. One second is allowed for each group of this many tokens. Use a lower value for slower models.':
-      '按这个速度消化输入 token，每这么多 token 允许 1 秒。模型越慢，这个值要设得越小。',
-    'Before any text, reasoning, or tool output, fail the stream after the minimum of the cap and base plus input tokens divided by the prefill speed plus reasoning-effort seconds. Retry only if the client has not received any response bytes.':
-      '在出现文本、推理或工具输出之前，按上限与“基础秒数 + 输入 token / 预填速度 + 推理强度附加秒数”中的较小值判定失败。只有客户端还没收到任何响应正文时才会重试。',
-    'Prefill tokens per second': '预填每秒 token 数',
+    'Global prefill speed': '全局预填速度',
+    'Leave empty to use the global prefill speed.':
+      '留空则使用全局预填速度。',
+    'Prefill speed must be a positive integer.': '预填速度必须是正整数。',
   },
   'zh-TW': {
-    'Assumed input-token prefill speed. One second is allowed for each group of this many tokens. Use a lower value for slower models.':
-      '按這個速度消化輸入 token，每這麼多 token 允許 1 秒。模型越慢，這個值要設得越小。',
-    'Before any text, reasoning, or tool output, fail the stream after the minimum of the cap and base plus input tokens divided by the prefill speed plus reasoning-effort seconds. Retry only if the client has not received any response bytes.':
-      '在出現文字、推理或工具輸出之前，按上限與「基礎秒數 + 輸入 token / 預填速度 + 推理強度附加秒數」中的較小值判定失敗。只有客戶端還沒收到任何回應正文時才會重試。',
-    'Prefill tokens per second': '預填每秒 token 數',
+    'Global prefill speed': '全域預填速度',
+    'Leave empty to use the global prefill speed.':
+      '留空則使用全域預填速度。',
+    'Prefill speed must be a positive integer.': '預填速度必須是正整數。',
   },
 }
 

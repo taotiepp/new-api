@@ -31,6 +31,7 @@ import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
   buildPricingChanges,
+  mergePrefillEdits,
   useModelPricing,
   useSaveModelPricing,
   type ModelPricingConfig,
@@ -358,7 +359,10 @@ export function RatioSettingsCard({
   }, [groupDefaults, groupForm])
 
   const saveModelRatios = useCallback(
-    async (values: ModelFormValues) => {
+    async (
+      values: ModelFormValues,
+      prefillEdits: Record<string, number | null> = {}
+    ) => {
       const normalized = {
         ModelPrice: normalizeJsonString(values.ModelPrice),
         ModelRatio: normalizeJsonString(values.ModelRatio),
@@ -375,11 +379,12 @@ export function RatioSettingsCard({
 
       if (!pricingBaseline) return
       try {
-        const changes = buildPricingChanges(
+        let changes = buildPricingChanges(
           pricingBaseline,
           pricingOptions(modelNormalizedDefaults.current),
           pricingOptions(normalized)
         )
+        changes = mergePrefillEdits(changes, prefillEdits, pricingBaseline)
         const visibilityChanged =
           normalized.ExposeRatioEnabled !==
           modelNormalizedDefaults.current.ExposeRatioEnabled

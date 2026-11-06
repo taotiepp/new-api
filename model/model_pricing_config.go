@@ -28,6 +28,10 @@ type ModelPricingChange struct {
 	ExpectedVersion string        `json:"expected_version"`
 	Pricing         PricingValues `json:"pricing"`
 	Reset           bool          `json:"reset,omitempty"`
+	// UpdatePrefill writes PrefillTokensPerSecond. A nil speed clears the
+	// model override so the global prefill speed applies.
+	UpdatePrefill          bool `json:"update_prefill,omitempty"`
+	PrefillTokensPerSecond *int `json:"prefill_tokens_per_second,omitempty"`
 }
 
 type ModelPricingEntry struct {
@@ -36,6 +40,8 @@ type ModelPricingEntry struct {
 	Configured  PricingValues                        `json:"configured"`
 	Effective   PricingValues                        `json:"effective"`
 	UsageSchema map[string]jsplugin.UsageFieldSchema `json:"usage_schema,omitempty"`
+	// PrefillTokensPerSecond overrides the global prefill speed for this model.
+	PrefillTokensPerSecond *int `json:"prefill_tokens_per_second,omitempty"`
 }
 
 type ModelPricingSnapshot struct {
@@ -176,6 +182,10 @@ func GetModelPricingSnapshot(names []string) (*ModelPricingSnapshot, error) {
 	if err != nil {
 		return nil, err
 	}
+	prefill, err := readPrefillMap(DB)
+	if err != nil {
+		return nil, err
+	}
 	if len(names) == 0 {
 		nameSet := make(map[string]bool)
 		for _, entries := range values {
@@ -195,7 +205,19 @@ func GetModelPricingSnapshot(names []string) (*ModelPricingSnapshot, error) {
 	generation := jsplugin.DefaultRegistry.Generation()
 	for _, name := range names {
 		configured := modelPricingValues(values, name)
-		entry := ModelPricingEntry{ModelName: name, Version: ModelPricingVersion(configured), Configured: configured, Effective: effectiveModelPricing(values, name)}
+		speed, hasPrefill := prefill[name]
+		var prefillSpeed *int
+		if hasPrefill {
+			copied := speed
+			prefillSpeed = &copied
+		}
+		entry := ModelPricingEntry{
+			ModelName:              name,
+			Version:                modelPricingEntryVersion(configured, prefillSpeed),
+			Configured:             configured,
+			Effective:              effectiveModelPricing(values, name),
+			PrefillTokensPerSecond: prefillSpeed,
+		}
 		if plugin, ok := generation.GetByModel(name); ok {
 			entry.UsageSchema = plugin.Meta.UsageSchema
 		} else if target, ok := ResolveTaskModelAlias(generation, name); ok {
@@ -294,19 +316,35 @@ func UpdateModelPricing(changes []ModelPricingChange) error {
 		if change.ExpectedVersion == "" {
 			return ErrModelPricingConflict
 		}
+		if change.UpdatePrefill && change.PrefillTokensPerSecond != nil && *change.PrefillTokensPerSecond < 1 {
+			return errors.New("预填每秒 token 数必须是正整数")
+		}
 		if err := ValidateModelPricing(change.ModelName, change.Pricing); err != nil {
 			return err
 		}
 	}
-	return mutateModelPricingOptions(func(_ *gorm.DB, values map[string]map[string]any) error {
+	var prefillRaw string
+	err := mutateModelPricingOptions(func(tx *gorm.DB, values map[string]map[string]any) error {
+		prefill, err := loadOrCreatePrefillMap(tx)
+		if err != nil {
+			return err
+		}
 		defaults := defaultPricingMaps()
 		for _, change := range changes {
-			if ModelPricingVersion(modelPricingValues(values, change.ModelName)) != change.ExpectedVersion {
+			currentPrefill := prefillPointer(prefill, change.ModelName)
+			if modelPricingEntryVersion(modelPricingValues(values, change.ModelName), currentPrefill) != change.ExpectedVersion {
 				return fmt.Errorf("%w: %s", ErrModelPricingConflict, change.ModelName)
 			}
 			pricing := change.Pricing
 			if change.Reset {
 				pricing = modelPricingValues(defaults, change.ModelName)
+				delete(prefill, change.ModelName)
+			} else if change.UpdatePrefill {
+				if change.PrefillTokensPerSecond == nil {
+					delete(prefill, change.ModelName)
+				} else {
+					prefill[change.ModelName] = *change.PrefillTokensPerSecond
+				}
 			}
 			for _, key := range modelPricingOptionKeys {
 				delete(values[key], change.ModelName)
@@ -315,8 +353,17 @@ func UpdateModelPricing(changes []ModelPricingChange) error {
 				}
 			}
 		}
-		return nil
+		encoded, err := common.Marshal(prefill)
+		if err != nil {
+			return err
+		}
+		prefillRaw = string(encoded)
+		return tx.Model(&Option{}).Where(commonKeyCol+" = ?", operation_setting.ModelPrefillOptionKey).Update("value", prefillRaw).Error
 	})
+	if err != nil {
+		return err
+	}
+	return updateOptionMap(operation_setting.ModelPrefillOptionKey, prefillRaw)
 }
 
 // UpdateModelPricingOptions keeps legacy single-option callers on the same
@@ -405,4 +452,77 @@ func mutateModelPricingOptions(mutate func(*gorm.DB, map[string]map[string]any) 
 	RefreshPricing()
 	ratio_setting.InvalidateExposedDataCache()
 	return nil
+}
+
+func modelPricingEntryVersion(values PricingValues, prefill *int) string {
+	if prefill == nil {
+		return ModelPricingVersion(values)
+	}
+	encoded, _ := common.Marshal(map[string]any{
+		"prefill_tokens_per_second": *prefill,
+		"pricing":                   values,
+	})
+	return fmt.Sprintf("%x", sha256.Sum256(encoded))
+}
+
+func prefillPointer(prefill map[string]int, name string) *int {
+	speed, ok := prefill[name]
+	if !ok {
+		return nil
+	}
+	return &speed
+}
+
+func readPrefillMap(db *gorm.DB) (map[string]int, error) {
+	var rows []Option
+	if err := db.Where(commonKeyCol+" = ?", operation_setting.ModelPrefillOptionKey).Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	if len(rows) == 0 {
+		return map[string]int{}, nil
+	}
+	if len(rows) > 1 {
+		return nil, fmt.Errorf("options table has duplicate %s", operation_setting.ModelPrefillOptionKey)
+	}
+	return parsePrefillMap(rows[0].Value)
+}
+
+func loadOrCreatePrefillMap(tx *gorm.DB) (map[string]int, error) {
+	var rows []Option
+	if err := lockForUpdate(tx).Where(commonKeyCol+" = ?", operation_setting.ModelPrefillOptionKey).Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	if len(rows) > 1 {
+		return nil, fmt.Errorf("options table has duplicate %s", operation_setting.ModelPrefillOptionKey)
+	}
+	if len(rows) == 0 {
+		row := Option{Key: operation_setting.ModelPrefillOptionKey, Value: "{}"}
+		if err := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&row).Error; err != nil {
+			return nil, err
+		}
+		rows = nil
+		if err := lockForUpdate(tx).Where(commonKeyCol+" = ?", operation_setting.ModelPrefillOptionKey).Find(&rows).Error; err != nil {
+			return nil, err
+		}
+		if len(rows) != 1 {
+			return nil, fmt.Errorf("failed to create %s", operation_setting.ModelPrefillOptionKey)
+		}
+	}
+	return parsePrefillMap(rows[0].Value)
+}
+
+func parsePrefillMap(raw string) (map[string]int, error) {
+	var entries map[string]any
+	if err := common.UnmarshalJsonStr(raw, &entries); err != nil || entries == nil {
+		return nil, fmt.Errorf("%s must be a JSON object", operation_setting.ModelPrefillOptionKey)
+	}
+	result := make(map[string]int, len(entries))
+	for name, value := range entries {
+		number, ok := value.(float64)
+		if !ok || number < 1 || number != float64(int(number)) {
+			return nil, errors.New("预填每秒 token 数必须是正整数")
+		}
+		result[name] = int(number)
+	}
+	return result, nil
 }

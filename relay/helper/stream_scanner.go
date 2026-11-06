@@ -87,7 +87,7 @@ func StreamScannerHandler(c *gin.Context, resp *http.Response, info *relaycommon
 	ctx, cancel := context.WithCancel(context.Background())
 
 	streamingTimeout := time.Duration(constant.StreamingTimeout) * time.Second
-	firstProgressTimeout, firstProgressEnabled := operation_setting.FirstProgressTimeout(info.GetFirstProgressPromptTokens(), info.GetReasoningEffort())
+	firstProgressTimeout, firstProgressEnabled := operation_setting.FirstProgressTimeoutForModel(info.GetFirstProgressPromptTokens(), info.GetReasoningEffort(), info.GetBillingModelName())
 	if override, ok := info.FirstProgressTimeoutOverride(); ok {
 		firstProgressTimeout = override
 		firstProgressEnabled = true

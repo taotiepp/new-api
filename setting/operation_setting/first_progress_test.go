@@ -92,6 +92,33 @@ func TestFirstProgressTimeoutCoversSlowPrefill(t *testing.T) {
 	assert.Equal(t, 300*time.Second, timeout)
 }
 
+func TestFirstProgressTimeoutUsesModelPrefillSpeed(t *testing.T) {
+	original := generalSetting
+	oldStreamingTimeout := constant.StreamingTimeout
+	t.Cleanup(func() {
+		generalSetting = original
+		constant.StreamingTimeout = oldStreamingTimeout
+		require.NoError(t, LoadModelPrefillTokensPerSecond("{}"))
+	})
+	constant.StreamingTimeout = 300
+	generalSetting.FirstProgressTimeoutEnabled = true
+	generalSetting.FirstProgressBaseSeconds = 20
+	generalSetting.FirstProgressInputTokenDivisor = 300
+	generalSetting.FirstProgressCapSeconds = 300
+	generalSetting.FirstProgressEffortLowSeconds = 0
+	generalSetting.FirstProgressEffortMediumSeconds = 15
+	generalSetting.FirstProgressEffortHighSeconds = 30
+	require.NoError(t, LoadModelPrefillTokensPerSecond(`{"slow-model":100}`))
+
+	timeout, ok := FirstProgressTimeoutForModel(1000, "", "slow-model")
+	require.True(t, ok)
+	assert.Equal(t, 30*time.Second, timeout)
+
+	timeout, ok = FirstProgressTimeoutForModel(1000, "", "other-model")
+	require.True(t, ok)
+	assert.Equal(t, 23*time.Second, timeout)
+}
+
 func TestValidateFirstProgressOption(t *testing.T) {
 	original := generalSetting
 	oldStreamingTimeout := constant.StreamingTimeout
