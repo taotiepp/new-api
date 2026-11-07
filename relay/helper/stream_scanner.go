@@ -97,6 +97,7 @@ func StreamScannerHandler(c *gin.Context, resp *http.Response, info *relaycommon
 		stopChan           = make(chan bool, 3) // 增加缓冲区避免阻塞
 		scanner            = NewStreamScanner(resp.Body)
 		ticker             = time.NewTicker(streamingTimeout)
+		realOutput         = make(chan struct{}, 1)
 		firstProgressTimer *time.Timer
 		firstProgressC     <-chan time.Time
 		pingTicker         *time.Ticker
@@ -105,6 +106,12 @@ func StreamScannerHandler(c *gin.Context, resp *http.Response, info *relaycommon
 		cleanupOnce        sync.Once
 		stopOnce           sync.Once
 	)
+	noteRealOutput := func() {
+		select {
+		case realOutput <- struct{}{}:
+		default:
+		}
+	}
 
 	stop := func() {
 		stopOnce.Do(func() {
@@ -266,7 +273,6 @@ func StreamScannerHandler(c *gin.Context, resp *http.Response, info *relaycommon
 			default:
 			}
 
-			ticker.Reset(streamingTimeout)
 			data := scanner.Text()
 			logger.LogDebug(c, "stream scanner data: %s", data)
 
@@ -284,6 +290,9 @@ func StreamScannerHandler(c *gin.Context, resp *http.Response, info *relaycommon
 			if !strings.HasPrefix(data, "[DONE]") {
 				info.SetFirstResponseTime()
 				info.ReceivedResponseCount++
+				if streamEventHasRealOutput(data) {
+					noteRealOutput()
+				}
 				if !info.DefersStreamProgress() {
 					info.MarkStreamProgress()
 				}
@@ -315,6 +324,9 @@ func StreamScannerHandler(c *gin.Context, resp *http.Response, info *relaycommon
 waitForStream:
 	for {
 		select {
+		case <-realOutput:
+			ticker.Reset(streamingTimeout)
+			continue
 		case <-ticker.C:
 			info.StreamStatus.SetEndReason(relaycommon.StreamEndReasonTimeout, nil)
 			break waitForStream

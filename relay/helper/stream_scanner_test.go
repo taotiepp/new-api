@@ -641,3 +641,104 @@ func TestStreamScannerHandler_StreamStatus_ReplacesPreInitialized(t *testing.T) 
 	assert.Equal(t, relaycommon.StreamEndReasonDone, info.StreamStatus.EndReason)
 	assert.Equal(t, 0, info.StreamStatus.TotalErrorCount())
 }
+
+func TestStreamEventHasRealOutput(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name string
+		data string
+		want bool
+	}{
+		{name: "text delta", data: `{"type":"response.output_text.delta","delta":"hello"}`, want: true},
+		{name: "reasoning delta", data: `{"type":"response.reasoning_summary_text.delta","delta":"think"}`, want: true},
+		{name: "tool arguments", data: `{"type":"response.function_call_arguments.delta","delta":"{\"q\":"}`, want: true},
+		{name: "claude text", data: `{"type":"content_block_delta","delta":{"type":"text_delta","text":"hi"}}`, want: true},
+		{name: "claude tool json", data: `{"type":"content_block_delta","delta":{"type":"input_json_delta","partial_json":"{"}}`, want: true},
+		{name: "chat content", data: `{"choices":[{"delta":{"content":"hi"}}]}`, want: true},
+		{name: "chat tool arguments", data: `{"choices":[{"delta":{"tool_calls":[{"function":{"arguments":"{}"}}]}}]}`, want: true},
+		{name: "keepalive", data: `{"type":"keepalive","sequence_number":5}`, want: false},
+		{name: "response created", data: `{"type":"response.created","response":{"output":[]}}`, want: false},
+		{name: "empty content part", data: `{"type":"response.content_part.added","part":{"text":"","type":"output_text"}}`, want: false},
+		{name: "placeholder space", data: `{"type":"response.output_text.delta","delta":" "}`, want: false},
+		{name: "zero width", data: "{\"type\":\"response.reasoning_summary_text.delta\",\"delta\":\"\\u200b\"}", want: false},
+		{name: "empty function call", data: `{"candidates":[{"content":{"parts":[{"functionCall":{"args":{}}}]}}]}`, want: false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			assert.Equal(t, tc.want, streamEventHasRealOutput(tc.data))
+		})
+	}
+}
+
+func TestStreamScannerHandler_IdleTimeoutIgnoresKeepalive(t *testing.T) {
+	oldTimeout := constant.StreamingTimeout
+	constant.StreamingTimeout = 1
+	t.Cleanup(func() { constant.StreamingTimeout = oldTimeout })
+
+	pr, pw := io.Pipe()
+	go func() {
+		for {
+			if _, err := fmt.Fprint(pw, "data: {\"type\":\"keepalive\"}\n\n"); err != nil {
+				return
+			}
+			time.Sleep(100 * time.Millisecond)
+		}
+	}()
+
+	c, resp, info := setupStreamTest(t, pr)
+	resp.Body = pr
+	started := time.Now()
+	done := make(chan struct{})
+	go func() {
+		StreamScannerHandler(c, resp, info, func(data string, sr *StreamResult) {})
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(3 * time.Second):
+		t.Fatal("keepalive kept the idle timeout alive")
+	}
+	assert.Less(t, time.Since(started), 2*time.Second)
+	require.NotNil(t, info.StreamStatus)
+	assert.Equal(t, relaycommon.StreamEndReasonTimeout, info.StreamStatus.EndReason)
+}
+
+func TestStreamScannerHandler_RealOutputResetsIdleTimeout(t *testing.T) {
+	oldTimeout := constant.StreamingTimeout
+	constant.StreamingTimeout = 1
+	t.Cleanup(func() { constant.StreamingTimeout = oldTimeout })
+
+	pr, pw := io.Pipe()
+	go func() {
+		fmt.Fprint(pw, "data: {\"type\":\"response.output_text.delta\",\"delta\":\"hi\"}\n\n")
+		time.Sleep(700 * time.Millisecond)
+		fmt.Fprint(pw, "data: {\"type\":\"response.output_text.delta\",\"delta\":\"there\"}\n\n")
+		time.Sleep(500 * time.Millisecond)
+		fmt.Fprint(pw, "data: {\"type\":\"response.output_text.delta\",\"delta\":\"again\"}\n\n")
+		time.Sleep(2 * time.Second)
+		_ = pw.Close()
+	}()
+
+	c, resp, info := setupStreamTest(t, pr)
+	resp.Body = pr
+	var count atomic.Int64
+	done := make(chan struct{})
+	go func() {
+		StreamScannerHandler(c, resp, info, func(data string, sr *StreamResult) {
+			count.Add(1)
+		})
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(4 * time.Second):
+		t.Fatal("real output did not keep the stream within the idle timeout")
+	}
+	assert.Equal(t, int64(3), count.Load())
+	require.NotNil(t, info.StreamStatus)
+	assert.Equal(t, relaycommon.StreamEndReasonTimeout, info.StreamStatus.EndReason)
+}
