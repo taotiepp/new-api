@@ -162,6 +162,9 @@ func appendStreamStatus(relayInfo *relaycommon.RelayInfo, other *model.LogOther)
 		streamInfo["errors"] = messages
 	}
 	other.SetPublic("stream_status", streamInfo)
+	if ss.EndReason == relaycommon.StreamEndReasonTimeout || ss.EndReason == relaycommon.StreamEndReasonClientGone {
+		other.SetAdmin(model.LogOtherAdminUpstreamBodyKey, ss.UpstreamBody())
+	}
 }
 
 func appendBillingInfo(relayInfo *relaycommon.RelayInfo, other *model.LogOther) {

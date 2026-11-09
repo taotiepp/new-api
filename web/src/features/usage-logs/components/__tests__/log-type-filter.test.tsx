@@ -128,3 +128,19 @@ it('marks only retired log types as deprecated while keeping historical filters 
     expect(router.state.location.search).toMatchObject({ type: ['7'], page: 1 })
   )
 })
+
+it('filters logs slower than the entered response time', async () => {
+  const router = await renderFilter()
+  await userEvent.click(screen.getByRole('button', { name: 'Expand' }))
+  await userEvent.type(
+    screen.getByRole('spinbutton', { name: 'Response time > (s)' }),
+    '480'
+  )
+  await userEvent.click(screen.getByRole('button', { name: 'Search' }))
+  await waitFor(() =>
+    expect(router.state.location.search).toMatchObject({
+      minUseTime: 480,
+      page: 1,
+    })
+  )
+})

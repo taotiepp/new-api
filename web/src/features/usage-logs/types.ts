@@ -54,6 +54,7 @@ export interface CommonLogFilters extends CommonFilters {
   username?: string
   requestId?: string
   upstreamRequestId?: string
+  minUseTime?: string
 }
 
 /**
@@ -413,6 +414,7 @@ export interface GetLogsParams {
   group?: string
   request_id?: string
   upstream_request_id?: string
+  min_use_time?: number
   user_id?: number
 }
 
@@ -438,6 +440,7 @@ export interface GetLogStatsParams {
   group?: string
   request_id?: string
   upstream_request_id?: string
+  min_use_time?: number
   user_id?: number
 }
 

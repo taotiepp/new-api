@@ -15,6 +15,7 @@ import (
 
 	"github.com/QuantumNous/new-api/constant"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
+	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
@@ -704,6 +705,12 @@ func TestStreamScannerHandler_IdleTimeoutIgnoresKeepalive(t *testing.T) {
 	assert.Less(t, time.Since(started), 2*time.Second)
 	require.NotNil(t, info.StreamStatus)
 	assert.Equal(t, relaycommon.StreamEndReasonTimeout, info.StreamStatus.EndReason)
+	assert.Contains(t, info.StreamStatus.UpstreamBody(), `"type":"keepalive"`)
+
+	info.IsStream = true
+	other := service.GenerateTextOtherInfo(c, info, 1, 1, 1, 0, 0, 0, 1)
+	assert.Contains(t, other.JSONString(), `"upstream_body"`)
+	assert.Contains(t, other.JSONString(), "keepalive")
 }
 
 func TestStreamScannerHandler_RealOutputResetsIdleTimeout(t *testing.T) {
@@ -741,4 +748,25 @@ func TestStreamScannerHandler_RealOutputResetsIdleTimeout(t *testing.T) {
 	assert.Equal(t, int64(3), count.Load())
 	require.NotNil(t, info.StreamStatus)
 	assert.Equal(t, relaycommon.StreamEndReasonTimeout, info.StreamStatus.EndReason)
+}
+
+func TestStreamFailureLogKeepsClientGoneBody(t *testing.T) {
+	t.Parallel()
+	recorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", nil)
+
+	info := &relaycommon.RelayInfo{
+		IsStream:     true,
+		ChannelMeta:  &relaycommon.ChannelMeta{},
+		StreamStatus: relaycommon.NewStreamStatus(),
+	}
+	info.StreamStatus.AppendUpstreamData(`{"delta":"hello"}`)
+	info.StreamStatus.SetEndReason(relaycommon.StreamEndReasonClientGone, fmt.Errorf("context canceled"))
+
+	other := service.GenerateTextOtherInfo(c, info, 1, 1, 1, 0, 0, 0, 1)
+	raw := other.JSONString()
+	assert.Contains(t, raw, `"end_reason":"client_gone"`)
+	assert.Contains(t, raw, `\"delta\":\"hello\"`)
+	assert.Contains(t, raw, `"upstream_body"`)
 }

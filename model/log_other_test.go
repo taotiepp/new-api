@@ -45,6 +45,21 @@ func TestLogOtherScopesAndMerges(t *testing.T) {
 	}`, other.JSONString())
 }
 
+func TestStreamFailureEndReason(t *testing.T) {
+	timeoutLog := NewLogOther()
+	timeoutLog.SetPublic("stream_status", map[string]any{"status": "error", "end_reason": "timeout"})
+	assert.Equal(t, "timeout", streamFailureEndReason(timeoutLog))
+
+	clientGoneLog := NewLogOther()
+	clientGoneLog.SetPublic("stream_status", map[string]any{"status": "error", "end_reason": "client_gone"})
+	assert.Equal(t, "client_gone", streamFailureEndReason(clientGoneLog))
+
+	normalLog := NewLogOther()
+	normalLog.SetPublic("stream_status", map[string]any{"status": "ok", "end_reason": "eof"})
+	assert.Empty(t, streamFailureEndReason(normalLog))
+	assert.Empty(t, streamFailureEndReason(nil))
+}
+
 func TestLogOtherRejectsSensitivePublicFields(t *testing.T) {
 	other := NewLogOther()
 

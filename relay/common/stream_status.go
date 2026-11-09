@@ -5,6 +5,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 )
 
 type StreamEndReason string
@@ -26,6 +27,11 @@ const (
 
 const maxStreamErrorEntries = 20
 
+// maxStreamUpstreamBodyBytes bounds the upstream SSE payloads kept for a
+// timeout or client-disconnect log. Further data is dropped, so the stored
+// body is the start of the response.
+const maxStreamUpstreamBodyBytes = 64 * 1024
+
 type StreamErrorEntry struct {
 	Message   string
 	Timestamp time.Time
@@ -39,6 +45,9 @@ type StreamStatus struct {
 	mu         sync.Mutex
 	Errors     []StreamErrorEntry
 	ErrorCount int
+
+	upstreamBody      strings.Builder
+	upstreamTruncated bool
 }
 
 func NewStreamStatus() *StreamStatus {
@@ -53,6 +62,68 @@ func (s *StreamStatus) SetEndReason(reason StreamEndReason, err error) {
 		s.EndReason = reason
 		s.EndError = err
 	})
+}
+
+// AppendUpstreamData keeps SSE payloads already read from upstream.
+// Once the cap is reached, later payloads are dropped.
+func (s *StreamStatus) AppendUpstreamData(line string) {
+	if s == nil || line == "" {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.upstreamTruncated {
+		return
+	}
+	extra := len(line)
+	if s.upstreamBody.Len() > 0 {
+		extra++
+	}
+	if s.upstreamBody.Len()+extra <= maxStreamUpstreamBodyBytes {
+		if s.upstreamBody.Len() > 0 {
+			s.upstreamBody.WriteByte('\n')
+		}
+		s.upstreamBody.WriteString(line)
+		return
+	}
+	s.upstreamTruncated = true
+	room := maxStreamUpstreamBodyBytes - s.upstreamBody.Len()
+	if s.upstreamBody.Len() > 0 {
+		if room <= 1 {
+			return
+		}
+		s.upstreamBody.WriteByte('\n')
+		room--
+	}
+	if len(line) > room {
+		line = line[:room]
+	}
+	s.upstreamBody.WriteString(trimTrailingPartialRune(line))
+}
+
+// UpstreamBody returns the captured payloads. A truncated body ends with "..."
+// so the log shows that later events were dropped.
+func (s *StreamStatus) UpstreamBody() string {
+	if s == nil {
+		return ""
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	body := s.upstreamBody.String()
+	if !s.upstreamTruncated {
+		return body
+	}
+	if body == "" {
+		return "..."
+	}
+	return body + "\n..."
+}
+
+func trimTrailingPartialRune(s string) string {
+	for len(s) > 0 && !utf8.ValidString(s) {
+		s = s[:len(s)-1]
+	}
+	return s
 }
 
 func (s *StreamStatus) RecordError(msg string) {

@@ -4834,6 +4834,7 @@
     "Responding...": "正在回覆...",
     "Response": "回應",
     "Response Time": "回應時間",
+    "Response time > (s)": "回應時間大於（秒）",
     "Response time: {{duration}}": "回應時間：{{duration}}",
     "Responses API Version": "回應 API 版本",
     "Restore default pricing": "還原預設定價",

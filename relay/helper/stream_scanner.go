@@ -288,6 +288,7 @@ func StreamScannerHandler(c *gin.Context, resp *http.Response, info *relaycommon
 				continue
 			}
 			if !strings.HasPrefix(data, "[DONE]") {
+				info.StreamStatus.AppendUpstreamData(data)
 				info.SetFirstResponseTime()
 				info.ReceivedResponseCount++
 				if streamEventHasRealOutput(data) {

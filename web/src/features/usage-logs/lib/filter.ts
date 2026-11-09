@@ -32,6 +32,19 @@ import type {
 // Filter Building Functions
 // ============================================================================
 
+export function parseMinUseSeconds(value: unknown): number | undefined {
+  if (typeof value === 'number') {
+    if (!Number.isSafeInteger(value) || value < 0) return undefined
+    return value
+  }
+  if (typeof value !== 'string') return undefined
+  const trimmed = value.trim()
+  if (!/^\d+$/.test(trimmed)) return undefined
+  const parsed = Number(trimmed)
+  if (!Number.isSafeInteger(parsed)) return undefined
+  return parsed
+}
+
 /**
  * Build search params from filters based on log category
  */
@@ -48,6 +61,7 @@ export function buildSearchParams(
   switch (logCategory) {
     case 'common': {
       const commonFilters = filters as CommonLogFilters
+      const minUseTime = parseMinUseSeconds(commonFilters.minUseTime)
       return {
         ...baseParams,
         ...(commonFilters.model && { model: commonFilters.model }),
@@ -58,6 +72,7 @@ export function buildSearchParams(
         ...(commonFilters.upstreamRequestId && {
           upstreamRequestId: commonFilters.upstreamRequestId,
         }),
+        ...(minUseTime !== undefined && { minUseTime }),
       }
     }
     case 'drawing': {

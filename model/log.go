@@ -147,6 +147,16 @@ const LogOtherAdminRetriedKey = "retried"
 // An empty string means the failure was read and the response was empty.
 const LogOtherAdminUpstreamBodyKey = "upstream_body"
 
+// applyMinUseTime keeps logs whose response time is greater than minUseTime
+// seconds. A negative value leaves the query unchanged, so zero still means
+// "slower than zero seconds".
+func applyMinUseTime(tx *gorm.DB, column string, minUseTime int) *gorm.DB {
+	if tx == nil || minUseTime < 0 {
+		return tx
+	}
+	return tx.Where(column+" > ?", minUseTime)
+}
+
 func excludeRetriedAttemptLogs(tx *gorm.DB, column string) *gorm.DB {
 	marker := `"` + LogOtherAdminRetriedKey + `":true`
 	return tx.Where("("+column+" IS NULL OR "+column+" NOT LIKE ?)", "%"+marker+"%")
@@ -353,9 +363,43 @@ type RecordConsumeLogParams struct {
 	Other            *LogOther `json:"other"`
 }
 
+// streamFailureEndReason reports timeout and client disconnects, which are
+// stored as error logs with the upstream body already attached to other.
+func streamFailureEndReason(other *LogOther) string {
+	if other == nil || other.public == nil {
+		return ""
+	}
+	raw, ok := other.public["stream_status"]
+	if !ok {
+		return ""
+	}
+	info, ok := raw.(map[string]any)
+	if !ok {
+		return ""
+	}
+	reason, _ := info["end_reason"].(string)
+	switch reason {
+	case "timeout", "client_gone":
+		return reason
+	default:
+		return ""
+	}
+}
+
 func RecordConsumeLog(c *gin.Context, userId int, params RecordConsumeLogParams) {
 	if !common.LogConsumeEnabled {
 		return
+	}
+	logType := LogTypeConsume
+	content := params.Content
+	if reason := streamFailureEndReason(params.Other); reason != "" {
+		logType = LogTypeError
+		prefix := "stream ended: reason=" + reason
+		if content == "" {
+			content = prefix
+		} else {
+			content = prefix + ", " + content
+		}
 	}
 	logger.LogInfo(c, fmt.Sprintf("record consume log: userId=%d, params=%s", userId, common.GetJsonString(params)))
 	username := c.GetString("username")
@@ -374,8 +418,8 @@ func RecordConsumeLog(c *gin.Context, userId int, params RecordConsumeLogParams)
 		UserId:           userId,
 		Username:         username,
 		CreatedAt:        createdAt,
-		Type:             LogTypeConsume,
-		Content:          params.Content,
+		Type:             logType,
+		Content:          content,
 		PromptTokens:     params.PromptTokens,
 		CompletionTokens: params.CompletionTokens,
 		TokenName:        params.TokenName,
@@ -479,7 +523,7 @@ func RecordTaskBillingLog(params RecordTaskBillingLogParams) {
 	}
 }
 
-func GetAllLogs(logType int, startTimestamp int64, endTimestamp int64, modelName string, username string, tokenName string, startIdx int, num int, channel int, group string, requestId string, upstreamRequestId string) (logs []*Log, total int64, err error) {
+func GetAllLogs(logType int, startTimestamp int64, endTimestamp int64, modelName string, username string, tokenName string, startIdx int, num int, channel int, group string, requestId string, upstreamRequestId string, minUseTime int) (logs []*Log, total int64, err error) {
 	var tx *gorm.DB
 	if logType == LogTypeUnknown {
 		tx = LOG_DB
@@ -502,6 +546,7 @@ func GetAllLogs(logType int, startTimestamp int64, endTimestamp int64, modelName
 	if upstreamRequestId != "" {
 		tx = tx.Where("logs.upstream_request_id = ?", upstreamRequestId)
 	}
+	tx = applyMinUseTime(tx, "logs.use_time", minUseTime)
 	if startTimestamp != 0 {
 		tx = tx.Where("logs.created_at >= ?", startTimestamp)
 	}
@@ -575,7 +620,7 @@ func GetAllLogs(logType int, startTimestamp int64, endTimestamp int64, modelName
 
 const logSearchCountLimit = 10000
 
-func GetUserLogs(userId int, logType int, startTimestamp int64, endTimestamp int64, modelName string, tokenName string, startIdx int, num int, group string, requestId string, upstreamRequestId string) (logs []*Log, total int64, err error) {
+func GetUserLogs(userId int, logType int, startTimestamp int64, endTimestamp int64, modelName string, tokenName string, startIdx int, num int, group string, requestId string, upstreamRequestId string, minUseTime int) (logs []*Log, total int64, err error) {
 	var tx *gorm.DB
 	if logType == LogTypeUnknown {
 		tx = LOG_DB.Where("logs.user_id = ?", userId)
@@ -595,6 +640,7 @@ func GetUserLogs(userId int, logType int, startTimestamp int64, endTimestamp int
 	if upstreamRequestId != "" {
 		tx = tx.Where("logs.upstream_request_id = ?", upstreamRequestId)
 	}
+	tx = applyMinUseTime(tx, "logs.use_time", minUseTime)
 	if startTimestamp != 0 {
 		tx = tx.Where("logs.created_at >= ?", startTimestamp)
 	}
@@ -637,7 +683,7 @@ type ChannelSettlementRow struct {
 	CostQuota int `json:"cost_quota"`
 }
 
-func SumUsedQuota(logType int, startTimestamp int64, endTimestamp int64, modelName string, username string, tokenName string, channel int, group string) (stat Stat, err error) {
+func SumUsedQuota(logType int, startTimestamp int64, endTimestamp int64, modelName string, username string, tokenName string, channel int, group string, minUseTime int) (stat Stat, err error) {
 	tx := LOG_DB.Table("logs").Select("COALESCE(sum(quota), 0) quota, COALESCE(sum(cost_quota), 0) cost_quota")
 
 	// 为rpm和tpm创建单独的查询
@@ -673,6 +719,8 @@ func SumUsedQuota(logType int, startTimestamp int64, endTimestamp int64, modelNa
 		tx = tx.Where(logGroupCol+" = ?", group)
 		rpmTpmQuery = rpmTpmQuery.Where(logGroupCol+" = ?", group)
 	}
+	tx = applyMinUseTime(tx, "use_time", minUseTime)
+	rpmTpmQuery = applyMinUseTime(rpmTpmQuery, "use_time", minUseTime)
 
 	tx = tx.Where("type = ?", LogTypeConsume)
 	rpmTpmQuery = rpmTpmQuery.Where("type = ?", LogTypeConsume)

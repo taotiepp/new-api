@@ -45,7 +45,7 @@ import { getUserGroups } from '@/lib/api'
 import { requireServerSuccess } from '@/lib/server-error-message'
 
 import { LOG_TYPE_ALL_VALUE, LOG_TYPE_FILTERS } from '../constants'
-import { buildSearchParams } from '../lib/filter'
+import { buildSearchParams, parseMinUseSeconds } from '../lib/filter'
 import { navigateToUsageLogsSection } from '../lib/logs-navigation'
 import { getDefaultTimeRange } from '../lib/utils'
 import type { CommonLogFilters } from '../types'
@@ -92,6 +92,7 @@ function buildSearchSourceKey(values: {
   username?: unknown
   requestId?: unknown
   upstreamRequestId?: unknown
+  minUseTime?: unknown
   type?: unknown
 }) {
   return [
@@ -104,6 +105,7 @@ function buildSearchSourceKey(values: {
     values.username,
     values.requestId,
     values.upstreamRequestId,
+    values.minUseTime,
     Array.isArray(values.type) ? values.type.join(',') : values.type,
   ]
     .map((value) => String(value ?? ''))
@@ -159,8 +161,10 @@ export function CommonLogsFilterBar<TData>(
       username: searchParams.username,
       requestId: searchParams.requestId,
       upstreamRequestId: searchParams.upstreamRequestId,
+      minUseTime: searchParams.minUseTime,
       type: searchParams.type,
     }
+    const minUseTime = parseMinUseSeconds(searchParams.minUseTime)
     const filters: CommonLogFilters = {
       startTime: searchParams.startTime
         ? new Date(searchParams.startTime)
@@ -194,6 +198,7 @@ export function CommonLogsFilterBar<TData>(
         typeof searchParams.upstreamRequestId === 'string'
           ? searchParams.upstreamRequestId || undefined
           : undefined,
+      minUseTime: minUseTime !== undefined ? String(minUseTime) : undefined,
     }
     return {
       sourceKey: buildSearchSourceKey(sourceValues),
@@ -210,6 +215,7 @@ export function CommonLogsFilterBar<TData>(
     searchParams.username,
     searchParams.requestId,
     searchParams.upstreamRequestId,
+    searchParams.minUseTime,
     searchParams.type,
   ])
   const [draft, setDraft] = useState<CommonLogDraft>(() => searchState)
@@ -291,7 +297,8 @@ export function CommonLogsFilterBar<TData>(
     !!filters.username ||
     !!filters.channel ||
     !!filters.requestId ||
-    !!filters.upstreamRequestId
+    !!filters.upstreamRequestId ||
+    parseMinUseSeconds(filters.minUseTime) !== undefined
 
   const hasTypeFilter = logType !== LOG_TYPE_ALL_VALUE
   const hasAdditionalFilters =
@@ -303,6 +310,9 @@ export function CommonLogsFilterBar<TData>(
     isAdmin ? filters.channel : undefined,
     filters.requestId,
     filters.upstreamRequestId,
+    parseMinUseSeconds(filters.minUseTime) !== undefined
+      ? filters.minUseTime
+      : undefined,
   ].filter(Boolean).length
   const sensitiveInputClass = sensitiveVisible
     ? undefined
@@ -501,6 +511,19 @@ export function CommonLogsFilterBar<TData>(
           placeholder={t('Upstream Request ID')}
           value={filters.upstreamRequestId || ''}
           onChange={(e) => handleChange('upstreamRequestId', e.target.value)}
+          onKeyDown={handleKeyDown}
+        />
+      </LogsFilterField>
+      <LogsFilterField>
+        <LogsFilterInput
+          type='number'
+          min={0}
+          step={1}
+          inputMode='numeric'
+          aria-label={t('Response time > (s)')}
+          placeholder={t('Response time > (s)')}
+          value={filters.minUseTime ?? ''}
+          onChange={(e) => handleChange('minUseTime', e.target.value)}
           onKeyDown={handleKeyDown}
         />
       </LogsFilterField>

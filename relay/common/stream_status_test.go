@@ -2,8 +2,10 @@ package common
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -180,4 +182,43 @@ func TestStreamStatus_Summary_NilSafe(t *testing.T) {
 	t.Parallel()
 	var s *StreamStatus
 	assert.Equal(t, "StreamStatus<nil>", s.Summary())
+}
+
+func TestStreamStatus_UpstreamBodyDropsTail(t *testing.T) {
+	t.Parallel()
+	s := NewStreamStatus()
+	s.AppendUpstreamData("head-kept")
+	chunk := strings.Repeat("a", 1024)
+	for i := range 80 {
+		s.AppendUpstreamData(fmt.Sprintf("line-%d-%s", i, chunk))
+	}
+	s.AppendUpstreamData("tail-dropped")
+
+	body := s.UpstreamBody()
+	assert.True(t, strings.HasPrefix(body, "head-kept\n"))
+	assert.True(t, strings.HasSuffix(body, "\n..."))
+	assert.NotContains(t, body, "tail-dropped")
+	stored := strings.TrimSuffix(body, "\n...")
+	assert.LessOrEqual(t, len(stored), maxStreamUpstreamBodyBytes)
+	assert.True(t, utf8.ValidString(stored))
+}
+
+func TestStreamStatus_UpstreamBodyKeepsValidPrefix(t *testing.T) {
+	t.Parallel()
+	s := NewStreamStatus()
+	s.AppendUpstreamData(strings.Repeat("你", maxStreamUpstreamBodyBytes))
+
+	body := s.UpstreamBody()
+	stored := strings.TrimSuffix(body, "\n...")
+	assert.True(t, strings.HasPrefix(stored, "你"))
+	assert.True(t, utf8.ValidString(stored))
+	assert.LessOrEqual(t, len(stored), maxStreamUpstreamBodyBytes)
+	assert.NotContains(t, stored, "...")
+}
+
+func TestStreamStatus_UpstreamBodyNilSafe(t *testing.T) {
+	t.Parallel()
+	var s *StreamStatus
+	s.AppendUpstreamData("ignored")
+	assert.Empty(t, s.UpstreamBody())
 }

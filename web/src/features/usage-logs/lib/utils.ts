@@ -39,6 +39,7 @@ import type {
   GetMidjourneyLogsParams,
   GetTaskLogsParams,
 } from '../types'
+import { parseMinUseSeconds } from './filter'
 
 export { buildQueryParams } from './query-params'
 
@@ -179,6 +180,8 @@ export function buildApiParams(config: {
     return undefined
   }
 
+  const minUseTime = parseMinUseSeconds(searchParams.minUseTime)
+
   // Build base params from search params
   const params: GetLogsParams = {
     p: page,
@@ -199,6 +202,7 @@ export function buildApiParams(config: {
     ...(searchParams.upstreamRequestId
       ? { upstream_request_id: String(searchParams.upstreamRequestId) }
       : {}),
+    ...(minUseTime !== undefined ? { min_use_time: minUseTime } : {}),
     ...buildTimeRangeParams(searchParams, false),
   }
 

@@ -255,3 +255,45 @@ func TestLogFormattingPreservesLargeIntegerLexemes(t *testing.T) {
 		assert.Equal(t, unprivileged, adminLogs[0].Other)
 	})
 }
+
+func TestGetLogsKeepsResponsesSlowerThanThreshold(t *testing.T) {
+	require.NoError(t, LOG_DB.AutoMigrate(&Log{}))
+	const username = "slow-response-filter"
+	const userID = 88001
+	require.NoError(t, LOG_DB.Where("username = ?", username).Delete(&Log{}).Error)
+	t.Cleanup(func() {
+		LOG_DB.Where("username = ?", username).Delete(&Log{})
+	})
+	require.NoError(t, LOG_DB.Create([]Log{
+		{UserId: userID, Username: username, Type: LogTypeConsume, ModelName: "m", UseTime: 0, Quota: 1},
+		{UserId: userID, Username: username, Type: LogTypeConsume, ModelName: "m", UseTime: 10, Quota: 10},
+		{UserId: userID, Username: username, Type: LogTypeConsume, ModelName: "m", UseTime: 480, Quota: 20},
+		{UserId: userID, Username: username, Type: LogTypeConsume, ModelName: "m", UseTime: 481, Quota: 30},
+	}).Error)
+
+	logs, total, err := GetAllLogs(LogTypeConsume, 0, 0, "", username, "", 0, 20, 0, "", "", "", 480)
+	require.NoError(t, err)
+	assert.EqualValues(t, 1, total)
+	require.Len(t, logs, 1)
+	assert.Equal(t, 481, logs[0].UseTime)
+
+	positive, positiveTotal, err := GetAllLogs(LogTypeConsume, 0, 0, "", username, "", 0, 20, 0, "", "", "", 0)
+	require.NoError(t, err)
+	assert.EqualValues(t, 3, positiveTotal)
+	assert.Len(t, positive, 3)
+
+	unfiltered, unfilteredTotal, err := GetAllLogs(LogTypeConsume, 0, 0, "", username, "", 0, 20, 0, "", "", "", -1)
+	require.NoError(t, err)
+	assert.EqualValues(t, 4, unfilteredTotal)
+	assert.Len(t, unfiltered, 4)
+
+	userLogs, userTotal, err := GetUserLogs(userID, LogTypeConsume, 0, 0, "", "", 0, 20, "", "", "", 480)
+	require.NoError(t, err)
+	assert.EqualValues(t, 1, userTotal)
+	require.Len(t, userLogs, 1)
+	assert.Equal(t, 481, userLogs[0].UseTime)
+
+	stat, err := SumUsedQuota(LogTypeConsume, 0, 0, "", username, "", 0, "", 480)
+	require.NoError(t, err)
+	assert.Equal(t, 30, stat.Quota)
+}

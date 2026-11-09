@@ -93,7 +93,7 @@ func TestProcessChannelErrorUsesSnapshotWithoutLeakingChannelMetadata(t *testing
 	assert.Equal(t, false, adminInfo[model.LogOtherAdminRetriedKey])
 	assert.Equal(t, `{"error":{"message":"original upstream failure"}}`, adminInfo[model.LogOtherAdminUpstreamBodyKey])
 
-	logs, total, err := model.GetUserLogs(7, model.LogTypeError, 0, 0, "", "", 0, 10, "", "", "")
+	logs, total, err := model.GetUserLogs(7, model.LogTypeError, 0, 0, "", "", 0, 10, "", "", "", -1)
 	require.NoError(t, err)
 	require.Equal(t, int64(1), total)
 	require.Len(t, logs, 1)
@@ -218,7 +218,7 @@ func TestRecordTerminalRelayErrorPersistsFailureReasonWithoutFlag(t *testing.T) 
 	require.True(t, ok)
 	assert.Equal(t, false, adminInfo[model.LogOtherAdminRetriedKey])
 
-	logs, total, err := model.GetUserLogs(9, model.LogTypeError, 0, 0, "", "", 0, 10, "", "", "")
+	logs, total, err := model.GetUserLogs(9, model.LogTypeError, 0, 0, "", "", 0, 10, "", "", "", -1)
 	require.NoError(t, err)
 	require.Equal(t, int64(1), total)
 	require.Len(t, logs, 1)
@@ -332,7 +332,7 @@ func TestRecordTerminalRelayErrorPersistsFinalFailureAfterRetriedAttempt(t *test
 	assert.Contains(t, stored[1].Other, `"retried":false`)
 	assert.Equal(t, "deepseek-v4.1-flash-1017", stored[1].ModelName)
 
-	logs, total, err := model.GetUserLogs(13, model.LogTypeError, 0, 0, "", "", 0, 10, "", "", "")
+	logs, total, err := model.GetUserLogs(13, model.LogTypeError, 0, 0, "", "", 0, 10, "", "", "", -1)
 	require.NoError(t, err)
 	require.Equal(t, int64(1), total)
 	require.Len(t, logs, 1)
@@ -439,7 +439,7 @@ func TestRetriedAttemptErrorLogIsHiddenFromUserLogs(t *testing.T) {
 	require.NoError(t, database.First(&stored).Error)
 	assert.Contains(t, stored.Other, `"retried":true`)
 
-	logs, total, err := model.GetUserLogs(12, model.LogTypeError, 0, 0, "", "", 0, 10, "", "", "")
+	logs, total, err := model.GetUserLogs(12, model.LogTypeError, 0, 0, "", "", 0, 10, "", "", "", -1)
 	require.NoError(t, err)
 	assert.Equal(t, int64(0), total)
 	assert.Empty(t, logs)
@@ -448,7 +448,7 @@ func TestRetriedAttemptErrorLogIsHiddenFromUserLogs(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, tokenLogs)
 
-	adminLogs, adminTotal, err := model.GetAllLogs(model.LogTypeError, 0, 0, "", "", "", 0, 10, 0, "", "", "")
+	adminLogs, adminTotal, err := model.GetAllLogs(model.LogTypeError, 0, 0, "", "", "", 0, 10, 0, "", "", "", -1)
 	require.NoError(t, err)
 	require.Equal(t, int64(1), adminTotal)
 	require.Len(t, adminLogs, 1)
