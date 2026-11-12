@@ -158,6 +158,74 @@ func TestProcessChannelErrorLogsEstimatedInputTokensOnStatusTimeout(t *testing.T
 	assert.Equal(t, "status_code=502, upstream stream produced no HTTP status before the first-progress timeout", stored.Content)
 }
 
+func TestProcessChannelErrorStoresTransportCauseInAdminUpstreamBody(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	previousDB, previousLogDB := model.DB, model.LOG_DB
+	previousRedisEnabled := common.RedisEnabled
+	previousMainDatabaseType := common.MainDatabaseType()
+	previousLogDatabaseType := common.LogDatabaseType()
+	previousErrorLogEnabled := constant.ErrorLogEnabled
+
+	database, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	require.NoError(t, err)
+	sqlDB, err := database.DB()
+	require.NoError(t, err)
+	sqlDB.SetMaxOpenConns(1)
+	require.NoError(t, database.AutoMigrate(&model.User{}, &model.Log{}))
+	model.DB, model.LOG_DB = database, database
+	common.RedisEnabled = false
+	common.SetDatabaseTypes(common.DatabaseTypeSQLite, common.DatabaseTypeSQLite)
+	constant.ErrorLogEnabled = true
+	t.Cleanup(func() {
+		model.DB, model.LOG_DB = previousDB, previousLogDB
+		common.RedisEnabled = previousRedisEnabled
+		common.SetDatabaseTypes(previousMainDatabaseType, previousLogDatabaseType)
+		constant.ErrorLogEnabled = previousErrorLogEnabled
+		require.NoError(t, sqlDB.Close())
+	})
+
+	require.NoError(t, database.Create(&model.User{Id: 10, Username: "transport-owner", Group: "default"}).Error)
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	ctx.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", nil)
+	ctx.Set("id", 10)
+	ctx.Set("username", "transport-owner")
+	ctx.Set("token_name", "neo")
+	ctx.Set("token_id", 13)
+	ctx.Set("original_model", "deepseek-v4.1-flash-1017")
+	ctx.Set("group", "deepseek")
+	common.SetContextKey(ctx, constant.ContextKeyRequestStartTime, time.Now().Add(-time.Minute))
+
+	transportErr := errors.New(`Post "https://api.example.com/v1/responses": context canceled`)
+	apiErr := types.NewError(transportErr, types.ErrorCodeDoRequestFailed, types.ErrOptionWithHideErrMsg("upstream error: do request failed"))
+	apiErr.SetUpstreamBody(transportErr.Error())
+	apiErr = types.NewOpenAIError(apiErr, types.ErrorCodeDoRequestFailed, http.StatusInternalServerError)
+	assert.Equal(t, "upstream error: do request failed", apiErr.Error())
+	assert.Equal(t, "upstream error: do request failed", apiErr.ToOpenAIError().Message)
+
+	processChannelError(ctx, types.ChannelError{ChannelId: 6, AutoBan: false}, apiErr, nil, false)
+
+	var stored model.Log
+	require.NoError(t, database.First(&stored).Error)
+	assert.Equal(t, "status_code=500, upstream error: do request failed", stored.Content)
+	storedOther, err := common.StrToMap(stored.Other)
+	require.NoError(t, err)
+	adminInfo, ok := storedOther["admin_info"].(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, transportErr.Error(), adminInfo[model.LogOtherAdminUpstreamBodyKey])
+
+	logs, total, err := model.GetUserLogs(10, model.LogTypeError, 0, 0, "", "", 0, 10, "", "", "", -1)
+	require.NoError(t, err)
+	require.Equal(t, int64(1), total)
+	require.Len(t, logs, 1)
+	assert.Equal(t, "status_code=500, upstream error: do request failed", logs[0].Content)
+	assert.NotContains(t, logs[0].Content, "context canceled")
+	assert.NotContains(t, logs[0].Content, "api.example.com")
+	userOther, err := common.StrToMap(logs[0].Other)
+	require.NoError(t, err)
+	assert.NotContains(t, userOther, "admin_info")
+}
+
 func TestRecordTerminalRelayErrorPersistsFailureReasonWithoutFlag(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	previousDB, previousLogDB := model.DB, model.LOG_DB

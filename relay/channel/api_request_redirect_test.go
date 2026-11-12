@@ -12,6 +12,7 @@ import (
 	"time"
 
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
+	"github.com/QuantumNous/new-api/relaykit/types"
 	"github.com/QuantumNous/new-api/service"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
@@ -87,6 +88,34 @@ func TestDoRequestReturnsUpstreamRedirectWithoutFollowing(t *testing.T) {
 	}
 
 	assert.Equal(t, originalRedirectPolicy, reflect.ValueOf(sharedClient.CheckRedirect).Pointer(), "the cached client must not be mutated")
+}
+
+func TestDoRequestStoresTransportErrorAsUpstreamBody(t *testing.T) {
+	service.InitHttpClient()
+	gin.SetMode(gin.TestMode)
+
+	upstream := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	upstream.Close()
+
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	ctx.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", nil)
+	req, err := http.NewRequest(http.MethodPost, upstream.URL, bytes.NewReader([]byte(`{}`)))
+	require.NoError(t, err)
+	info := &relaycommon.RelayInfo{ChannelMeta: &relaycommon.ChannelMeta{}}
+
+	resp, err := doRequest(ctx, req, info)
+	if resp != nil && resp.Body != nil {
+		_ = resp.Body.Close()
+	}
+	require.Error(t, err)
+	assert.Equal(t, "upstream error: do request failed", err.Error())
+
+	var apiErr *types.NewAPIError
+	require.ErrorAs(t, err, &apiErr)
+	require.True(t, apiErr.HasUpstreamBody())
+	assert.Contains(t, apiErr.UpstreamBody(), "connection refused")
+	assert.NotContains(t, err.Error(), "connection refused")
 }
 
 func TestDoRequestStreamStatusTimeoutCancelsHungUpstream(t *testing.T) {
