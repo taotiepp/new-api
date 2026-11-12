@@ -226,6 +226,60 @@ func TestProcessChannelErrorStoresTransportCauseInAdminUpstreamBody(t *testing.T
 	assert.NotContains(t, userOther, "admin_info")
 }
 
+func TestProcessChannelErrorRecordsEachAttemptDuration(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	previousDB, previousLogDB := model.DB, model.LOG_DB
+	previousRedisEnabled := common.RedisEnabled
+	previousMainDatabaseType := common.MainDatabaseType()
+	previousLogDatabaseType := common.LogDatabaseType()
+	previousErrorLogEnabled := constant.ErrorLogEnabled
+
+	database, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	require.NoError(t, err)
+	sqlDB, err := database.DB()
+	require.NoError(t, err)
+	sqlDB.SetMaxOpenConns(1)
+	require.NoError(t, database.AutoMigrate(&model.User{}, &model.Log{}))
+	model.DB, model.LOG_DB = database, database
+	common.RedisEnabled = false
+	common.SetDatabaseTypes(common.DatabaseTypeSQLite, common.DatabaseTypeSQLite)
+	constant.ErrorLogEnabled = true
+	t.Cleanup(func() {
+		model.DB, model.LOG_DB = previousDB, previousLogDB
+		common.RedisEnabled = previousRedisEnabled
+		common.SetDatabaseTypes(previousMainDatabaseType, previousLogDatabaseType)
+		constant.ErrorLogEnabled = previousErrorLogEnabled
+		require.NoError(t, sqlDB.Close())
+	})
+
+	require.NoError(t, database.Create(&model.User{Id: 11, Username: "retry-owner", Group: "default"}).Error)
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	ctx.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", nil)
+	ctx.Set("id", 11)
+	ctx.Set("username", "retry-owner")
+	ctx.Set("token_name", "neo")
+	ctx.Set("token_id", 14)
+	ctx.Set("original_model", "deepseek-v4.1-flash-1017")
+	ctx.Set("group", "deepseek")
+	common.SetContextKey(ctx, constant.ContextKeyRequestStartTime, time.Now().Add(-2*time.Minute))
+
+	apiErr := types.NewOpenAIError(errors.New("context canceled"), types.ErrorCodeDoRequestFailed, http.StatusInternalServerError)
+	common.SetContextKey(ctx, constant.ContextKeyRelayAttemptStartTime, time.Now().Add(-30*time.Second))
+	processChannelError(ctx, types.ChannelError{ChannelId: 8, AutoBan: false}, apiErr, nil, true)
+	common.SetContextKey(ctx, constant.ContextKeyRelayAttemptStartTime, time.Now().Add(-time.Second))
+	processChannelError(ctx, types.ChannelError{ChannelId: 8, AutoBan: false}, apiErr, nil, false)
+
+	var stored []model.Log
+	require.NoError(t, database.Order("id asc").Find(&stored).Error)
+	require.Len(t, stored, 2)
+	assert.GreaterOrEqual(t, stored[0].UseTime, 30)
+	assert.Less(t, stored[0].UseTime, 35)
+	assert.GreaterOrEqual(t, stored[1].UseTime, 1)
+	assert.Less(t, stored[1].UseTime, 5)
+	assert.NotEqual(t, stored[0].UseTime, stored[1].UseTime)
+}
+
 func TestRecordTerminalRelayErrorPersistsFailureReasonWithoutFlag(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	previousDB, previousLogDB := model.DB, model.LOG_DB

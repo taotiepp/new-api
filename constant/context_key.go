@@ -9,6 +9,9 @@ const (
 
 	ContextKeyOriginalModel    ContextKey = "original_model"
 	ContextKeyRequestStartTime ContextKey = "request_start_time"
+	// ContextKeyRelayAttemptStartTime marks when the current relay or task attempt began.
+	// Error logs use it so each retry records that attempt's own duration.
+	ContextKeyRelayAttemptStartTime ContextKey = "relay_attempt_start_time"
 
 	/* token related keys */
 	ContextKeyTokenUnlimited             ContextKey = "token_unlimited_quota"

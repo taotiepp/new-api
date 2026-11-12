@@ -239,6 +239,7 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 	}
 
 	for ; retryParam.GetRetry() <= common.RetryTimes+encryptedReasoningExtraRetry+responsesStreamExtraRetry; retryParam.IncreaseRetry() {
+		common.SetContextKey(c, constant.ContextKeyRelayAttemptStartTime, time.Now())
 		relayInfo.RetryIndex = retryParam.GetRetry()
 		channel, channelErr := getChannel(c, relayInfo, retryParam)
 		if channelErr != nil {
@@ -612,7 +613,10 @@ func recordRelayErrorLog(c *gin.Context, err *types.NewAPIError, channelId int, 
 	}
 	service.AppendRelayLogAdminInfo(c, relayInfo, other)
 	service.AppendTaskPluginContextAuditInfo(c, other)
-	startTime := common.GetContextKeyTime(c, constant.ContextKeyRequestStartTime)
+	startTime := common.GetContextKeyTime(c, constant.ContextKeyRelayAttemptStartTime)
+	if startTime.IsZero() {
+		startTime = common.GetContextKeyTime(c, constant.ContextKeyRequestStartTime)
+	}
 	if startTime.IsZero() {
 		startTime = time.Now()
 	}
@@ -835,6 +839,7 @@ func executeTaskSubmissionWith(
 	}
 
 	for ; retryParam.GetRetry() <= common.RetryTimes; retryParam.IncreaseRetry() {
+		common.SetContextKey(c, constant.ContextKeyRelayAttemptStartTime, time.Now())
 		stage = "select_channel"
 		if requestErr := c.Request.Context().Err(); requestErr != nil {
 			diagnostics.cancelled("before_attempt", retryParam.GetRetry()+1)
