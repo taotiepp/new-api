@@ -8,6 +8,34 @@ import (
 	"github.com/tidwall/gjson"
 )
 
+// StreamEventShowsWork reports whether an SSE payload is evidence the model is
+// working. Keepalive and session bookkeeping are ignored. Text, reasoning, and
+// tool events count only when they carry real content. Any other event type,
+// including ones added later, counts.
+func StreamEventShowsWork(data string) bool {
+	if strings.TrimSpace(data) == "" || !gjson.Valid(data) {
+		return false
+	}
+	if streamEventHasRealOutput(data) {
+		return true
+	}
+	switch gjson.Get(data, "type").String() {
+	case "", "ping", "keepalive",
+		"response.created", "response.queued", "response.in_progress",
+		"message_start", "content_block_start", "content_block_stop", "message_stop",
+		"response.output_text.delta",
+		"response.reasoning_text.delta",
+		"response.reasoning_summary_text.delta",
+		"response.function_call_arguments.delta",
+		"response.content_part.added",
+		"response.content_part.delta",
+		"content_block_delta":
+		return false
+	default:
+		return true
+	}
+}
+
 // streamEventHasRealOutput reports whether an SSE payload contains generated
 // text, reasoning, tool-call arguments, or a Claude thinking progress delta.
 // Keepalives, stream bookkeeping, and whitespace-only placeholders do not

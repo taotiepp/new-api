@@ -81,8 +81,8 @@ func (w *streamStatusWatch) stop() bool {
 	return false
 }
 
-// FirstProgressTimeoutError reports that the upstream stream produced no text,
-// reasoning, or tool output before the configured first-progress deadline.
+// FirstProgressTimeoutError reports that the upstream stream produced no model
+// work before the configured first-progress deadline.
 func FirstProgressTimeoutError(info *relaycommon.RelayInfo) *types.NewAPIError {
 	if info == nil || info.StreamStatus == nil {
 		return nil

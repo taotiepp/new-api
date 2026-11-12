@@ -122,7 +122,7 @@ func OaiResponsesStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp
 			return
 		}
 		writeEvent(streamResponse, data)
-		if responsesStreamEventReportsProgress(streamResponse) {
+		if helper.StreamEventShowsWork(data) {
 			sr.MarkProgress()
 		}
 		switch streamResponse.Type {
@@ -253,29 +253,6 @@ func markIncompleteResponsesStreamForRetry(c *gin.Context, info *relaycommon.Rel
 		}
 	}
 	common.SetContextKey(c, constant.ContextKeyRetryIncompleteResponsesStream, true)
-}
-
-func responsesStreamEventReportsProgress(streamResponse dto.ResponsesStreamResponse) bool {
-	switch streamResponse.Type {
-	case "response.completed", "response.done",
-		"response.output_text.done",
-		"response.function_call_arguments.delta",
-		"response.function_call_arguments.done",
-		"response.content_part.added",
-		"response.content_part.delta",
-		"response.content_part.done",
-		"response.reasoning_text.delta",
-		"response.reasoning_text.done",
-		"response.reasoning_summary_text.delta",
-		"response.reasoning_summary_text.done",
-		"response.image_generation_call.partial_image",
-		dto.ResponsesOutputTypeItemDone:
-		return true
-	case "response.output_text.delta":
-		return streamResponse.Delta != ""
-	default:
-		return false
-	}
 }
 
 func responsesStreamEventCommitsOutput(streamResponse dto.ResponsesStreamResponse) bool {

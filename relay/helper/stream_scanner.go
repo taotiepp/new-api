@@ -291,10 +291,8 @@ func StreamScannerHandler(c *gin.Context, resp *http.Response, info *relaycommon
 				info.StreamStatus.AppendUpstreamData(data)
 				info.SetFirstResponseTime()
 				info.ReceivedResponseCount++
-				if streamEventHasRealOutput(data) {
+				if StreamEventShowsWork(data) {
 					noteRealOutput()
-				}
-				if !info.DefersStreamProgress() {
 					info.MarkStreamProgress()
 				}
 
@@ -321,7 +319,7 @@ func StreamScannerHandler(c *gin.Context, resp *http.Response, info *relaycommon
 		info.StreamStatus.SetEndReason(relaycommon.StreamEndReasonEOF, nil)
 	})
 
-	// 主循环等待完成或超时。首个进展计时只在还没有文本、推理或工具输出时生效。
+	// 主循环等待完成或超时。首个进展计时只在还没有模型工作信号时生效。
 waitForStream:
 	for {
 		select {

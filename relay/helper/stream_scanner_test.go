@@ -676,6 +676,69 @@ func TestStreamEventHasRealOutput(t *testing.T) {
 	}
 }
 
+func TestStreamEventShowsWork(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name string
+		data string
+		want bool
+	}{
+		{name: "created", data: `{"type":"response.created","response":{"status":"queued","output":[]}}`, want: false},
+		{name: "queued", data: `{"type":"response.queued","response":{"status":"queued","output":[]}}`, want: false},
+		{name: "in progress", data: `{"type":"response.in_progress","response":{"status":"in_progress"}}`, want: false},
+		{name: "keepalive", data: `{"type":"keepalive","sequence_number":7}`, want: false},
+		{name: "ping", data: `{"type":"ping"}`, want: false},
+		{name: "empty text delta", data: `{"type":"response.output_text.delta","delta":" "}`, want: false},
+		{name: "text delta", data: `{"type":"response.output_text.delta","delta":"hi"}`, want: true},
+		{name: "thinking progress", data: `{"type":"content_block_delta","delta":{"type":"thinking_delta","thinking":"","estimated_tokens":50}}`, want: true},
+		{name: "compaction item", data: `{"type":"response.output_item.added","item":{"type":"compaction","encrypted_content":"abc"}}`, want: true},
+		{name: "compacting", data: `{"type":"response.compaction.compacting","item_id":"cmp_1"}`, want: true},
+		{name: "unknown event", data: `{"type":"response.future_work","sequence_number":3}`, want: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			assert.Equal(t, tc.want, StreamEventShowsWork(tc.data))
+		})
+	}
+}
+
+func TestStreamScannerHandler_CompactionCountsAsProgress(t *testing.T) {
+	oldTimeout := constant.StreamingTimeout
+	constant.StreamingTimeout = 30
+	t.Cleanup(func() { constant.StreamingTimeout = oldTimeout })
+
+	pr, pw := io.Pipe()
+	go func() {
+		fmt.Fprint(pw, "data: {\"type\":\"response.created\",\"response\":{\"status\":\"queued\"}}\n\n")
+		fmt.Fprint(pw, "data: {\"type\":\"response.compaction.compacting\",\"item_id\":\"cmp_1\"}\n\n")
+		time.Sleep(2 * time.Second)
+		_ = pw.Close()
+	}()
+
+	c, resp, info := setupStreamTest(t, pr)
+	resp.Body = pr
+	info.HoldStreamProgressUntilMarked()
+	info.SetFirstProgressTimeoutForTest(time.Second)
+
+	done := make(chan struct{})
+	go func() {
+		StreamScannerHandler(c, resp, info, func(data string, sr *StreamResult) {})
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(4 * time.Second):
+		t.Fatal("timed out waiting for compaction to keep the stream open")
+	}
+
+	require.NotNil(t, info.StreamStatus)
+	assert.Equal(t, relaycommon.StreamEndReasonEOF, info.StreamStatus.EndReason)
+	assert.True(t, info.StreamProgressSeen())
+}
+
 func TestStreamScannerHandler_IdleTimeoutIgnoresKeepalive(t *testing.T) {
 	oldTimeout := constant.StreamingTimeout
 	constant.StreamingTimeout = 1

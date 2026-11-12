@@ -257,7 +257,7 @@ func OaiResponsesToChatStreamHandler(c *gin.Context, info *relaycommon.RelayInfo
 			sr.Error(err)
 			return
 		}
-		if responsesStreamEventReportsProgress(streamResp) {
+		if helper.StreamEventShowsWork(data) {
 			sr.MarkProgress()
 		}
 
