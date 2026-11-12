@@ -13,7 +13,7 @@ import (
 // HTTPTransportPolicy is the runtime-normalized outbound HTTP transport policy
 // for a channel. Unknown or out-of-range stored values are clamped safely.
 type HTTPTransportPolicy struct {
-	Protocol string // dto.HTTPProtocolAuto or dto.HTTPProtocolHTTP1
+	Protocol string // dto.HTTPProtocolHTTP1 or dto.HTTPProtocolHTTP2
 	Shards   int    // 1..dto.MaxHTTP2ConnectionShards
 }
 
@@ -21,7 +21,7 @@ var httpTransportPolicyWarnings sync.Map
 
 func defaultHTTPTransportPolicy() HTTPTransportPolicy {
 	return HTTPTransportPolicy{
-		Protocol: dto.HTTPProtocolAuto,
+		Protocol: dto.HTTPProtocolHTTP1,
 		Shards:   1,
 	}
 }
@@ -33,13 +33,14 @@ func NormalizeHTTPTransportPolicy(settings dto.ChannelSettings) HTTPTransportPol
 
 	protocol := strings.ToLower(strings.TrimSpace(settings.HTTPProtocol))
 	switch protocol {
-	case "", dto.HTTPProtocolAuto:
-		policy.Protocol = dto.HTTPProtocolAuto
-	case dto.HTTPProtocolHTTP1:
+	case dto.HTTPProtocolHTTP2:
+		policy.Protocol = dto.HTTPProtocolHTTP2
+	case "", dto.HTTPProtocolAuto, dto.HTTPProtocolHTTP1:
+		// Auto is HTTP/1.1. HTTP/2 is used only when the channel selects it.
 		policy.Protocol = dto.HTTPProtocolHTTP1
 	default:
 		warnHTTPTransportPolicyOnce("http_protocol", settings.HTTPProtocol)
-		policy.Protocol = dto.HTTPProtocolAuto
+		policy.Protocol = dto.HTTPProtocolHTTP1
 	}
 
 	shards := settings.HTTP2ConnectionShards
@@ -56,11 +57,11 @@ func NormalizeHTTPTransportPolicy(settings dto.ChannelSettings) HTTPTransportPol
 		policy.Shards = shards
 	}
 
-	if policy.Protocol == dto.HTTPProtocolHTTP1 {
+	if policy.Protocol != dto.HTTPProtocolHTTP2 {
 		if settings.HTTP2ConnectionShards > 1 {
 			warnHTTPTransportPolicyOnce(
 				"http_protocol+http2_connection_shards",
-				fmt.Sprintf("%s+%d", dto.HTTPProtocolHTTP1, settings.HTTP2ConnectionShards),
+				fmt.Sprintf("%s+%d", protocol, settings.HTTP2ConnectionShards),
 			)
 		}
 		policy.Shards = 1

@@ -113,7 +113,27 @@ func drainClose(t *testing.T, resp *http.Response) {
 	require.NoError(t, resp.Body.Close())
 }
 
-func TestAutoOneShardNegotiatesHTTP2SingleConnection(t *testing.T) {
+func TestAutoUsesHTTP1AgainstHTTP2Server(t *testing.T) {
+	withRelayHTTPTransportSettings(t)
+
+	var nonHTTP1Count atomic.Uint32
+	server := startHTTP2TLSServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.ProtoMajor != 1 {
+			nonHTTP1Count.Add(1)
+		}
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("ok"))
+	}))
+
+	client := newHTTPClientWithPolicyAndTLS(defaultHTTPTransportPolicy(), testTLSClientConfig(t, server))
+	resp, err := client.Get(server.URL)
+	require.NoError(t, err)
+	assert.Equal(t, 1, resp.ProtoMajor)
+	drainClose(t, resp)
+	assert.Equal(t, uint32(0), nonHTTP1Count.Load())
+}
+
+func TestHTTP2OneShardReusesSingleConnection(t *testing.T) {
 	withRelayHTTPTransportSettings(t)
 
 	var mu sync.Mutex
@@ -131,7 +151,8 @@ func TestAutoOneShardNegotiatesHTTP2SingleConnection(t *testing.T) {
 		_, _ = w.Write([]byte("ok"))
 	}))
 
-	client := newHTTPClientWithPolicyAndTLS(defaultHTTPTransportPolicy(), testTLSClientConfig(t, server))
+	policy := HTTPTransportPolicy{Protocol: dto.HTTPProtocolHTTP2, Shards: 1}
+	client := newHTTPClientWithPolicyAndTLS(policy, testTLSClientConfig(t, server))
 	for range 4 {
 		resp, err := client.Get(server.URL)
 		require.NoError(t, err)
@@ -142,7 +163,7 @@ func TestAutoOneShardNegotiatesHTTP2SingleConnection(t *testing.T) {
 	mu.Lock()
 	defer mu.Unlock()
 	assert.True(t, sawHTTP2.Load())
-	assert.Len(t, addrs, 1, "auto+1 must reuse a single HTTP/2 connection")
+	assert.Len(t, addrs, 1, "http2+1 must reuse a single HTTP/2 connection")
 }
 
 func TestFourShardHTTP2ReusesExactlyFourConnections(t *testing.T) {
@@ -163,7 +184,7 @@ func TestFourShardHTTP2ReusesExactlyFourConnections(t *testing.T) {
 		_, _ = w.Write([]byte("ok"))
 	}))
 
-	policy := HTTPTransportPolicy{Protocol: dto.HTTPProtocolAuto, Shards: 4}
+	policy := HTTPTransportPolicy{Protocol: dto.HTTPProtocolHTTP2, Shards: 4}
 	client := newHTTPClientWithPolicyAndTLS(policy, testTLSClientConfig(t, server))
 	for range 8 {
 		resp, err := client.Get(server.URL)
@@ -279,9 +300,9 @@ func TestHTTPClientCachePolicyAndCompatibility(t *testing.T) {
 
 	http1, err := GetHttpClientWithProxySettings("", dto.ChannelSettings{HTTPProtocol: dto.HTTPProtocolHTTP1})
 	require.NoError(t, err)
-	assert.NotSame(t, aware, http1)
+	assert.Same(t, aware, http1)
 
-	sharded, err := GetHttpClientWithProxySettings("", dto.ChannelSettings{HTTP2ConnectionShards: 4})
+	sharded, err := GetHttpClientWithProxySettings("", dto.ChannelSettings{HTTPProtocol: dto.HTTPProtocolHTTP2, HTTP2ConnectionShards: 4})
 	require.NoError(t, err)
 	assert.NotSame(t, aware, sharded)
 	assert.NotSame(t, http1, sharded)
@@ -296,7 +317,11 @@ func TestHTTPClientCachePolicyAndCompatibility(t *testing.T) {
 
 	proxyHTTP1, err := GetHttpClientWithProxySettings(proxyA, dto.ChannelSettings{HTTPProtocol: dto.HTTPProtocolHTTP1})
 	require.NoError(t, err)
-	assert.NotSame(t, clientA, proxyHTTP1)
+	assert.Same(t, clientA, proxyHTTP1)
+
+	proxyHTTP2, err := GetHttpClientWithProxySettings(proxyA, dto.ChannelSettings{HTTPProtocol: dto.HTTPProtocolHTTP2})
+	require.NoError(t, err)
+	assert.NotSame(t, clientA, proxyHTTP2)
 }
 
 func TestHTTPClientCacheConcurrentGetOrCreate(t *testing.T) {
@@ -312,7 +337,7 @@ func TestHTTPClientCacheConcurrentGetOrCreate(t *testing.T) {
 		i := i
 		go func() {
 			defer wg.Done()
-			client, err := GetHttpClientWithProxySettings(proxyURL, dto.ChannelSettings{HTTP2ConnectionShards: 3})
+			client, err := GetHttpClientWithProxySettings(proxyURL, dto.ChannelSettings{HTTPProtocol: dto.HTTPProtocolHTTP2, HTTP2ConnectionShards: 3})
 			errs[i] = err
 			results[i] = client
 		}()
@@ -364,7 +389,7 @@ func TestInvalidateProxyClientClosesAllPolicyVariants(t *testing.T) {
 	require.NoError(t, err)
 	http1Client, err := GetHttpClientWithProxySettings(proxyURL, dto.ChannelSettings{HTTPProtocol: dto.HTTPProtocolHTTP1})
 	require.NoError(t, err)
-	shardedClient, err := GetHttpClientWithProxySettings(proxyURL, dto.ChannelSettings{HTTP2ConnectionShards: 2})
+	shardedClient, err := GetHttpClientWithProxySettings(proxyURL, dto.ChannelSettings{HTTPProtocol: dto.HTTPProtocolHTTP2, HTTP2ConnectionShards: 2})
 	require.NoError(t, err)
 
 	InvalidateProxyClient(proxyURL)
@@ -373,7 +398,7 @@ func TestInvalidateProxyClientClosesAllPolicyVariants(t *testing.T) {
 	require.NoError(t, err)
 	afterHTTP1, err := GetHttpClientWithProxySettings(proxyURL, dto.ChannelSettings{HTTPProtocol: dto.HTTPProtocolHTTP1})
 	require.NoError(t, err)
-	afterSharded, err := GetHttpClientWithProxySettings(proxyURL, dto.ChannelSettings{HTTP2ConnectionShards: 2})
+	afterSharded, err := GetHttpClientWithProxySettings(proxyURL, dto.ChannelSettings{HTTPProtocol: dto.HTTPProtocolHTTP2, HTTP2ConnectionShards: 2})
 	require.NoError(t, err)
 
 	assert.NotSame(t, defaultClient, afterDefault)
@@ -386,7 +411,8 @@ func TestResetProxyClientCacheKeepsDefaultPointerAndRecreatesVariants(t *testing
 
 	http1Client, err := GetHttpClientWithProxySettings("", dto.ChannelSettings{HTTPProtocol: dto.HTTPProtocolHTTP1})
 	require.NoError(t, err)
-	shardedClient, err := GetHttpClientWithProxySettings("", dto.ChannelSettings{HTTP2ConnectionShards: 3})
+	assert.Same(t, defaultClient, http1Client)
+	shardedClient, err := GetHttpClientWithProxySettings("", dto.ChannelSettings{HTTPProtocol: dto.HTTPProtocolHTTP2, HTTP2ConnectionShards: 3})
 	require.NoError(t, err)
 	proxyClient, err := GetHttpClientWithProxy("http://reset-proxy.example:8080")
 	require.NoError(t, err)
@@ -400,11 +426,12 @@ func TestResetProxyClientCacheKeepsDefaultPointerAndRecreatesVariants(t *testing
 
 	afterHTTP1, err := GetHttpClientWithProxySettings("", dto.ChannelSettings{HTTPProtocol: dto.HTTPProtocolHTTP1})
 	require.NoError(t, err)
-	afterSharded, err := GetHttpClientWithProxySettings("", dto.ChannelSettings{HTTP2ConnectionShards: 3})
+	assert.Same(t, defaultClient, afterHTTP1)
+	afterSharded, err := GetHttpClientWithProxySettings("", dto.ChannelSettings{HTTPProtocol: dto.HTTPProtocolHTTP2, HTTP2ConnectionShards: 3})
 	require.NoError(t, err)
 	afterProxy, err := GetHttpClientWithProxy("http://reset-proxy.example:8080")
 	require.NoError(t, err)
-	assert.NotSame(t, http1Client, afterHTTP1)
+	assert.Same(t, http1Client, afterHTTP1)
 	assert.NotSame(t, shardedClient, afterSharded)
 	assert.NotSame(t, proxyClient, afterProxy)
 }
@@ -464,7 +491,7 @@ func TestCloseIdleConnectionsRedialsHTTP2(t *testing.T) {
 		_, _ = w.Write([]byte("ok"))
 	}))
 
-	client := newHTTPClientWithPolicyAndTLS(defaultHTTPTransportPolicy(), testTLSClientConfig(t, server))
+	client := newHTTPClientWithPolicyAndTLS(HTTPTransportPolicy{Protocol: dto.HTTPProtocolHTTP2, Shards: 1}, testTLSClientConfig(t, server))
 	resp, err := client.Get(server.URL)
 	require.NoError(t, err)
 	drainClose(t, resp)
@@ -483,9 +510,10 @@ func TestCloseIdleConnectionsRedialsHTTP2(t *testing.T) {
 
 func TestNormalizeHTTPTransportPolicyClampsWithoutPanic(t *testing.T) {
 	assert.Equal(t, defaultHTTPTransportPolicy(), NormalizeHTTPTransportPolicy(dto.ChannelSettings{}))
-	assert.Equal(t, HTTPTransportPolicy{Protocol: dto.HTTPProtocolAuto, Shards: 1}, NormalizeHTTPTransportPolicy(dto.ChannelSettings{HTTPProtocol: "AUTO"}))
+	assert.Equal(t, HTTPTransportPolicy{Protocol: dto.HTTPProtocolHTTP1, Shards: 1}, NormalizeHTTPTransportPolicy(dto.ChannelSettings{HTTPProtocol: "AUTO"}))
 	assert.Equal(t, HTTPTransportPolicy{Protocol: dto.HTTPProtocolHTTP1, Shards: 1}, NormalizeHTTPTransportPolicy(dto.ChannelSettings{HTTPProtocol: "HTTP1", HTTP2ConnectionShards: 8}))
-	assert.Equal(t, HTTPTransportPolicy{Protocol: dto.HTTPProtocolAuto, Shards: 1}, NormalizeHTTPTransportPolicy(dto.ChannelSettings{HTTPProtocol: "http3"}))
-	assert.Equal(t, HTTPTransportPolicy{Protocol: dto.HTTPProtocolAuto, Shards: 1}, NormalizeHTTPTransportPolicy(dto.ChannelSettings{HTTP2ConnectionShards: -3}))
-	assert.Equal(t, HTTPTransportPolicy{Protocol: dto.HTTPProtocolAuto, Shards: 8}, NormalizeHTTPTransportPolicy(dto.ChannelSettings{HTTP2ConnectionShards: 99}))
+	assert.Equal(t, HTTPTransportPolicy{Protocol: dto.HTTPProtocolHTTP1, Shards: 1}, NormalizeHTTPTransportPolicy(dto.ChannelSettings{HTTPProtocol: "http3"}))
+	assert.Equal(t, HTTPTransportPolicy{Protocol: dto.HTTPProtocolHTTP1, Shards: 1}, NormalizeHTTPTransportPolicy(dto.ChannelSettings{HTTP2ConnectionShards: -3}))
+	assert.Equal(t, HTTPTransportPolicy{Protocol: dto.HTTPProtocolHTTP1, Shards: 1}, NormalizeHTTPTransportPolicy(dto.ChannelSettings{HTTP2ConnectionShards: 99}))
+	assert.Equal(t, HTTPTransportPolicy{Protocol: dto.HTTPProtocolHTTP2, Shards: 8}, NormalizeHTTPTransportPolicy(dto.ChannelSettings{HTTPProtocol: "HTTP2", HTTP2ConnectionShards: 99}))
 }

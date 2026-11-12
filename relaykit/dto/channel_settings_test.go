@@ -624,11 +624,15 @@ func TestChannelSettingsValidateHTTPTransport(t *testing.T) {
 	require.NoError(t, (&ChannelSettings{}).ValidateHTTPTransport())
 	require.NoError(t, (&ChannelSettings{HTTPProtocol: "AUTO"}).ValidateHTTPTransport())
 	require.NoError(t, (&ChannelSettings{HTTPProtocol: "http1"}).ValidateHTTPTransport())
-	require.NoError(t, (&ChannelSettings{HTTP2ConnectionShards: 8}).ValidateHTTPTransport())
+	require.NoError(t, (&ChannelSettings{HTTPProtocol: "http2", HTTP2ConnectionShards: 8}).ValidateHTTPTransport())
 
-	err := (&ChannelSettings{HTTPProtocol: "http2"}).ValidateHTTPTransport()
+	err := (&ChannelSettings{HTTPProtocol: "http3"}).ValidateHTTPTransport()
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "http_protocol")
+
+	err = (&ChannelSettings{HTTP2ConnectionShards: 8}).ValidateHTTPTransport()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "http2_connection_shards")
 
 	err = (&ChannelSettings{HTTP2ConnectionShards: -1}).ValidateHTTPTransport()
 	require.Error(t, err)

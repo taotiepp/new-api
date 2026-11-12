@@ -344,7 +344,7 @@ func newHTTPClientFromTransportFactory(policy HTTPTransportPolicy, factory func(
 	if policy.Shards < 1 {
 		policy.Shards = 1
 	}
-	if policy.Protocol == dto.HTTPProtocolHTTP1 || policy.Shards == 1 {
+	if policy.Protocol != dto.HTTPProtocolHTTP2 || policy.Shards == 1 {
 		transport := factory()
 		applyHTTPTransportPolicy(transport, policy)
 		return newRelayHTTPClient(transport)

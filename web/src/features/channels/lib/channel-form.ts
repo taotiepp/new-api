@@ -83,16 +83,20 @@ function isOptionalProxyURL(value: string | undefined): boolean {
 
 export const HTTP_PROTOCOL_AUTO = 'auto'
 export const HTTP_PROTOCOL_HTTP1 = 'http1'
+export const HTTP_PROTOCOL_HTTP2 = 'http2'
 export const MAX_HTTP2_CONNECTION_SHARDS = 8
 
 export function normalizeHttpProtocol(
   value: string | undefined | null
-): 'auto' | 'http1' {
+): 'auto' | 'http1' | 'http2' {
   const normalized = String(value || '')
     .trim()
     .toLowerCase()
   if (normalized === HTTP_PROTOCOL_HTTP1) {
     return HTTP_PROTOCOL_HTTP1
+  }
+  if (normalized === HTTP_PROTOCOL_HTTP2) {
+    return HTTP_PROTOCOL_HTTP2
   }
   return HTTP_PROTOCOL_AUTO
 }
@@ -278,7 +282,7 @@ export const channelFormSchema = z
       .string()
       .optional()
       .refine(isOptionalProxyURL, ERROR_MESSAGES.INVALID_PROXY),
-    http_protocol: z.enum(['auto', 'http1']).optional(),
+    http_protocol: z.enum(['auto', 'http1', 'http2']).optional(),
     http2_connection_shards: z.number().int().optional(),
     pass_through_body_enabled: z.boolean().optional(),
     system_prompt: z.string().optional(),
@@ -413,7 +417,7 @@ export const channelFormSchema = z
         ERROR_MESSAGES.INVALID_HTTP2_CONNECTION_SHARDS
       )
     }
-    if (protocol === HTTP_PROTOCOL_HTTP1 && shards > 1) {
+    if (protocol !== HTTP_PROTOCOL_HTTP2 && shards > 1) {
       addRequiredIssue(
         ctx,
         'http2_connection_shards',
@@ -502,7 +506,7 @@ export function transformChannelToFormDefaults(
     force_format: false,
     thinking_to_content: false,
     proxy: '',
-    http_protocol: HTTP_PROTOCOL_AUTO as 'auto' | 'http1',
+    http_protocol: HTTP_PROTOCOL_AUTO as 'auto' | 'http1' | 'http2',
     http2_connection_shards: 1,
     pass_through_body_enabled: false,
     system_prompt: '',
@@ -522,7 +526,8 @@ export function transformChannelToFormDefaults(
         thinking_to_content: parsed.thinking_to_content || false,
         proxy: parsed.proxy || '',
         http_protocol: protocol,
-        http2_connection_shards: protocol === HTTP_PROTOCOL_HTTP1 ? 1 : shards,
+        http2_connection_shards:
+          protocol === HTTP_PROTOCOL_HTTP2 ? shards : 1,
         pass_through_body_enabled: parsed.pass_through_body_enabled || false,
         system_prompt: parsed.system_prompt || '',
         system_prompt_override: parsed.system_prompt_override || false,
@@ -654,16 +659,18 @@ export function buildSettingJSON(formData: ChannelFormValues): string {
   }
 
   const protocol = normalizeHttpProtocol(formData.http_protocol)
-  const shards =
-    protocol === HTTP_PROTOCOL_HTTP1
-      ? 1
-      : normalizeHttp2ConnectionShards(formData.http2_connection_shards)
 
-  // Omit defaults so unchanged channels keep equivalent JSON.
-  if (protocol === HTTP_PROTOCOL_HTTP1) {
+  // Auto omits the field and uses HTTP/1.1. Shards apply only to HTTP/2.
+  if (protocol === HTTP_PROTOCOL_HTTP2) {
+    settingObj.http_protocol = HTTP_PROTOCOL_HTTP2
+    const shards = normalizeHttp2ConnectionShards(
+      formData.http2_connection_shards
+    )
+    if (shards > 1) {
+      settingObj.http2_connection_shards = shards
+    }
+  } else if (protocol === HTTP_PROTOCOL_HTTP1) {
     settingObj.http_protocol = HTTP_PROTOCOL_HTTP1
-  } else if (shards > 1) {
-    settingObj.http2_connection_shards = shards
   }
 
   return JSON.stringify(settingObj)

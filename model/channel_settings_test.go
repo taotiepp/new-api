@@ -16,8 +16,13 @@ func TestChannelValidateSettingsRejectsInvalidHTTPTransport(t *testing.T) {
 		wantErr string
 	}{
 		{
-			name:    "auto with shards is valid",
+			name:    "http2 with shards is valid",
+			setting: dto.ChannelSettings{HTTPProtocol: "http2", HTTP2ConnectionShards: 4},
+		},
+		{
+			name:    "auto with shards greater than one rejected",
 			setting: dto.ChannelSettings{HTTPProtocol: "auto", HTTP2ConnectionShards: 4},
+			wantErr: "http2_connection_shards",
 		},
 		{
 			name:    "http1 with shards greater than one rejected",

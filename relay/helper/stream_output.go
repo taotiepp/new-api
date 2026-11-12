@@ -9,8 +9,9 @@ import (
 )
 
 // streamEventHasRealOutput reports whether an SSE payload contains generated
-// text, reasoning, or tool-call arguments. Keepalives, stream bookkeeping, and
-// whitespace-only placeholders do not count, so they cannot extend the idle timeout.
+// text, reasoning, tool-call arguments, or a Claude thinking progress delta.
+// Keepalives, stream bookkeeping, and whitespace-only placeholders do not
+// count, so they cannot extend the idle timeout.
 func streamEventHasRealOutput(data string) bool {
 	if strings.TrimSpace(data) == "" || !gjson.Valid(data) {
 		return false
@@ -63,6 +64,11 @@ func realOutputString(value gjson.Result) bool {
 		return false
 	}
 	if raw[0] == '{' {
+		// Claude reports thinking progress with an empty thinking string and
+		// estimated_tokens. That packet is model progress, not a keepalive.
+		if value.Get("type").String() == "thinking_delta" {
+			return true
+		}
 		return hasRealOutputRune(value.Get("text").String()) ||
 			hasRealOutputRune(value.Get("thinking").String()) ||
 			hasRealOutputRune(value.Get("partial_json").String())

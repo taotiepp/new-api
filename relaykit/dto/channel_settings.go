@@ -19,16 +19,17 @@ type ChannelSettings struct {
 	SystemPrompt           string `json:"system_prompt,omitempty"`
 	SystemPromptOverride   bool   `json:"system_prompt_override,omitempty"`
 	// HTTPProtocol controls outbound HTTP version negotiation for this channel.
-	// Accepted values: "", "auto" (default), "http1".
+	// Accepted values: "", "auto" (HTTP/1.1), "http1", and "http2".
 	HTTPProtocol string `json:"http_protocol,omitempty"`
 	// HTTP2ConnectionShards spreads HTTP/2 traffic across N independent transports
-	// (1-8). Zero/unset means 1. Ignored when HTTPProtocol is "http1".
+	// (1-8). Zero/unset means 1. It applies only when HTTPProtocol is "http2".
 	HTTP2ConnectionShards int `json:"http2_connection_shards,omitempty"`
 }
 
 const (
 	HTTPProtocolAuto         = "auto"
 	HTTPProtocolHTTP1        = "http1"
+	HTTPProtocolHTTP2        = "http2"
 	MaxHTTP2ConnectionShards = 8
 )
 
@@ -39,15 +40,15 @@ func (s *ChannelSettings) ValidateHTTPTransport() error {
 	}
 	protocol := strings.ToLower(strings.TrimSpace(s.HTTPProtocol))
 	switch protocol {
-	case "", HTTPProtocolAuto, HTTPProtocolHTTP1:
+	case "", HTTPProtocolAuto, HTTPProtocolHTTP1, HTTPProtocolHTTP2:
 	default:
 		return fmt.Errorf("invalid http_protocol: %s", s.HTTPProtocol)
 	}
 	if s.HTTP2ConnectionShards < 0 || s.HTTP2ConnectionShards > MaxHTTP2ConnectionShards {
 		return fmt.Errorf("invalid http2_connection_shards: %d", s.HTTP2ConnectionShards)
 	}
-	if protocol == HTTPProtocolHTTP1 && s.HTTP2ConnectionShards > 1 {
-		return fmt.Errorf("http2_connection_shards must be 1 when http_protocol is http1")
+	if protocol != HTTPProtocolHTTP2 && s.HTTP2ConnectionShards > 1 {
+		return fmt.Errorf("http2_connection_shards must be 1 unless http_protocol is http2")
 	}
 	return nil
 }

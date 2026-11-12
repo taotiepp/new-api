@@ -119,7 +119,7 @@ func applyHTTPTransportPolicy(transport *http.Transport, policy HTTPTransportPol
 	if transport == nil {
 		return
 	}
-	if policy.Protocol == dto.HTTPProtocolHTTP1 {
+	if policy.Protocol != dto.HTTPProtocolHTTP2 {
 		applyHTTP1Force(transport)
 		return
 	}

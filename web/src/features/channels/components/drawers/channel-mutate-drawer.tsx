@@ -4411,13 +4411,21 @@ export function ChannelMutateDrawer({
                                         value: 'http1',
                                         label: t('HTTP/1.1'),
                                       },
+                                      {
+                                        value: 'http2',
+                                        label: t('HTTP/2'),
+                                      },
                                     ]}
                                     value={field.value || 'auto'}
                                     onValueChange={(value) => {
                                       const nextProtocol =
-                                        value === 'http1' ? 'http1' : 'auto'
+                                        value === 'http1'
+                                          ? 'http1'
+                                          : value === 'http2'
+                                            ? 'http2'
+                                            : 'auto'
                                       field.onChange(nextProtocol)
-                                      if (nextProtocol === 'http1') {
+                                      if (nextProtocol !== 'http2') {
                                         form.setValue(
                                           'http2_connection_shards',
                                           1,
@@ -4442,12 +4450,15 @@ export function ChannelMutateDrawer({
                                         <SelectItem value='http1'>
                                           {t('HTTP/1.1')}
                                         </SelectItem>
+                                        <SelectItem value='http2'>
+                                          {t('HTTP/2')}
+                                        </SelectItem>
                                       </SelectGroup>
                                     </SelectContent>
                                   </Select>
                                   <FormDescription>
                                     {t(
-                                      'Auto negotiates HTTP/2 when available. HTTP/1.1 forces multiple keep-alive connections under concurrency.'
+                                      'Auto uses HTTP/1.1. Choose HTTP/2 to negotiate HTTP/2 and enable connection shards.'
                                     )}
                                   </FormDescription>
                                   <FormMessage />
@@ -4459,8 +4470,8 @@ export function ChannelMutateDrawer({
                               control={form.control}
                               name='http2_connection_shards'
                               render={({ field }) => {
-                                const http1Selected =
-                                  currentHttpProtocol === 'http1'
+                                const http2Selected =
+                                  currentHttpProtocol === 'http2'
                                 const shardItems = Array.from(
                                   { length: 8 },
                                   (_, index) => {
@@ -4476,13 +4487,13 @@ export function ChannelMutateDrawer({
                                     <Select
                                       items={shardItems}
                                       value={String(field.value || 1)}
-                                      disabled={http1Selected}
+                                      disabled={!http2Selected}
                                       onValueChange={(value) => {
                                         field.onChange(Number(value))
                                       }}
                                     >
                                       <FormControl>
-                                        <SelectTrigger disabled={http1Selected}>
+                                        <SelectTrigger disabled={!http2Selected}>
                                           <SelectValue />
                                         </SelectTrigger>
                                       </FormControl>
@@ -4502,12 +4513,12 @@ export function ChannelMutateDrawer({
                                       </SelectContent>
                                     </Select>
                                     <FormDescription>
-                                      {http1Selected
+                                      {http2Selected
                                         ? t(
-                                            'HTTP/2 connection shards are unavailable when HTTP/1.1 is selected.'
+                                            'Spread HTTP/2 traffic across multiple reusable connections to the same upstream origin (1-8).'
                                           )
                                         : t(
-                                            'Spread HTTP/2 traffic across multiple reusable connections to the same upstream origin (1-8).'
+                                            'HTTP/2 connection shards are available only when HTTP/2 is selected.'
                                           )}
                                     </FormDescription>
                                     <FormMessage />
