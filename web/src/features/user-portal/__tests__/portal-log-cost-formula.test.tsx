@@ -135,7 +135,10 @@ describe('portal log cost formula', () => {
       </QueryClientProvider>
     )
 
-    expect(await screen.findByText('{"input":"mine"}')).toBeVisible()
+    const body = await screen.findByText(/"input": "mine"/)
+    expect(body.tagName).toBe('PRE')
+    expect(body.className).toContain('max-h-80')
+    expect(body.className).toContain('overflow-y-auto')
     expect(screen.getByText('Request body')).toBeVisible()
   })
 })

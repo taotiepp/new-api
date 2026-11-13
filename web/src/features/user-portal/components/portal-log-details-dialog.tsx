@@ -102,7 +102,13 @@ export function PortalLogDetailsDialog(props: PortalLogDetailsDialogProps) {
     void decodeGzipBase64(requestPayload)
       .then((text) => {
         if (cancelled) return
-        setDecodedRequest(text)
+        let formatted = text
+        try {
+          formatted = JSON.stringify(JSON.parse(text), null, 2)
+        } catch {
+          // Request bodies are not always JSON.
+        }
+        setDecodedRequest(formatted)
         setRequestDecodeFailed(false)
       })
       .catch(() => {
@@ -220,7 +226,12 @@ export function PortalLogDetailsDialog(props: PortalLogDetailsDialogProps) {
 
   return (
     <Dialog open={log != null} onOpenChange={props.onOpenChange}>
-      <DialogContent className='sm:max-w-lg'>
+      <DialogContent
+        className={cn(
+          'max-h-[min(90dvh,720px)] overflow-y-auto',
+          requestPayload ? 'sm:max-w-3xl' : 'sm:max-w-lg'
+        )}
+      >
         <DialogHeader>
           <DialogTitle>{t('Request Logs')}</DialogTitle>
         </DialogHeader>
@@ -293,17 +304,19 @@ export function PortalLogDetailsDialog(props: PortalLogDetailsDialogProps) {
             </div>
           ) : null}
           {decodedRequest ? (
-            <div className='grid gap-1'>
+            <div className='grid min-w-0 gap-1'>
               <dt className='text-muted-foreground text-sm'>
                 {t('Request body')}
               </dt>
-              <dd className='rounded-[var(--portal-radius)] bg-[var(--portal-surface-muted)] px-3 py-2 font-mono text-xs break-all whitespace-pre-wrap text-[var(--portal-ink)]'>
+              <dd className='min-w-0'>
                 {other?.request_body_truncated ? (
-                  <span className='text-muted-foreground mb-1 block font-sans'>
+                  <p className='text-muted-foreground mb-1 text-xs'>
                     {t('Request body was truncated')}
-                  </span>
+                  </p>
                 ) : null}
-                {decodedRequest}
+                <pre className='max-h-80 overflow-y-auto rounded-[var(--portal-radius)] border bg-[var(--portal-surface-muted)] p-2 font-mono text-[11px] leading-relaxed wrap-break-word whitespace-pre-wrap text-[var(--portal-ink)]'>
+                  {decodedRequest}
+                </pre>
               </dd>
             </div>
           ) : null}
