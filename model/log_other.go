@@ -209,6 +209,29 @@ func normalizeLegacyRejectReason(values map[string]json.RawMessage) bool {
 	return true
 }
 
+// exposeFailedRequestBody copies the stored failed-request input onto the
+// user-visible log. The rest of admin_info stays hidden.
+func exposeFailedRequestBody(values map[string]json.RawMessage) bool {
+	raw, ok := values[logOtherAdminInfoKey]
+	if !ok || len(raw) == 0 || string(raw) == "null" {
+		return false
+	}
+	var adminInfo map[string]json.RawMessage
+	if err := common.Unmarshal(raw, &adminInfo); err != nil {
+		return false
+	}
+	changed := false
+	for _, key := range []string{LogOtherAdminRequestBodyKey, LogOtherAdminRequestBodyTruncatedKey} {
+		field, exists := adminInfo[key]
+		if !exists || len(field) == 0 || string(field) == "null" {
+			continue
+		}
+		values[key] = field
+		changed = true
+	}
+	return changed
+}
+
 // formatLogOtherJSON applies the role projection while keeping untouched JSON
 // values as RawMessage. This preserves integers larger than JavaScript's safe
 // range instead of round-tripping them through float64.
@@ -227,6 +250,9 @@ func formatLogOtherJSON(value string, visibility logOtherVisibility) string {
 
 	changed := false
 	if visibility == logOtherVisibilityUser {
+		if exposeFailedRequestBody(values) {
+			changed = true
+		}
 		for _, key := range []string{logOtherAdminInfoKey, logOtherRootInfoKey, logOtherAuditInfoKey} {
 			if _, exists := values[key]; exists {
 				delete(values, key)

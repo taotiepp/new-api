@@ -498,7 +498,10 @@ export function DetailsDialog(props: DetailsDialogProps) {
   const other = parseLogOther(props.log.other || detailQuery.data || '')
   const requestPayload = props.isAdmin
     ? other?.admin_info?.request_body
-    : undefined
+    : other?.request_body
+  const requestTruncated = props.isAdmin
+    ? other?.admin_info?.request_body_truncated
+    : other?.request_body_truncated
   const [decodedRequest, setDecodedRequest] = useState<string | null>(null)
   const [requestDecodeFailed, setRequestDecodeFailed] = useState(false)
   useEffect(() => {
@@ -826,12 +829,12 @@ export function DetailsDialog(props: DetailsDialogProps) {
             <p className='text-xs wrap-break-word whitespace-pre-wrap'>
               {details}
             </p>
-            {props.isAdmin && decodedRequest !== null ? (
+            {decodedRequest !== null ? (
               <pre className='bg-background/60 mt-2 max-h-80 overflow-y-auto rounded border p-2 font-mono text-[11px] leading-relaxed wrap-break-word whitespace-pre-wrap'>
                 <span className='text-muted-foreground mb-1 block font-sans'>
                   {t('Request body')}
                 </span>
-                {other?.admin_info?.request_body_truncated ? (
+                {requestTruncated ? (
                   <span className='text-muted-foreground mb-1 block font-sans'>
                     {t('Request body was truncated')}
                   </span>
@@ -839,7 +842,7 @@ export function DetailsDialog(props: DetailsDialogProps) {
                 {decodedRequest}
               </pre>
             ) : null}
-            {props.isAdmin && requestDecodeFailed ? (
+            {requestDecodeFailed ? (
               <p className='text-muted-foreground mt-2 text-xs'>
                 {t('Failed to decode request body')}
               </p>

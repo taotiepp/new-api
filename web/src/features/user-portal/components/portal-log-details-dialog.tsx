@@ -17,6 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { useQuery } from '@tanstack/react-query'
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { CopyButton } from '@/components/copy-button'
@@ -37,6 +38,7 @@ import {
   getAppliedUserDiscount,
 } from '@/features/usage-logs/lib/discount-display'
 import {
+  decodeGzipBase64,
   getTieredBillingSummary,
   parseLogOther,
 } from '@/features/usage-logs/lib/format'
@@ -87,6 +89,31 @@ export function PortalLogDetailsDialog(props: PortalLogDetailsDialogProps) {
     },
   })
   const other = log ? parseLogOther(log.other || detailQuery.data || '') : null
+  const requestPayload = other?.request_body
+  const [decodedRequest, setDecodedRequest] = useState<string | null>(null)
+  const [requestDecodeFailed, setRequestDecodeFailed] = useState(false)
+  useEffect(() => {
+    if (!requestPayload) {
+      setDecodedRequest(null)
+      setRequestDecodeFailed(false)
+      return
+    }
+    let cancelled = false
+    void decodeGzipBase64(requestPayload)
+      .then((text) => {
+        if (cancelled) return
+        setDecodedRequest(text)
+        setRequestDecodeFailed(false)
+      })
+      .catch(() => {
+        if (cancelled) return
+        setDecodedRequest(null)
+        setRequestDecodeFailed(true)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [requestPayload])
   const typeLabel =
     LOG_TYPES.find((item) => item.value === log?.type)?.label ?? 'Unknown'
   const showTiming = log != null && isTimingLogType(log.type)
@@ -264,6 +291,26 @@ export function PortalLogDetailsDialog(props: PortalLogDetailsDialogProps) {
                 {log.content}
               </dd>
             </div>
+          ) : null}
+          {decodedRequest ? (
+            <div className='grid gap-1'>
+              <dt className='text-muted-foreground text-sm'>
+                {t('Request body')}
+              </dt>
+              <dd className='rounded-[var(--portal-radius)] bg-[var(--portal-surface-muted)] px-3 py-2 font-mono text-xs break-all whitespace-pre-wrap text-[var(--portal-ink)]'>
+                {other?.request_body_truncated ? (
+                  <span className='text-muted-foreground mb-1 block font-sans'>
+                    {t('Request body was truncated')}
+                  </span>
+                ) : null}
+                {decodedRequest}
+              </dd>
+            </div>
+          ) : null}
+          {requestDecodeFailed ? (
+            <p className='text-muted-foreground text-sm'>
+              {t('Failed to decode request body')}
+            </p>
           ) : null}
         </dl>
         <DialogFooter>

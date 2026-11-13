@@ -89,7 +89,7 @@ export function FailedRequestBodyCard(props: PrivacyCardProps) {
     <TitledCard
       title={t('Store failed requests')}
       description={t(
-        "Store a failed request's input so administrators can debug it. Turning this on requires your agreement."
+        "Store a failed request's input so you can review it later. Turning this on requires your agreement."
       )}
       disableHoverEffect
     >
@@ -130,7 +130,7 @@ export function FailedRequestBodyCard(props: PrivacyCardProps) {
         items={[
           t('Only the input sent with a failed request is stored.'),
           t('Successful requests are not stored.'),
-          t('Only administrators can view the stored input.'),
+          t('You can view the stored input in your usage logs.'),
           retention,
         ]}
         checklist={[

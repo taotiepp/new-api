@@ -197,4 +197,36 @@ describe('usage log reject reason', () => {
     expect(screen.queryByText('{"input":"secret-request"}')).toBeNull()
     expect(screen.queryByText('Request body')).toBeNull()
   })
+
+  test('shows the stored request body to the log owner', async () => {
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    })
+    queryClients.push(queryClient)
+    const log = makeLog({
+      request_body: gzipSync(
+        Buffer.from('{"input":"secret-request"}')
+      ).toString('base64'),
+      request_body_truncated: true,
+    })
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <DetailsDialog
+          log={log}
+          isAdmin={false}
+          isRoot={false}
+          open
+          onOpenChange={() => undefined}
+        />
+      </QueryClientProvider>
+    )
+
+    expect(
+      await screen.findByText('{"input":"secret-request"}')
+    ).toBeInTheDocument()
+    expect(screen.getByText('Request body')).toBeInTheDocument()
+    expect(screen.getByText('Request body was truncated')).toBeInTheDocument()
+    expect(screen.queryByText('Upstream response')).toBeNull()
+  })
 })

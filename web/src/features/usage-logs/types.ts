@@ -146,7 +146,7 @@ export interface LogOtherData {
     // The upstream response captured for this failure. Empty means the
     // response was read and contained nothing. Admin-only.
     upstream_body?: string
-    // Gzip+base64 request body captured for this failure. Admin-only.
+    // Gzip+base64 request body captured for this failure.
     request_body?: string
     request_body_truncated?: boolean
     // Reject / intercept reason (admin only)
@@ -157,6 +157,9 @@ export interface LogOtherData {
     channel_discount?: number
     channel_discount_source?: string
   }
+  // Gzip+base64 failed-request input returned to the log owner.
+  request_body?: string
+  request_body_truncated?: boolean
   root_info?: {
     task_plugin?: TaskPluginRuntimeInfo
     upstream_task_id?: string

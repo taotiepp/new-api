@@ -53,6 +53,27 @@ func TestFormatUserLogsStripsQuotaSaturation(t *testing.T) {
 	require.Contains(t, parsed, "model_price")
 }
 
+func TestFormatUserLogsKeepsFailedRequestBody(t *testing.T) {
+	other := common.MapToJsonStr(map[string]any{
+		"status_code": 500,
+		"admin_info": map[string]any{
+			"request_body":           "H4sIAAAA",
+			"request_body_truncated": true,
+			"upstream_body":          "secret-upstream",
+		},
+	})
+	logs := []*Log{{Other: other}}
+
+	formatUserLogs(logs, 0)
+
+	parsed, err := common.StrToMap(logs[0].Other)
+	require.NoError(t, err)
+	assert.Equal(t, "H4sIAAAA", parsed["request_body"])
+	assert.Equal(t, true, parsed["request_body_truncated"])
+	assert.NotContains(t, parsed, "admin_info")
+	assert.NotContains(t, logs[0].Other, "secret-upstream")
+}
+
 func TestFormatUserLogsZerosCostQuota(t *testing.T) {
 	logs := []*Log{{Quota: 120, CostQuota: 80, Other: `{"user_discount":0.8}`}}
 

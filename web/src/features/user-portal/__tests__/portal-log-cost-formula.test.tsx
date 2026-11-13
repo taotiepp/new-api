@@ -16,6 +16,8 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { gzipSync } from 'node:zlib'
+
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen } from '@testing-library/react'
 import { describe, expect, test } from 'vitest'
@@ -96,5 +98,44 @@ describe('portal log cost formula', () => {
     expect(formula).toContain('Input 800 ×')
     expect(formula).toContain('Cache Read 50 ×')
     expect(formula).toContain('Cache Write 20 ×')
+  })
+
+  test('shows a stored failed request input', async () => {
+    const log = usageLogSchema.parse({
+      id: 2,
+      user_id: 1,
+      created_at: 1_700_000_000,
+      type: 5,
+      content: 'upstream failed',
+      username: 'alice',
+      token_name: 'production',
+      model_name: 'gpt-4.1',
+      quota: 0,
+      prompt_tokens: 1,
+      completion_tokens: 0,
+      use_time: 1,
+      is_stream: false,
+      channel: 1,
+      token_id: 1,
+      group: 'default',
+      ip: '',
+      request_id: 'req_failed',
+      other: JSON.stringify({
+        request_body: gzipSync(Buffer.from('{"input":"mine"}')).toString(
+          'base64'
+        ),
+      }),
+    })
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    })
+    render(
+      <QueryClientProvider client={client}>
+        <PortalLogDetailsDialog log={log} onOpenChange={() => {}} />
+      </QueryClientProvider>
+    )
+
+    expect(await screen.findByText('{"input":"mine"}')).toBeVisible()
+    expect(screen.getByText('Request body')).toBeVisible()
   })
 })

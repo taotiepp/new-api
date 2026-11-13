@@ -13,8 +13,9 @@ import (
 )
 
 const (
-	// LogOtherAdminRequestBodyKey stores the failed request body for administrators.
-	// The value is gzip compressed and base64 encoded.
+	// LogOtherAdminRequestBodyKey stores the failed request body. The value is gzip
+	// compressed and base64 encoded. User log views receive this field without the
+	// rest of admin_info.
 	LogOtherAdminRequestBodyKey = "request_body"
 	// LogOtherAdminRequestBodyTruncatedKey is true when the stored request was cut
 	// to maxErrorRequestBodyBytes before compression.
@@ -23,9 +24,9 @@ const (
 	maxErrorRequestBodyBytes = 1 << 20
 )
 
-// AttachErrorRequestBody copies the caller request into admin-only log metadata
-// when that user has enabled storage. The default is off. User-facing log queries
-// drop admin_info, so this payload is not returned to them.
+// AttachErrorRequestBody copies the caller request into log metadata when that
+// user has enabled storage. The default is off. User-facing views keep the
+// request body and drop the rest of admin_info.
 func AttachErrorRequestBody(c *gin.Context, userID int, other *LogOther) {
 	if !userRecordsFailedRequestBody(userID) || c == nil || c.Request == nil || c.Request.Body == nil || other == nil {
 		return
