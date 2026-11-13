@@ -65,6 +65,187 @@ func TestAllowEncryptedReasoningRetry(t *testing.T) {
 	assert.False(t, SessionPolicyBlocked(chineseOnly))
 }
 
+func TestSessionBindingUnavailable(t *testing.T) {
+	unavailable := types.NewErrorWithStatusCode(
+		assert.AnError,
+		types.ErrorCodeBadResponseStatusCode,
+		http.StatusServiceUnavailable,
+	)
+	unavailable.SetMessage("strict_session_binding_unavailable")
+	assert.True(t, SessionBindingUnavailable(unavailable))
+	assert.True(t, StaleSessionBoundThinking(unavailable))
+
+	otherStatus := types.NewErrorWithStatusCode(
+		assert.AnError,
+		types.ErrorCodeBadResponseStatusCode,
+		http.StatusBadRequest,
+	)
+	otherStatus.SetMessage("strict_session_binding_unavailable")
+	assert.False(t, SessionBindingUnavailable(otherStatus))
+
+	otherMessage := types.NewErrorWithStatusCode(
+		assert.AnError,
+		types.ErrorCodeBadResponseStatusCode,
+		http.StatusServiceUnavailable,
+	)
+	otherMessage.SetMessage("upstream unavailable")
+	assert.False(t, SessionBindingUnavailable(otherMessage))
+	assert.False(t, SessionBindingUnavailable(nil))
+
+	coded := types.NewErrorWithStatusCode(
+		assert.AnError,
+		types.ErrorCodeBadResponseStatusCode,
+		http.StatusServiceUnavailable,
+	)
+	coded.SetMessage("upstream unavailable")
+	coded.RelayError = types.OpenAIError{Code: "strict_session_binding_unavailable"}
+	assert.True(t, SessionBindingUnavailable(coded))
+
+	bodied := types.NewErrorWithStatusCode(
+		assert.AnError,
+		types.ErrorCodeBadResponseStatusCode,
+		http.StatusServiceUnavailable,
+	)
+	bodied.SetMessage("upstream unavailable")
+	bodied.SetUpstreamBody(`{"error":{"code":"strict_session_binding_unavailable"}}`)
+	assert.True(t, SessionBindingUnavailable(bodied))
+}
+
+func TestInvalidThinkingSignature(t *testing.T) {
+	signature := types.NewErrorWithStatusCode(
+		assert.AnError,
+		types.ErrorCodeBadResponseStatusCode,
+		http.StatusBadRequest,
+	)
+	signature.SetMessage("messages.31.content.22: Invalid `signature` in `thinking` block")
+	assert.True(t, InvalidThinkingSignature(signature))
+	assert.True(t, StaleSessionBoundThinking(signature))
+
+	plain := types.NewErrorWithStatusCode(
+		assert.AnError,
+		types.ErrorCodeBadResponseStatusCode,
+		http.StatusBadRequest,
+	)
+	plain.SetMessage("messages.1.content.0: Invalid signature in thinking block")
+	assert.True(t, InvalidThinkingSignature(plain))
+
+	other := types.NewErrorWithStatusCode(
+		assert.AnError,
+		types.ErrorCodeBadResponseStatusCode,
+		http.StatusBadRequest,
+	)
+	other.SetMessage("invalid request")
+	assert.False(t, InvalidThinkingSignature(other))
+	assert.False(t, StaleSessionBoundThinking(other))
+
+	wrongStatus := types.NewErrorWithStatusCode(
+		assert.AnError,
+		types.ErrorCodeBadResponseStatusCode,
+		http.StatusServiceUnavailable,
+	)
+	wrongStatus.SetMessage("Invalid `signature` in `thinking` block")
+	assert.False(t, InvalidThinkingSignature(wrongStatus))
+	assert.False(t, InvalidThinkingSignature(nil))
+
+	bodied := types.NewErrorWithStatusCode(
+		assert.AnError,
+		types.ErrorCodeBadResponseStatusCode,
+		http.StatusBadRequest,
+	)
+	bodied.SetMessage("bad response status code 400")
+	bodied.SetUpstreamBody(`{"type":"error","error":{"type":"invalid_request_error","message":"messages.31.content.22: Invalid ` + "`signature`" + ` in ` + "`thinking`" + ` block"}}`)
+	assert.True(t, InvalidThinkingSignature(bodied))
+}
+
+func TestStripSessionBoundThinking(t *testing.T) {
+	body := []byte(`{
+		"thinking":{"type":"enabled","budget_tokens":1024},
+		"reasoning":{"effort":"high"},
+		"messages":[
+			{"role":"user","content":"hi"},
+			{"role":"assistant","reasoning_content":"secret","reasoning":"secret","content":[
+				{"type":"thinking","thinking":"secret","signature":"sig"},
+				{"type":"redacted_thinking","data":"cipher"},
+				{"type":"text","text":"answer"}
+			]},
+			{"role":"assistant","content":[{"type":"thinking","thinking":"only"}]}
+		],
+		"input":[
+			{"type":"reasoning","encrypted_content":"cipher","summary":[]},
+			{"type":"message","role":"user","content":"next"}
+		],
+		"contents":[
+			{"role":"model","parts":[
+				{"text":"hidden","thought":true,"thoughtSignature":"sig"},
+				{"text":"visible","thoughtSignature":"sig"}
+			]}
+		]
+	}`)
+
+	parsed := gjson.ParseBytes(StripSessionBoundThinking(body))
+	assert.Equal(t, "enabled", parsed.Get("thinking.type").String())
+	assert.Equal(t, int64(1024), parsed.Get("thinking.budget_tokens").Int())
+	assert.Equal(t, "high", parsed.Get("reasoning.effort").String())
+	require.Equal(t, 2, len(parsed.Get("messages").Array()))
+	assert.Equal(t, "hi", parsed.Get("messages.0.content").String())
+	require.Equal(t, 1, len(parsed.Get("messages.1.content").Array()))
+	assert.Equal(t, "text", parsed.Get("messages.1.content.0.type").String())
+	assert.Equal(t, "answer", parsed.Get("messages.1.content.0.text").String())
+	assert.False(t, parsed.Get("messages.1.reasoning_content").Exists())
+	assert.False(t, parsed.Get("messages.1.reasoning").Exists())
+	require.Equal(t, 1, len(parsed.Get("input").Array()))
+	assert.Equal(t, "message", parsed.Get("input.0.type").String())
+	require.Equal(t, 1, len(parsed.Get("contents.0.parts").Array()))
+	assert.Equal(t, "visible", parsed.Get("contents.0.parts.0.text").String())
+	assert.False(t, parsed.Get("contents.0.parts.0.thoughtSignature").Exists())
+}
+
+func TestClearUnavailableSessionBinding(t *testing.T) {
+	body := `{
+		"model":"claude",
+		"previous_response_id":"resp_old",
+		"thinking":{"type":"enabled","budget_tokens":1024},
+		"messages":[
+			{"role":"user","content":"hi"},
+			{"role":"assistant","content":[
+				{"type":"thinking","thinking":"secret","signature":"sig"},
+				{"type":"text","text":"answer"}
+			]}
+		]
+	}`
+	ctx, info := newSessionRetry(t, body, map[string]string{"session_id": "sess-old"})
+	info.Request = &dto.ClaudeRequest{
+		Messages: []dto.ClaudeMessage{
+			{Role: "user", Content: "hi"},
+			{Role: "assistant", Content: []any{
+				map[string]any{"type": "thinking", "thinking": "secret", "signature": "sig"},
+				map[string]any{"type": "text", "text": "answer"},
+			}},
+		},
+	}
+
+	ClearUnavailableSessionBinding(ctx, info)
+
+	sessionID := ctx.Request.Header.Get("session_id")
+	require.NotEmpty(t, sessionID)
+	assert.NotEqual(t, "sess-old", sessionID)
+	assert.True(t, info.SessionBindingCleared)
+	stored := storedSessionBody(t, ctx)
+	assert.False(t, stored.Get("previous_response_id").Exists())
+	assert.Equal(t, "enabled", stored.Get("thinking.type").String())
+	assert.Equal(t, "answer", stored.Get("messages.1.content.0.text").String())
+	assert.False(t, strings.Contains(stored.Raw, "secret"))
+	req := info.Request.(*dto.ClaudeRequest)
+	require.Len(t, req.Messages, 2)
+	assistant, err := common.Marshal(req.Messages[1].Content)
+	require.NoError(t, err)
+	assert.NotContains(t, string(assistant), "thinking")
+	assert.Contains(t, string(assistant), "answer")
+
+	ClearUnavailableSessionBinding(ctx, info)
+	assert.Equal(t, sessionID, ctx.Request.Header.Get("session_id"))
+}
+
 func TestStripEncryptedReasoningInput(t *testing.T) {
 	input := []byte(`[
 		{"type":"message","role":"user","content":"hi"},

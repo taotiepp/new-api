@@ -177,6 +177,10 @@ type RelayInfo struct {
 	// switch on. The next attempt drops that ciphertext, replaces the session
 	// field a downstream account router uses, and removes previous_response_id.
 	RetryWithoutEncryptedContent bool
+	// SessionBindingCleared is set after a strict session-binding failure or an
+	// invalid thinking signature when the token switch is on. That retry drops
+	// the bound thinking chain and replaces the session.
+	SessionBindingCleared bool
 	// BlockedSessionRewritten is set when this request already replaced a
 	// session blocked by cyber-security policy. A second block stops.
 	BlockedSessionRewritten bool

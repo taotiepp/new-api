@@ -28,8 +28,10 @@ type Token struct {
 	UsedQuota          int     `json:"used_quota" gorm:"default:0"` // used quota
 	Group              string  `json:"group" gorm:"default:''"`
 	CrossGroupRetry    bool    `json:"cross_group_retry"` // 跨分组重试，仅auto分组有效
-	// ClearEncryptedContent retries a Responses request once without encrypted
-	// reasoning after upstream rejects the ciphertext or blocks the session.
+	// ClearEncryptedContent retries a request once after upstream rejects encrypted
+	// reasoning, blocks the session, reports that strict session binding is
+	// unavailable, or rejects a thinking-block signature. The retry drops that
+	// thinking chain and replaces the session.
 	ClearEncryptedContent bool           `json:"clear_encrypted_content"`
 	AutoGroups            string         `json:"-" gorm:"type:text"`
 	DeletedAt             gorm.DeletedAt `gorm:"index"`

@@ -230,6 +230,7 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 	relayInfo.LastError = nil
 	encryptedReasoningExtraRetry := 0
 	responsesStreamExtraRetry := 0
+	sessionBindingExtraRetry := 0
 	if common.GetContextKeyBool(c, constant.ContextKeyTokenClearEncryptedContent) {
 		service.PrepareBlockedSessionRetry(c, relayInfo)
 		if relayInfo.BlockedSessionExhausted {
@@ -238,7 +239,7 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		}
 	}
 
-	for ; retryParam.GetRetry() <= common.RetryTimes+encryptedReasoningExtraRetry+responsesStreamExtraRetry; retryParam.IncreaseRetry() {
+	for ; retryParam.GetRetry() <= common.RetryTimes+encryptedReasoningExtraRetry+responsesStreamExtraRetry+sessionBindingExtraRetry; retryParam.IncreaseRetry() {
 		common.SetContextKey(c, constant.ContextKeyRelayAttemptStartTime, time.Now())
 		relayInfo.RetryIndex = retryParam.GetRetry()
 		channel, channelErr := getChannel(c, relayInfo, retryParam)
@@ -303,6 +304,16 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 			service.RotateBlockedSession(c, relayInfo)
 			if retryParam.GetRetry() >= common.RetryTimes {
 				encryptedReasoningExtraRetry = 1
+			}
+			processChannelError(c, channelError, newAPIError, relayInfo, true)
+			continue
+		}
+
+		if common.GetContextKeyBool(c, constant.ContextKeyTokenClearEncryptedContent) && service.StaleSessionBoundThinking(newAPIError) && !relayInfo.SessionBindingCleared {
+			service.AllowChannelAffinityRetry(c)
+			service.ClearUnavailableSessionBinding(c, relayInfo)
+			if retryParam.GetRetry() >= common.RetryTimes {
+				sessionBindingExtraRetry = 1
 			}
 			processChannelError(c, channelError, newAPIError, relayInfo, true)
 			continue

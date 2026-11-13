@@ -3,6 +3,7 @@ package service
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"strconv"
@@ -36,6 +37,8 @@ const (
 	encryptedContentDecryptFragment = "Encrypted content could not be decrypted or parsed"
 	sessionBlockedZhFragment        = "该会话已被网络安全策略屏蔽，请开启新会话"
 	sessionBlockedEnFragment        = "This session is blocked by cyber-security policy, please start a new session"
+	strictSessionBindingUnavailable = "strict_session_binding_unavailable"
+	invalidThinkingSignature        = "Invalid signature in thinking block"
 )
 
 // AllowEncryptedReasoningRetry reports whether this failure may be retried once
@@ -59,6 +62,228 @@ func SessionPolicyBlocked(err *types.NewAPIError) bool {
 	message := err.Error()
 	return strings.Contains(message, sessionBlockedZhFragment) &&
 		strings.Contains(message, sessionBlockedEnFragment)
+}
+
+// SessionBindingUnavailable reports the 503 that means the downstream session
+// binding cannot be used. The thinking chain and session from that binding are
+// stale and have to be removed before another attempt.
+func SessionBindingUnavailable(err *types.NewAPIError) bool {
+	if err == nil || err.StatusCode != http.StatusServiceUnavailable {
+		return false
+	}
+	if strings.Contains(err.Error(), strictSessionBindingUnavailable) {
+		return true
+	}
+	if err.HasUpstreamBody() && strings.Contains(err.UpstreamBody(), strictSessionBindingUnavailable) {
+		return true
+	}
+	openAI, ok := err.RelayError.(types.OpenAIError)
+	return ok && strings.Contains(fmt.Sprint(openAI.Code), strictSessionBindingUnavailable)
+}
+
+// InvalidThinkingSignature reports a 400 whose thinking block signature no
+// longer verifies. The old chain cannot be replayed on this session.
+func InvalidThinkingSignature(err *types.NewAPIError) bool {
+	if err == nil || err.StatusCode != http.StatusBadRequest {
+		return false
+	}
+	if invalidThinkingSignatureMessage(err.Error()) {
+		return true
+	}
+	return err.HasUpstreamBody() && invalidThinkingSignatureMessage(err.UpstreamBody())
+}
+
+// StaleSessionBoundThinking reports a failure that needs the thinking chain
+// and session removed before another attempt.
+func StaleSessionBoundThinking(err *types.NewAPIError) bool {
+	return SessionBindingUnavailable(err) || InvalidThinkingSignature(err)
+}
+
+func invalidThinkingSignatureMessage(message string) bool {
+	return strings.Contains(strings.ReplaceAll(message, "`", ""), invalidThinkingSignature)
+}
+
+// ClearUnavailableSessionBinding drops the thinking chain bound to the failed
+// session, then replaces the session field a downstream account router uses.
+// The relay calls this only when the token switch is on.
+func ClearUnavailableSessionBinding(c *gin.Context, info *relaycommon.RelayInfo) {
+	if info == nil || info.SessionBindingCleared {
+		return
+	}
+	info.SessionBindingCleared = true
+	stripSessionBoundThinkingRequest(info.Request)
+	stripSessionBoundThinkingBody(c)
+	ReplaceEffectiveSession(c, info)
+}
+
+// StripSessionBoundThinking removes a session-bound thinking chain from a
+// request body. Thinking blocks, redacted thinking, reasoning items, and
+// thought parts are dropped. The request's thinking mode stays in place.
+func StripSessionBoundThinking(body []byte) []byte {
+	trimmed := bytes.TrimSpace(body)
+	if len(trimmed) == 0 || !gjson.ValidBytes(trimmed) {
+		return body
+	}
+	var root any
+	if err := common.Unmarshal(trimmed, &root); err != nil {
+		return body
+	}
+	out, err := common.Marshal(stripSessionBoundThinkingValue(root))
+	if err != nil {
+		return body
+	}
+	return out
+}
+
+func stripSessionBoundThinkingRequest(request dto.Request) {
+	switch req := request.(type) {
+	case *dto.ClaudeRequest:
+		raw, err := common.Marshal(req.Messages)
+		if err != nil {
+			return
+		}
+		var messages []dto.ClaudeMessage
+		if err := common.Unmarshal(StripSessionBoundThinking(raw), &messages); err != nil {
+			return
+		}
+		req.Messages = messages
+	case *dto.GeneralOpenAIRequest:
+		raw, err := common.Marshal(req.Messages)
+		if err != nil {
+			return
+		}
+		var messages []dto.Message
+		if err := common.Unmarshal(StripSessionBoundThinking(raw), &messages); err != nil {
+			return
+		}
+		req.Messages = messages
+	case *dto.OpenAIResponsesRequest:
+		req.Input = StripSessionBoundThinking(req.Input)
+	case *dto.OpenAIResponsesCompactionRequest:
+		req.Input = StripSessionBoundThinking(req.Input)
+	case *dto.GeminiChatRequest:
+		raw, err := common.Marshal(req.Contents)
+		if err != nil {
+			return
+		}
+		var contents []dto.GeminiChatContent
+		if err := common.Unmarshal(StripSessionBoundThinking(raw), &contents); err != nil {
+			return
+		}
+		req.Contents = contents
+		for i := range req.Requests {
+			stripSessionBoundThinkingRequest(&req.Requests[i])
+		}
+	}
+}
+
+func stripSessionBoundThinkingBody(c *gin.Context) {
+	if c == nil {
+		return
+	}
+	storage, err := common.GetBodyStorage(c)
+	if err != nil {
+		return
+	}
+	raw, err := storage.Bytes()
+	if err != nil {
+		return
+	}
+	stripped := StripSessionBoundThinking(raw)
+	if bytes.Equal(stripped, raw) {
+		return
+	}
+	nextStorage, err := common.CreateBodyStorage(stripped)
+	if err != nil {
+		return
+	}
+	_ = storage.Close()
+	c.Set(common.KeyBodyStorage, nextStorage)
+	c.Set(common.KeyRequestBody, nil)
+	if c.Request != nil {
+		c.Request.Body = io.NopCloser(nextStorage)
+		c.Request.ContentLength = int64(len(stripped))
+	}
+}
+
+func stripSessionBoundThinkingValue(value any) any {
+	switch typed := value.(type) {
+	case map[string]any:
+		delete(typed, "reasoning_content")
+		delete(typed, "thoughtSignature")
+		delete(typed, "thought_signature")
+		if _, hasRole := typed["role"]; hasRole {
+			if _, isString := typed["reasoning"].(string); isString {
+				delete(typed, "reasoning")
+			}
+		}
+		for key, child := range typed {
+			typed[key] = stripSessionBoundThinkingValue(child)
+		}
+		return typed
+	case []any:
+		kept := make([]any, 0, len(typed))
+		for _, item := range typed {
+			if sessionBoundThinkingItem(item) {
+				continue
+			}
+			next := stripSessionBoundThinkingValue(item)
+			if thinkingOnlyMessage(next) {
+				continue
+			}
+			kept = append(kept, next)
+		}
+		return kept
+	default:
+		return value
+	}
+}
+
+func sessionBoundThinkingItem(item any) bool {
+	obj, ok := item.(map[string]any)
+	if !ok {
+		return false
+	}
+	switch obj["type"] {
+	case "thinking", "redacted_thinking", "reasoning":
+		return true
+	}
+	thought, ok := obj["thought"].(bool)
+	return ok && thought
+}
+
+func thinkingOnlyMessage(item any) bool {
+	obj, ok := item.(map[string]any)
+	if !ok {
+		return false
+	}
+	role, _ := obj["role"].(string)
+	if role == "" {
+		return false
+	}
+	if hasSessionBoundPayload(obj["tool_calls"]) || hasSessionBoundPayload(obj["tool_call_id"]) || obj["functionCall"] != nil || obj["function_call"] != nil {
+		return false
+	}
+	if content, ok := obj["content"].([]any); ok && len(content) == 0 {
+		return true
+	}
+	if parts, ok := obj["parts"].([]any); ok && len(parts) == 0 {
+		return true
+	}
+	return obj["content"] == nil && obj["parts"] == nil
+}
+
+func hasSessionBoundPayload(value any) bool {
+	switch typed := value.(type) {
+	case nil:
+		return false
+	case string:
+		return strings.TrimSpace(typed) != ""
+	case []any:
+		return len(typed) > 0
+	default:
+		return true
+	}
 }
 
 // BlockedSessionError is returned when a replacement session was blocked again.
