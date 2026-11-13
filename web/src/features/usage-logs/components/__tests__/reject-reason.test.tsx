@@ -16,6 +16,8 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { gzipSync } from 'node:zlib'
+
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, test } from 'vitest'
@@ -145,5 +147,54 @@ describe('usage log reject reason', () => {
     )
 
     expect(screen.queryByText('Upstream response')).toBeNull()
+  })
+
+  test('shows the stored request body only to admins', async () => {
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    })
+    queryClients.push(queryClient)
+    const log = makeLog({
+      admin_info: {
+        request_body: gzipSync(
+          Buffer.from('{"input":"secret-request"}')
+        ).toString('base64'),
+        request_body_truncated: true,
+      },
+    })
+
+    const { unmount } = render(
+      <QueryClientProvider client={queryClient}>
+        <DetailsDialog
+          log={log}
+          isAdmin
+          isRoot={false}
+          open
+          onOpenChange={() => undefined}
+        />
+      </QueryClientProvider>
+    )
+
+    expect(
+      await screen.findByText('{"input":"secret-request"}')
+    ).toBeInTheDocument()
+    expect(screen.getByText('Request body')).toBeInTheDocument()
+    expect(screen.getByText('Request body was truncated')).toBeInTheDocument()
+    unmount()
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <DetailsDialog
+          log={log}
+          isAdmin={false}
+          isRoot={false}
+          open
+          onOpenChange={() => undefined}
+        />
+      </QueryClientProvider>
+    )
+
+    expect(screen.queryByText('{"input":"secret-request"}')).toBeNull()
+    expect(screen.queryByText('Request body')).toBeNull()
   })
 })

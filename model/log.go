@@ -78,7 +78,7 @@ type Log struct {
 	Ip                string `json:"ip" gorm:"index;default:''"`
 	RequestId         string `json:"request_id,omitempty" gorm:"type:varchar(64);index:idx_logs_request_id;default:''"`
 	UpstreamRequestId string `json:"upstream_request_id,omitempty" gorm:"type:varchar(128);index:idx_logs_upstream_request_id;default:''"`
-	Other             string `json:"other"`
+	Other             string `json:"other,omitempty"`
 }
 
 // don't use iota, avoid change log type value
@@ -168,7 +168,7 @@ func GetLogByTokenId(tokenId int) (logs []*Log, err error) {
 		order = clickHouseLogOrder("")
 	}
 	tx := excludeRetriedAttemptLogs(LOG_DB.Model(&Log{}).Where("token_id = ?", tokenId), "other")
-	err = tx.Order(order).Limit(common.MaxRecentItems).Find(&logs).Error
+	err = tx.Select(logListColumns()).Order(order).Limit(common.MaxRecentItems).Find(&logs).Error
 	formatUserLogs(logs, 0)
 	return logs, err
 }
@@ -307,6 +307,7 @@ func RecordErrorLog(c *gin.Context, userId int, channelId int, modelName string,
 	username := c.GetString("username")
 	requestId := c.GetString(common.RequestIdKey)
 	upstreamRequestId := c.GetString(common.UpstreamRequestIdKey)
+	AttachErrorRequestBody(c, other)
 	otherStr := other.JSONString()
 	// 判断是否需要记录 IP
 	needRecordIp := false
@@ -402,6 +403,9 @@ func RecordConsumeLog(c *gin.Context, userId int, params RecordConsumeLogParams)
 		}
 	}
 	logger.LogInfo(c, fmt.Sprintf("record consume log: userId=%d, params=%s", userId, common.GetJsonString(params)))
+	if logType == LogTypeError {
+		AttachErrorRequestBody(c, params.Other)
+	}
 	username := c.GetString("username")
 	requestId := c.GetString(common.RequestIdKey)
 	upstreamRequestId := c.GetString(common.UpstreamRequestIdKey)
@@ -567,7 +571,7 @@ func GetAllLogs(logType int, startTimestamp int64, endTimestamp int64, modelName
 	if common.UsingLogDatabase(common.DatabaseTypeClickHouse) {
 		order = clickHouseLogOrder("logs.")
 	}
-	err = tx.Order(order).Limit(num).Offset(startIdx).Find(&logs).Error
+	err = tx.Select(logListColumns()).Order(order).Limit(num).Offset(startIdx).Find(&logs).Error
 	if err != nil {
 		return nil, 0, err
 	}
@@ -660,7 +664,7 @@ func GetUserLogs(userId int, logType int, startTimestamp int64, endTimestamp int
 	if common.UsingLogDatabase(common.DatabaseTypeClickHouse) {
 		order = clickHouseLogOrder("logs.")
 	}
-	err = tx.Order(order).Limit(num).Offset(startIdx).Find(&logs).Error
+	err = tx.Select(logListColumns()).Order(order).Limit(num).Offset(startIdx).Find(&logs).Error
 	if err != nil {
 		common.SysError("failed to search user logs: " + err.Error())
 		return nil, 0, errors.New("查询日志失败")

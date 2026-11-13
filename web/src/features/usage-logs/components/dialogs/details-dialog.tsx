@@ -1,3 +1,4 @@
+import { useQuery } from '@tanstack/react-query'
 /*
 Copyright (C) 2023-2026 QuantumNous
 
@@ -50,6 +51,7 @@ import {
   Info,
   LogIn,
 } from 'lucide-react'
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { Dialog } from '@/components/dialog'
@@ -63,11 +65,18 @@ import { formatBillingCurrencyFromUSD } from '@/lib/currency'
 import { formatLogQuota, formatTokens, formatUseTime } from '@/lib/format'
 import { cn } from '@/lib/utils'
 
+import { getLogOther } from '../../api'
 import { AuditDetailFields } from '../../audit/components/audit-detail-fields'
 import { LOG_TYPE_ENUM } from '../../constants'
 import type { UsageLog } from '../../data/schema'
 import {
+  formatAppliedDiscount,
+  getAppliedChannelDiscount,
+  getAppliedUserDiscount,
+} from '../../lib/discount-display'
+import {
   parseLogOther,
+  decodeGzipBase64,
   getParamOverrideActionLabel,
   parseAuditLine,
   decodeBillingExprB64,
@@ -79,11 +88,6 @@ import {
   getReasoningEffortVariant,
   renderAuditContent,
 } from '../../lib/format'
-import {
-  formatAppliedDiscount,
-  getAppliedChannelDiscount,
-  getAppliedUserDiscount,
-} from '../../lib/discount-display'
 import { buildQuotaAuditOperation } from '../../lib/quota-audit-operation'
 import {
   getLogTypeConfig,
@@ -383,11 +387,7 @@ function BillingBreakdown(props: {
       />
       {isAdmin ? (
         <>
-          <DetailRow
-            label={t('Channel cost')}
-            value={channelCostValue}
-            mono
-          />
+          <DetailRow label={t('Channel cost')} value={channelCostValue} mono />
           <DetailRow
             label={t('Margin')}
             value={formatLogQuota((log.quota || 0) - (log.cost_quota || 0))}
@@ -476,7 +476,53 @@ interface DetailsDialogProps {
 export function DetailsDialog(props: DetailsDialogProps) {
   const { t } = useTranslation()
   const { copiedText, copyToClipboard } = useCopyToClipboard({ notify: false })
-  const other = parseLogOther(props.log.other)
+  const detailEnabled =
+    props.open && !props.log.other && Boolean(props.log.request_id)
+  const detailQuery = useQuery({
+    queryKey: [
+      'usage-log-other',
+      props.isAdmin,
+      props.log.user_id,
+      props.log.request_id,
+      props.log.created_at,
+      props.log.channel,
+      props.log.type,
+      props.log.use_time,
+      props.log.token_id,
+      props.log.model_name,
+    ],
+    enabled: detailEnabled,
+    retry: false,
+    queryFn: () => getLogOther(props.log, props.isAdmin),
+  })
+  const other = parseLogOther(props.log.other || detailQuery.data || '')
+  const requestPayload = props.isAdmin
+    ? other?.admin_info?.request_body
+    : undefined
+  const [decodedRequest, setDecodedRequest] = useState<string | null>(null)
+  const [requestDecodeFailed, setRequestDecodeFailed] = useState(false)
+  useEffect(() => {
+    if (!requestPayload) {
+      setDecodedRequest(null)
+      setRequestDecodeFailed(false)
+      return
+    }
+    let cancelled = false
+    void decodeGzipBase64(requestPayload)
+      .then((text) => {
+        if (cancelled) return
+        setDecodedRequest(text)
+        setRequestDecodeFailed(false)
+      })
+      .catch(() => {
+        if (cancelled) return
+        setDecodedRequest(null)
+        setRequestDecodeFailed(true)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [requestPayload])
   const typeConfig = getLogTypeConfig(props.log.type)
 
   const isViolation = isViolationFeeLog(other)
@@ -646,6 +692,14 @@ export function DetailsDialog(props: DetailsDialogProps) {
       bodyClassName='pr-2 sm:pr-4'
     >
       <div className='w-full max-w-full min-w-0 space-y-2.5 overflow-x-hidden py-1 sm:space-y-3'>
+        {detailEnabled && detailQuery.isFetching ? (
+          <p className='text-muted-foreground text-xs'>{t('Loading')}</p>
+        ) : null}
+        {detailEnabled && detailQuery.isError ? (
+          <p className='text-xs text-red-600 dark:text-red-400'>
+            {t('Failed to load log details')}
+          </p>
+        ) : null}
         {/* Overview section - key identifiers */}
         <div className='min-w-0 space-y-1'>
           {props.log.request_id && (
@@ -767,14 +821,29 @@ export function DetailsDialog(props: DetailsDialogProps) {
               />
             ) : null}
             {props.isAdmin && other?.admin_info?.retried === false ? (
-              <DetailRow
-                label={t('Outcome')}
-                value={t('Final failure')}
-              />
+              <DetailRow label={t('Outcome')} value={t('Final failure')} />
             ) : null}
             <p className='text-xs wrap-break-word whitespace-pre-wrap'>
               {details}
             </p>
+            {props.isAdmin && decodedRequest !== null ? (
+              <pre className='bg-background/60 mt-2 max-h-80 overflow-y-auto rounded border p-2 font-mono text-[11px] leading-relaxed wrap-break-word whitespace-pre-wrap'>
+                <span className='text-muted-foreground mb-1 block font-sans'>
+                  {t('Request body')}
+                </span>
+                {other?.admin_info?.request_body_truncated ? (
+                  <span className='text-muted-foreground mb-1 block font-sans'>
+                    {t('Request body was truncated')}
+                  </span>
+                ) : null}
+                {decodedRequest}
+              </pre>
+            ) : null}
+            {props.isAdmin && requestDecodeFailed ? (
+              <p className='text-muted-foreground mt-2 text-xs'>
+                {t('Failed to decode request body')}
+              </p>
+            ) : null}
             {props.isAdmin && upstreamBody !== undefined ? (
               <pre className='bg-background/60 mt-2 max-h-80 overflow-y-auto rounded border p-2 font-mono text-[11px] leading-relaxed wrap-break-word whitespace-pre-wrap'>
                 <span className='text-muted-foreground mb-1 block font-sans'>

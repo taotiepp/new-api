@@ -146,6 +146,9 @@ export interface LogOtherData {
     // The upstream response captured for this failure. Empty means the
     // response was read and contained nothing. Admin-only.
     upstream_body?: string
+    // Gzip+base64 request body captured for this failure. Admin-only.
+    request_body?: string
+    request_body_truncated?: boolean
     // Reject / intercept reason (admin only)
     reject_reason?: string
     // True when this error was retried and was not the failure returned to the user.

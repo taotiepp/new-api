@@ -16,6 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 
 import { CopyButton } from '@/components/copy-button'
@@ -27,6 +28,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { getLogOther } from '@/features/usage-logs/api'
 import { LOG_TYPE_ENUM, LOG_TYPES } from '@/features/usage-logs/constants'
 import type { UsageLog } from '@/features/usage-logs/data/schema'
 import {
@@ -62,7 +64,29 @@ export function PortalLogDetailsDialog(props: PortalLogDetailsDialogProps) {
   const { t } = useTranslation()
   const { formatQuota } = usePricingCurrency()
   const log = props.log
-  const other = log ? parseLogOther(log.other) : null
+  const detailEnabled = log != null && !log.other && Boolean(log.request_id)
+  const detailQuery = useQuery({
+    queryKey: [
+      'portal-log-other',
+      log?.user_id,
+      log?.request_id,
+      log?.created_at,
+      log?.channel,
+      log?.type,
+      log?.use_time,
+      log?.token_id,
+      log?.model_name,
+    ],
+    enabled: detailEnabled,
+    retry: false,
+    queryFn: () => {
+      if (log == null) {
+        throw new Error('missing log')
+      }
+      return getLogOther(log, false)
+    },
+  })
+  const other = log ? parseLogOther(log.other || detailQuery.data || '') : null
   const typeLabel =
     LOG_TYPES.find((item) => item.value === log?.type)?.label ?? 'Unknown'
   const showTiming = log != null && isTimingLogType(log.type)
@@ -173,6 +197,14 @@ export function PortalLogDetailsDialog(props: PortalLogDetailsDialogProps) {
         <DialogHeader>
           <DialogTitle>{t('Request Logs')}</DialogTitle>
         </DialogHeader>
+        {detailEnabled && detailQuery.isFetching ? (
+          <p className='text-muted-foreground text-xs'>{t('Loading')}</p>
+        ) : null}
+        {detailEnabled && detailQuery.isError ? (
+          <p className='text-xs text-red-600 dark:text-red-400'>
+            {t('Failed to load log details')}
+          </p>
+        ) : null}
         <dl className='grid gap-3'>
           {rows.map((row) => (
             <div key={row.label} className='grid gap-1 sm:grid-cols-[8rem_1fr]'>
@@ -235,10 +267,7 @@ export function PortalLogDetailsDialog(props: PortalLogDetailsDialogProps) {
           ) : null}
         </dl>
         <DialogFooter>
-          <Button
-            type='button'
-            onClick={() => props.onOpenChange(false)}
-          >
+          <Button type='button' onClick={() => props.onOpenChange(false)}>
             {t('Done')}
           </Button>
         </DialogFooter>

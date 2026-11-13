@@ -1,6 +1,7 @@
 package model
 
 import (
+	"bytes"
 	"testing"
 
 	"github.com/QuantumNous/new-api/common"
@@ -8,6 +9,23 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func TestCompressLogPayloadRoundTrip(t *testing.T) {
+	raw := bytes.Repeat([]byte("request-body "), 80)
+	encoded, truncated := compressLogPayload(raw)
+	require.NotEmpty(t, encoded)
+	assert.False(t, truncated)
+	decoded, err := decompressLogPayload(encoded)
+	require.NoError(t, err)
+	assert.Equal(t, raw, decoded)
+
+	huge := bytes.Repeat([]byte("x"), maxErrorRequestBodyBytes+32)
+	encoded, truncated = compressLogPayload(huge)
+	assert.True(t, truncated)
+	decoded, err = decompressLogPayload(encoded)
+	require.NoError(t, err)
+	assert.Equal(t, huge[:maxErrorRequestBodyBytes], decoded)
+}
 
 // TestFormatUserLogsStripsQuotaSaturation verifies the admin-only quota
 // saturation marker (nested under other.admin_info) is removed for non-admin

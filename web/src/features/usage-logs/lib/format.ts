@@ -285,6 +285,25 @@ export function decodeBillingExprB64(exprB64: string | undefined): string {
   }
 }
 
+/** Decode a gzip+base64 request body stored on an admin failure log. */
+export async function decodeGzipBase64(value: string): Promise<string> {
+  const binary =
+    typeof window !== 'undefined'
+      ? window.atob(value)
+      : Buffer.from(value, 'base64').toString('binary')
+  const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0))
+  if (typeof DecompressionStream === 'undefined') {
+    throw new Error('gzip decoding is unavailable')
+  }
+  const stream = new ReadableStream<BufferSource>({
+    start(controller) {
+      controller.enqueue(bytes)
+      controller.close()
+    },
+  }).pipeThrough(new DecompressionStream('gzip'))
+  return new Response(stream).text()
+}
+
 /**
  * Resolve which parsed tier corresponds to the matched_tier label in a log
  * entry. Missing or unknown labels do not fall back to another tier because

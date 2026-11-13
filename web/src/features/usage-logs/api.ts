@@ -18,6 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { api, type ApiRequestConfig } from '@/lib/api'
 
+import type { UsageLog } from './data/schema'
 import { buildQueryParams } from './lib/query-params'
 import { parseTaskArtifactsResponse } from './lib/task-artifacts'
 import type {
@@ -79,6 +80,30 @@ export const getAllLogs = (params: GetLogsParams = {}) =>
 export const getUserLogs = (
   params: Omit<GetLogsParams, 'username' | 'channel'> = {}
 ) => fetchLogs('/api/log', params, false)
+
+export async function getLogOther(
+  log: UsageLog,
+  isAdmin: boolean
+): Promise<string> {
+  const queryParams = buildQueryParams({
+    id: log.id,
+    request_id: log.request_id,
+    created_at: log.created_at,
+    channel: log.channel,
+    type: log.type,
+    use_time: log.use_time,
+    token_id: log.token_id,
+    model_name: log.model_name,
+    content: log.content,
+    user_id: isAdmin ? undefined : log.user_id,
+  })
+  const path = isAdmin ? '/api/log/detail' : '/api/log/self/detail'
+  const res = await api.get(`${path}?${queryParams}`)
+  if (!res.data?.success) {
+    throw new Error(res.data?.message || 'Failed to load log details')
+  }
+  return typeof res.data.data?.other === 'string' ? res.data.data.other : ''
+}
 
 export const getLogStats = (params: GetLogStatsParams = {}) =>
   fetchLogStats('/api/log', params, true)

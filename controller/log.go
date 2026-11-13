@@ -24,6 +24,47 @@ func queryMinUseTime(c *gin.Context) int {
 	return value
 }
 
+func logProbeFromQuery(c *gin.Context) model.Log {
+	id, _ := strconv.Atoi(c.Query("id"))
+	createdAt, _ := strconv.ParseInt(c.Query("created_at"), 10, 64)
+	channel, _ := strconv.Atoi(c.Query("channel"))
+	logType, _ := strconv.Atoi(c.Query("type"))
+	useTime, _ := strconv.Atoi(c.Query("use_time"))
+	tokenID, _ := strconv.Atoi(c.Query("token_id"))
+	return model.Log{
+		Id:        id,
+		RequestId: c.Query("request_id"),
+		CreatedAt: createdAt,
+		ChannelId: channel,
+		Type:      logType,
+		UseTime:   useTime,
+		TokenId:   tokenID,
+		ModelName: c.Query("model_name"),
+		Content:   c.Query("content"),
+	}
+}
+
+func writeLogOther(c *gin.Context, scopeUserID int, asRoot bool) {
+	other, err := model.GetLogOther(scopeUserID, logProbeFromQuery(c), asRoot)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, gin.H{"other": other})
+}
+
+func GetLogDetail(c *gin.Context) {
+	writeLogOther(c, 0, c.GetInt("role") >= common.RoleRootUser)
+}
+
+func GetSelfLogDetail(c *gin.Context) {
+	subject, ok := resolveScopedUser(c)
+	if !ok {
+		return
+	}
+	writeLogOther(c, subject.ID, false)
+}
+
 func GetAllLogs(c *gin.Context) {
 	pageInfo := common.GetPageQuery(c)
 	logType, _ := strconv.Atoi(c.Query("type"))

@@ -16,6 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen } from '@testing-library/react'
 import { describe, expect, test } from 'vitest'
 
@@ -62,7 +63,14 @@ function renderFormula(
       ...other,
     }),
   })
-  render(<PortalLogDetailsDialog log={log} onOpenChange={() => {}} />)
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  })
+  render(
+    <QueryClientProvider client={client}>
+      <PortalLogDetailsDialog log={log} onOpenChange={() => {}} />
+    </QueryClientProvider>
+  )
   return screen.getByText(/Matched Tier: standard/).textContent ?? ''
 }
 
