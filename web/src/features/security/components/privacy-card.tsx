@@ -22,6 +22,7 @@ import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
+import { RiskAcknowledgementDialog } from '@/components/risk-acknowledgement-dialog'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
@@ -29,6 +30,7 @@ import { TitledCard } from '@/components/ui/titled-card'
 import { updateUserSettings } from '@/features/profile/api'
 import { parseUserSettings } from '@/features/profile/lib/format'
 import type { UserProfile } from '@/features/profile/types'
+import { useStatus } from '@/hooks/use-status'
 import { handleServerError } from '@/lib/handle-server-error'
 import { createServerError } from '@/lib/server-error-message'
 
@@ -39,9 +41,11 @@ type PrivacyCardProps = {
 
 export function FailedRequestBodyCard(props: PrivacyCardProps) {
   const { t } = useTranslation()
+  const { status } = useStatus()
   const [enabled, setEnabled] = useState(() =>
     Boolean(parseUserSettings(props.profile.setting).record_error_request_body)
   )
+  const [consentOpen, setConsentOpen] = useState(false)
   useEffect(() => {
     setEnabled(
       Boolean(
@@ -50,16 +54,30 @@ export function FailedRequestBodyCard(props: PrivacyCardProps) {
     )
   }, [props.profile.setting])
 
+  const ttlDays =
+    typeof status?.log_ttl_days === 'number' ? status.log_ttl_days : null
+  let retention = t('These inputs are not deleted on a fixed schedule.')
+  if (ttlDays === null) {
+    retention = t('Checking how long stored inputs are kept.')
+  } else if (ttlDays > 0) {
+    retention = t('These inputs are deleted after {{count}} days.', {
+      count: ttlDays,
+    })
+  }
+
   const save = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (next: boolean) => {
       const response = await updateUserSettings({
-        record_error_request_body: enabled,
+        record_error_request_body: next,
       })
       if (!response.success) {
         throw createServerError(response, t('Failed to update settings'))
       }
+      return next
     },
-    onSuccess: () => {
+    onSuccess: (next) => {
+      setEnabled(next)
+      setConsentOpen(false)
       toast.success(t('Settings updated successfully'))
       props.onUpdate()
     },
@@ -71,7 +89,7 @@ export function FailedRequestBodyCard(props: PrivacyCardProps) {
     <TitledCard
       title={t('Store failed requests')}
       description={t(
-        'Save the request body when a request fails. Only administrators can view it.'
+        "Store a failed request's input so administrators can debug it. Turning this on requires your agreement."
       )}
       disableHoverEffect
     >
@@ -82,20 +100,49 @@ export function FailedRequestBodyCard(props: PrivacyCardProps) {
         <Switch
           id='security-store-failed-request'
           checked={enabled}
-          onCheckedChange={setEnabled}
+          onCheckedChange={(checked) => {
+            if (checked) {
+              setConsentOpen(true)
+              return
+            }
+            setEnabled(false)
+          }}
           disabled={save.isPending}
         />
       </div>
       <div className='mt-4 flex justify-end'>
         <Button
           type='button'
-          onClick={() => save.mutate()}
+          onClick={() => save.mutate(enabled)}
           disabled={save.isPending}
         >
           {save.isPending && <Loader2 className='size-4 animate-spin' />}
           {save.isPending ? t('Saving...') : t('Save Settings')}
         </Button>
       </div>
+      <RiskAcknowledgementDialog
+        open={consentOpen}
+        onOpenChange={setConsentOpen}
+        title={t('Turn on storage of failed requests?')}
+        description={t(
+          'This is only for debugging. Stored inputs are not used for anything else.'
+        )}
+        items={[
+          t('Only the input sent with a failed request is stored.'),
+          t('Successful requests are not stored.'),
+          t('Only administrators can view the stored input.'),
+          retention,
+        ]}
+        checklist={[
+          t(
+            'I understand the above and agree to store failed request inputs for debugging.'
+          ),
+        ]}
+        confirmText={t('Agree and turn on')}
+        destructive={false}
+        isLoading={save.isPending || ttlDays === null}
+        onConfirm={() => save.mutate(true)}
+      />
     </TitledCard>
   )
 }

@@ -155,7 +155,9 @@ func TestUpdateUserSettingLogsFailedRequestBodySwitch(t *testing.T) {
 	assert.Equal(t, model.AuditCategorySecurity, logs[0].Category)
 	assert.Equal(t, "user.error_request_body_enable", logs[0].Action)
 	assert.Equal(t, "Enabled storing failed request bodies", logs[0].Content)
+	assert.Equal(t, "203.0.113.8", logs[0].Ip)
 	assert.True(t, logs[0].Success)
+	assert.Equal(t, "203.0.113.8", logs[1].Ip)
 	assert.Equal(t, "user.error_request_body_disable", logs[1].Action)
 	assert.Equal(t, "Disabled storing failed request bodies", logs[1].Content)
 
@@ -176,6 +178,7 @@ func saveSetting(t *testing.T, userID int, recordBody bool) {
 	ctx, _ := gin.CreateTestContext(recorder)
 	ctx.Set("id", userID)
 	ctx.Request = httptest.NewRequest(http.MethodPut, "/api/user/setting", bytes.NewReader(encoded))
+	ctx.Request.RemoteAddr = "203.0.113.8:443"
 	ctx.Request.Header.Set("Content-Type", "application/json")
 	ctx.Request.Header.Set("Accept-Language", "en")
 	UpdateUserSetting(ctx)

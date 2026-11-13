@@ -427,6 +427,15 @@ func clickHouseLogTTLDays() int {
 	return ttlDays
 }
 
+// LogRetentionDays is how long usage logs, including stored failed-request
+// inputs, stay on a ClickHouse log database. Other databases have no TTL.
+func LogRetentionDays() int {
+	if !common.UsingLogDatabase(common.DatabaseTypeClickHouse) {
+		return 0
+	}
+	return clickHouseLogTTLDays()
+}
+
 func clickHouseLogTTLExpression(ttlDays int) string {
 	if ttlDays <= 0 {
 		return ""

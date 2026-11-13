@@ -120,14 +120,13 @@ describe('privacy settings', () => {
 })
 
 describe('failed request body setting', () => {
-  it('starts off and saves the enabled value', async () => {
-    vi.spyOn(api, 'get').mockResolvedValue({
-      data: { success: true, data: profile },
+  function renderCard(setting = profile.setting) {
+    vi.spyOn(api, 'get').mockImplementation(async (url: string) => {
+      if (url === '/api/status') {
+        return { data: { success: true, data: { log_ttl_days: 30 } } }
+      }
+      return { data: { success: true, data: profile } }
     })
-    const put = vi
-      .spyOn(api, 'put')
-      .mockResolvedValue({ data: { success: true } })
-    const user = userEvent.setup()
     const client = new QueryClient({
       defaultOptions: {
         queries: { retry: false },
@@ -137,17 +136,83 @@ describe('failed request body setting', () => {
     const onUpdate = vi.fn()
     render(
       <QueryClientProvider client={client}>
-        <FailedRequestBodyCard profile={profile} onUpdate={onUpdate} />
+        <FailedRequestBodyCard
+          profile={{ ...profile, setting }}
+          onUpdate={onUpdate}
+        />
+        <Toaster />
       </QueryClientProvider>
     )
+    return { onUpdate }
+  }
+
+  it('asks for agreement and includes the current retention before turning on', async () => {
+    const put = vi
+      .spyOn(api, 'put')
+      .mockResolvedValue({ data: { success: true } })
+    const user = userEvent.setup()
+    const { onUpdate } = renderCard()
     const toggle = screen.getByRole('switch', { name: 'Store failed requests' })
     expect(toggle).not.toBeChecked()
     await user.click(toggle)
-    await user.click(screen.getByRole('button', { name: 'Save Settings' }))
+    expect(
+      await screen.findByRole('heading', {
+        name: 'Turn on storage of failed requests?',
+      })
+    ).toBeVisible()
+    expect(
+      screen.getByText('These inputs are deleted after 30 days.')
+    ).toBeVisible()
+    expect(put).not.toHaveBeenCalled()
+    expect(
+      screen.getByRole('button', { name: 'Agree and turn on' })
+    ).toBeDisabled()
+    await user.click(
+      screen.getByRole('checkbox', {
+        name: 'I understand the above and agree to store failed request inputs for debugging.',
+      })
+    )
+    await user.click(screen.getByRole('button', { name: 'Agree and turn on' }))
     await waitFor(() => expect(onUpdate).toHaveBeenCalled())
     expect(put).toHaveBeenCalledWith(
       '/api/user/setting',
       expect.objectContaining({ record_error_request_body: true })
+    )
+    expect(toggle).toBeChecked()
+  })
+
+  it('leaves the switch off when the agreement is cancelled', async () => {
+    const put = vi.spyOn(api, 'put')
+    const user = userEvent.setup()
+    renderCard()
+    const toggle = screen.getByRole('switch', { name: 'Store failed requests' })
+    await user.click(toggle)
+    await user.click(await screen.findByRole('button', { name: 'Cancel' }))
+    expect(toggle).not.toBeChecked()
+    expect(put).not.toHaveBeenCalled()
+  })
+
+  it('turns the setting off without asking again', async () => {
+    const put = vi
+      .spyOn(api, 'put')
+      .mockResolvedValue({ data: { success: true } })
+    const user = userEvent.setup()
+    const { onUpdate } = renderCard(
+      JSON.stringify({ record_error_request_body: true })
+    )
+    const toggle = screen.getByRole('switch', { name: 'Store failed requests' })
+    expect(toggle).toBeChecked()
+    await user.click(toggle)
+    expect(
+      screen.queryByRole('heading', {
+        name: 'Turn on storage of failed requests?',
+      })
+    ).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Save Settings' }))
+    await waitFor(() => expect(onUpdate).toHaveBeenCalled())
+    expect(put).toHaveBeenCalledWith(
+      '/api/user/setting',
+      expect.objectContaining({ record_error_request_body: false })
     )
   })
 })
