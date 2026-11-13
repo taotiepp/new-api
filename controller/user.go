@@ -1288,6 +1288,7 @@ type UpdateUserSettingRequest struct {
 	UpstreamModelUpdateNotifyEnabled *bool   `json:"upstream_model_update_notify_enabled,omitempty"`
 	AcceptUnsetModelRatioModel       bool    `json:"accept_unset_model_ratio_model"`
 	RecordIpLog                      bool    `json:"record_ip_log"`
+	RecordErrorRequestBody           bool    `json:"record_error_request_body"`
 }
 
 func UpdateUserSetting(c *gin.Context) {
@@ -1295,9 +1296,31 @@ func UpdateUserSetting(c *gin.Context) {
 	if !ok {
 		return
 	}
+	previous := user.GetSetting().RecordErrorRequestBody
 	if err := model.UpdateUserSetting(user.Id, settings); err != nil {
 		common.ApiErrorI18n(c, i18n.MsgUpdateFailed)
 		return
+	}
+	if previous != settings.RecordErrorRequestBody {
+		action := "user.error_request_body_disable"
+		content := "Disabled storing failed request bodies"
+		if settings.RecordErrorRequestBody {
+			action = "user.error_request_body_enable"
+			content = "Enabled storing failed request bodies"
+		}
+		model.RecordAuditLog(c, model.AuditLog{
+			UserId:    user.Id,
+			Username:  user.Username,
+			ActorRole: user.Role,
+			Category:  model.AuditCategorySecurity,
+			Action:    action,
+			Content:   content,
+			Status:    http.StatusOK,
+			Success:   true,
+			Other: model.AuditOther{
+				Op: &model.AuditOperation{Action: action},
+			},
+		})
 	}
 	common.ApiSuccessI18n(c, i18n.MsgSettingSaved, nil)
 }
@@ -1442,6 +1465,7 @@ func userSettingFromRequest(user *model.User, req UpdateUserSettingRequest) dto.
 		UpstreamModelUpdateNotifyEnabled: upstreamModelUpdateNotifyEnabled,
 		AcceptUnsetRatioModel:            req.AcceptUnsetModelRatioModel,
 		RecordIpLog:                      req.RecordIpLog,
+		RecordErrorRequestBody:           req.RecordErrorRequestBody,
 		Language:                         existingSettings.Language,
 		SidebarModules:                   existingSettings.SidebarModules,
 		BillingPreference:                existingSettings.BillingPreference,

@@ -46,6 +46,7 @@ export function normalizeUserSettings(
     accept_unset_model_ratio_model:
       parsed.accept_unset_model_ratio_model || false,
     record_ip_log: parsed.record_ip_log || false,
+    record_error_request_body: parsed.record_error_request_body || false,
     upstream_model_update_notify_enabled:
       parsed.upstream_model_update_notify_enabled || false,
   }

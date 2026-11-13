@@ -23,10 +23,11 @@ const (
 	maxErrorRequestBodyBytes = 1 << 20
 )
 
-// AttachErrorRequestBody copies the caller request into admin-only log metadata.
-// User-facing log queries drop admin_info, so this payload is not returned to them.
-func AttachErrorRequestBody(c *gin.Context, other *LogOther) {
-	if c == nil || c.Request == nil || c.Request.Body == nil || other == nil {
+// AttachErrorRequestBody copies the caller request into admin-only log metadata
+// when that user has enabled storage. The default is off. User-facing log queries
+// drop admin_info, so this payload is not returned to them.
+func AttachErrorRequestBody(c *gin.Context, userID int, other *LogOther) {
+	if !userRecordsFailedRequestBody(userID) || c == nil || c.Request == nil || c.Request.Body == nil || other == nil {
 		return
 	}
 	storage, err := common.GetBodyStorage(c)
@@ -45,6 +46,17 @@ func AttachErrorRequestBody(c *gin.Context, other *LogOther) {
 	if truncated {
 		other.SetAdmin(LogOtherAdminRequestBodyTruncatedKey, true)
 	}
+}
+
+func userRecordsFailedRequestBody(userID int) bool {
+	if userID <= 0 {
+		return false
+	}
+	setting, err := GetUserSetting(userID, false)
+	if err != nil {
+		return false
+	}
+	return setting.RecordErrorRequestBody
 }
 
 func compressLogPayload(raw []byte) (string, bool) {

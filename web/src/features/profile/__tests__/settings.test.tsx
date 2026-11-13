@@ -59,6 +59,7 @@ const settings = {
   feishu_webhook_secret: '',
   accept_unset_model_ratio_model: true,
   record_ip_log: true,
+  record_error_request_body: true,
   upstream_model_update_notify_enabled: true,
 }
 
@@ -112,6 +113,7 @@ describe('user settings saves across profile and security', () => {
       feishu_webhook_secret: '',
       accept_unset_model_ratio_model: false,
       record_ip_log: true,
+      record_error_request_body: false,
       upstream_model_update_notify_enabled: false,
     })
   })
@@ -313,7 +315,11 @@ describe('user settings saves across profile and security', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Send test message' }))
 
-    const { record_ip_log: _recordIpLog, ...notificationSettings } = settings
+    const {
+      record_ip_log: _recordIpLog,
+      record_error_request_body: _recordErrorRequestBody,
+      ...notificationSettings
+    } = settings
     await waitFor(() =>
       expect(post).toHaveBeenCalledWith('/api/user/setting/test', {
         ...notificationSettings,

@@ -37,6 +37,69 @@ type PrivacyCardProps = {
   onUpdate: () => void
 }
 
+export function FailedRequestBodyCard(props: PrivacyCardProps) {
+  const { t } = useTranslation()
+  const [enabled, setEnabled] = useState(() =>
+    Boolean(parseUserSettings(props.profile.setting).record_error_request_body)
+  )
+  useEffect(() => {
+    setEnabled(
+      Boolean(
+        parseUserSettings(props.profile.setting).record_error_request_body
+      )
+    )
+  }, [props.profile.setting])
+
+  const save = useMutation({
+    mutationFn: async () => {
+      const response = await updateUserSettings({
+        record_error_request_body: enabled,
+      })
+      if (!response.success) {
+        throw createServerError(response, t('Failed to update settings'))
+      }
+    },
+    onSuccess: () => {
+      toast.success(t('Settings updated successfully'))
+      props.onUpdate()
+    },
+    onError: (error) =>
+      handleServerError(error, t('Failed to update settings')),
+  })
+
+  return (
+    <TitledCard
+      title={t('Store failed requests')}
+      description={t(
+        'Save the request body when a request fails. Only administrators can view it.'
+      )}
+      disableHoverEffect
+    >
+      <div className='flex items-center justify-between gap-4'>
+        <Label htmlFor='security-store-failed-request'>
+          {t('Store failed requests')}
+        </Label>
+        <Switch
+          id='security-store-failed-request'
+          checked={enabled}
+          onCheckedChange={setEnabled}
+          disabled={save.isPending}
+        />
+      </div>
+      <div className='mt-4 flex justify-end'>
+        <Button
+          type='button'
+          onClick={() => save.mutate()}
+          disabled={save.isPending}
+        >
+          {save.isPending && <Loader2 className='size-4 animate-spin' />}
+          {save.isPending ? t('Saving...') : t('Save Settings')}
+        </Button>
+      </div>
+    </TitledCard>
+  )
+}
+
 export function PrivacyCard(props: PrivacyCardProps) {
   const { t } = useTranslation()
   const [recordIpLog, setRecordIpLog] = useState(() =>

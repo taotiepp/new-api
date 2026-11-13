@@ -128,6 +128,60 @@ func TestUpdateUserSettingKeepsLanguageAndSidebar(t *testing.T) {
 	assert.Equal(t, 1200.0, got.QuotaWarningThreshold)
 }
 
+func TestUpdateUserSettingLogsFailedRequestBodySwitch(t *testing.T) {
+	setupModelListControllerTestDB(t)
+	require.NoError(t, i18n.Init())
+	require.NoError(t, model.DB.AutoMigrate(&model.AuditLog{}))
+
+	user := &model.User{
+		Username: "dana",
+		Password: "placeholder",
+		Role:     common.RoleCommonUser,
+		Status:   common.UserStatusEnabled,
+		Group:    "default",
+		AffCode:  "notify-test-dana",
+		Email:    "dana@example.com",
+		Setting:  `{"notify_type":"email","quota_warning_threshold":10}`,
+	}
+	require.NoError(t, model.DB.Create(user).Error)
+
+	saveSetting(t, user.Id, true)
+	saveSetting(t, user.Id, true)
+	saveSetting(t, user.Id, false)
+
+	var logs []model.AuditLog
+	require.NoError(t, model.LOG_DB.Order("id asc").Find(&logs).Error)
+	require.Len(t, logs, 2)
+	assert.Equal(t, model.AuditCategorySecurity, logs[0].Category)
+	assert.Equal(t, "user.error_request_body_enable", logs[0].Action)
+	assert.Equal(t, "Enabled storing failed request bodies", logs[0].Content)
+	assert.True(t, logs[0].Success)
+	assert.Equal(t, "user.error_request_body_disable", logs[1].Action)
+	assert.Equal(t, "Disabled storing failed request bodies", logs[1].Content)
+
+	var stored model.User
+	require.NoError(t, model.DB.First(&stored, user.Id).Error)
+	assert.False(t, stored.GetSetting().RecordErrorRequestBody)
+}
+
+func saveSetting(t *testing.T, userID int, recordBody bool) {
+	t.Helper()
+	encoded, err := common.Marshal(map[string]any{
+		"notify_type":               "email",
+		"quota_warning_threshold":   10,
+		"record_error_request_body": recordBody,
+	})
+	require.NoError(t, err)
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	ctx.Set("id", userID)
+	ctx.Request = httptest.NewRequest(http.MethodPut, "/api/user/setting", bytes.NewReader(encoded))
+	ctx.Request.Header.Set("Content-Type", "application/json")
+	ctx.Request.Header.Set("Accept-Language", "en")
+	UpdateUserSetting(ctx)
+	require.Equal(t, http.StatusOK, recorder.Code)
+}
+
 func TestUserNotificationRejectsIncompleteSettingsWithoutSaving(t *testing.T) {
 	setupModelListControllerTestDB(t)
 	require.NoError(t, i18n.Init())

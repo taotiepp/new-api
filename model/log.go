@@ -307,7 +307,7 @@ func RecordErrorLog(c *gin.Context, userId int, channelId int, modelName string,
 	username := c.GetString("username")
 	requestId := c.GetString(common.RequestIdKey)
 	upstreamRequestId := c.GetString(common.UpstreamRequestIdKey)
-	AttachErrorRequestBody(c, other)
+	AttachErrorRequestBody(c, userId, other)
 	otherStr := other.JSONString()
 	// 判断是否需要记录 IP
 	needRecordIp := false
@@ -404,7 +404,7 @@ func RecordConsumeLog(c *gin.Context, userId int, params RecordConsumeLogParams)
 	}
 	logger.LogInfo(c, fmt.Sprintf("record consume log: userId=%d, params=%s", userId, common.GetJsonString(params)))
 	if logType == LogTypeError {
-		AttachErrorRequestBody(c, params.Other)
+		AttachErrorRequestBody(c, userId, params.Other)
 	}
 	username := c.GetString("username")
 	requestId := c.GetString(common.RequestIdKey)

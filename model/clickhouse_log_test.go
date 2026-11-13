@@ -11,6 +11,23 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestClickHouseAuditReadSettingsSkipUnknownJSONStringSetting(t *testing.T) {
+	cases := []struct {
+		version string
+		want    bool
+	}{
+		{version: "24.8.14.22", want: false},
+		{version: "24.9.1.1", want: false},
+		{version: "24.10.1.1", want: true},
+		{version: "25.3.1.117", want: true},
+		{version: "", want: false},
+		{version: "unknown", want: false},
+	}
+	for _, tc := range cases {
+		assert.Equalf(t, tc.want, clickHouseVersionAtLeast(tc.version, 24, 10), "version=%q", tc.version)
+	}
+}
+
 func TestIsClickHouseDSN(t *testing.T) {
 	cases := []struct {
 		dsn  string

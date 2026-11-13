@@ -5,7 +5,9 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
 	"github.com/QuantumNous/new-api/common"
@@ -141,10 +143,7 @@ func GetAuditLogs(filter AuditLogFilter, start, limit, viewerRole int) ([]*Audit
 	if common.UsingLogDatabase(common.DatabaseTypeClickHouse) {
 		// Decode native JSON through database/sql as text for AuditOther.Scan.
 		// Preserve numeric metadata instead of returning quoted Int64 values.
-		query = query.WithContext(clickhouse.Context(query.Statement.Context, clickhouse.WithSettings(clickhouse.Settings{
-			"output_format_native_write_json_as_string": 1,
-			"output_format_json_quote_64bit_integers":   0,
-		})))
+		query = query.WithContext(clickhouse.Context(query.Statement.Context, clickhouse.WithSettings(clickHouseAuditReadSettings())))
 	}
 	if viewerRole < common.RoleRootUser {
 		query = query.Where("actor_role IN ?", []int{common.RoleCommonUser, common.RoleAdminUser})
@@ -252,6 +251,68 @@ func MigrateAuditLogs() error {
 	) ENGINE = MergeTree()
 	PARTITION BY toYYYYMM(toDateTime(created_at))
 	ORDER BY (created_at, event_id)`).Error
+}
+
+var (
+	clickHouseVersionMu    sync.Mutex
+	clickHouseVersionDB    *gorm.DB
+	clickHouseVersionValue string
+	clickHouseVersionReady bool
+)
+
+// clickHouseAuditReadSettings keeps audit JSON readable on the connected server.
+// output_format_native_write_json_as_string exists from 24.10. ClickHouse 24.8
+// rejects it with code 115, and its native JSON payload is already a string.
+func clickHouseAuditReadSettings() clickhouse.Settings {
+	settings := clickhouse.Settings{
+		"output_format_json_quote_64bit_integers": 0,
+	}
+	if clickHouseVersionAtLeast(clickHouseServerVersion(), 24, 10) {
+		settings["output_format_native_write_json_as_string"] = 1
+	}
+	return settings
+}
+
+func clickHouseServerVersion() string {
+	clickHouseVersionMu.Lock()
+	defer clickHouseVersionMu.Unlock()
+	if clickHouseVersionReady && clickHouseVersionDB == LOG_DB {
+		return clickHouseVersionValue
+	}
+	clickHouseVersionReady = false
+	clickHouseVersionDB = LOG_DB
+	if LOG_DB == nil {
+		return ""
+	}
+	var version string
+	if err := LOG_DB.Raw("SELECT version()").Scan(&version).Error; err != nil {
+		common.SysError("failed to read clickhouse version: " + err.Error())
+		clickHouseVersionValue = ""
+		clickHouseVersionReady = true
+		return ""
+	}
+	clickHouseVersionValue = version
+	clickHouseVersionReady = true
+	return version
+}
+
+func clickHouseVersionAtLeast(version string, major, minor int) bool {
+	parts := strings.Split(version, ".")
+	if len(parts) < 2 {
+		return false
+	}
+	gotMajor, err := strconv.Atoi(parts[0])
+	if err != nil {
+		return false
+	}
+	gotMinor, err := strconv.Atoi(parts[1])
+	if err != nil {
+		return false
+	}
+	if gotMajor != major {
+		return gotMajor > major
+	}
+	return gotMinor >= minor
 }
 
 func ValidAuditCategory(category string) bool {

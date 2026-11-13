@@ -188,7 +188,7 @@ func TestProcessChannelErrorStoresTransportCauseInAdminUpstreamBody(t *testing.T
 		require.NoError(t, sqlDB.Close())
 	})
 
-	require.NoError(t, database.Create(&model.User{Id: 10, Username: "transport-owner", Group: "default"}).Error)
+	require.NoError(t, database.Create(&model.User{Id: 10, Username: "transport-owner", Group: "default", Setting: `{"record_error_request_body":true}`}).Error)
 	recorder := httptest.NewRecorder()
 	ctx, _ := gin.CreateTestContext(recorder)
 	ctx.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", nil)

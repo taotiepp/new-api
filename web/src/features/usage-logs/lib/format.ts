@@ -474,6 +474,8 @@ const AUDIT_TEMPLATES: Record<string, string> = {
   'access_token.revoke': 'Revoked the system access token',
   'user.2fa_setup': 'Started two-factor authentication setup',
   'user.2fa_enable': 'Enabled two-factor authentication',
+  'user.error_request_body_enable': 'Enabled storing failed request bodies',
+  'user.error_request_body_disable': 'Disabled storing failed request bodies',
   'user.2fa_disable_self': 'Disabled two-factor authentication',
   'user.2fa_backup_codes': 'Regenerated two-factor backup codes',
   'user.security_verify': 'Completed security verification',

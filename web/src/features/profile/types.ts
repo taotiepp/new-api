@@ -137,6 +137,8 @@ export interface UserSettings {
   accept_unset_model_ratio_model?: boolean
   /** Record IP log */
   record_ip_log?: boolean
+  /** Store the request body of failed requests. Admin-only when viewed. */
+  record_error_request_body?: boolean
   /** Receive upstream model update notifications (admin only) */
   upstream_model_update_notify_enabled?: boolean
   /** Preferred interface/API response language */
@@ -184,6 +186,7 @@ export interface UpdateUserSettingsRequest {
   feishu_webhook_secret?: string
   accept_unset_model_ratio_model?: boolean
   record_ip_log?: boolean
+  record_error_request_body?: boolean
   upstream_model_update_notify_enabled?: boolean
 }
 

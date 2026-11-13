@@ -37,7 +37,7 @@ import { AccountActionCard } from './components/account-action-card'
 import { AccountBindings } from './components/account-bindings'
 import { LoginSessionsCard } from './components/login-sessions-card'
 import { PasskeyCard } from './components/passkey-card'
-import { PrivacyCard } from './components/privacy-card'
+import { FailedRequestBodyCard, PrivacyCard } from './components/privacy-card'
 import { TwoFACard } from './components/two-fa-card'
 
 type SecurityProps = {
@@ -134,6 +134,10 @@ export function Security(props: SecurityProps) {
               {t('Privacy')}
             </h3>
             <PrivacyCard profile={profile} onUpdate={refreshProfile} />
+            <FailedRequestBodyCard
+              profile={profile}
+              onUpdate={refreshProfile}
+            />
           </section>
         </aside>
       </div>

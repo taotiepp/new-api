@@ -104,7 +104,11 @@ export function NotificationTab({ profile, onUpdate }: NotificationTabProps) {
   }, [exchangeRate, quotaPerUnit, settings.quota_warning_threshold])
 
   const notificationSettingsForRequest = () => {
-    const { record_ip_log: _recordIpLog, ...notificationSettings } = settings
+    const {
+      record_ip_log: _recordIpLog,
+      record_error_request_body: _recordErrorRequestBody,
+      ...notificationSettings
+    } = settings
     return {
       ...notificationSettings,
       quota_warning_threshold: quotaFromCurrencyAmount(

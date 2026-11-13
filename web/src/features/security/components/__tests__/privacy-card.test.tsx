@@ -25,7 +25,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { UserProfile } from '@/features/profile/types'
 import { api } from '@/lib/api'
 
-import { PrivacyCard } from '../privacy-card'
+import { FailedRequestBodyCard, PrivacyCard } from '../privacy-card'
 
 const profile: UserProfile = {
   id: 1,
@@ -116,5 +116,38 @@ describe('privacy settings', () => {
     expect(
       screen.getByRole('switch', { name: 'Record IP Address' })
     ).not.toBeChecked()
+  })
+})
+
+describe('failed request body setting', () => {
+  it('starts off and saves the enabled value', async () => {
+    vi.spyOn(api, 'get').mockResolvedValue({
+      data: { success: true, data: profile },
+    })
+    const put = vi
+      .spyOn(api, 'put')
+      .mockResolvedValue({ data: { success: true } })
+    const user = userEvent.setup()
+    const client = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false },
+        mutations: { retry: false },
+      },
+    })
+    const onUpdate = vi.fn()
+    render(
+      <QueryClientProvider client={client}>
+        <FailedRequestBodyCard profile={profile} onUpdate={onUpdate} />
+      </QueryClientProvider>
+    )
+    const toggle = screen.getByRole('switch', { name: 'Store failed requests' })
+    expect(toggle).not.toBeChecked()
+    await user.click(toggle)
+    await user.click(screen.getByRole('button', { name: 'Save Settings' }))
+    await waitFor(() => expect(onUpdate).toHaveBeenCalled())
+    expect(put).toHaveBeenCalledWith(
+      '/api/user/setting',
+      expect.objectContaining({ record_error_request_body: true })
+    )
   })
 })
