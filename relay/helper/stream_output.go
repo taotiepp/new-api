@@ -9,9 +9,10 @@ import (
 )
 
 // StreamEventShowsWork reports whether an SSE payload is evidence the model is
-// working. Keepalive and session bookkeeping are ignored. Text, reasoning, and
-// tool events count only when they carry real content. Any other event type,
-// including ones added later, counts.
+// working. Upstream ping events count: they are how a live stream stays quiet
+// while a long tool call is still running. Other keepalives and session
+// bookkeeping are ignored. Text, reasoning, and tool events count only when
+// they carry real content. Any other event type, including ones added later, counts.
 func StreamEventShowsWork(data string) bool {
 	if strings.TrimSpace(data) == "" || !gjson.Valid(data) {
 		return false
@@ -20,7 +21,7 @@ func StreamEventShowsWork(data string) bool {
 		return true
 	}
 	switch gjson.Get(data, "type").String() {
-	case "", "ping", "keepalive",
+	case "", "keepalive",
 		"response.created", "response.queued", "response.in_progress",
 		"message_start", "content_block_start", "content_block_stop", "message_stop",
 		"response.output_text.delta",

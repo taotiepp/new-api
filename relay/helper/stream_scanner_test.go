@@ -688,7 +688,7 @@ func TestStreamEventShowsWork(t *testing.T) {
 		{name: "queued", data: `{"type":"response.queued","response":{"status":"queued","output":[]}}`, want: false},
 		{name: "in progress", data: `{"type":"response.in_progress","response":{"status":"in_progress"}}`, want: false},
 		{name: "keepalive", data: `{"type":"keepalive","sequence_number":7}`, want: false},
-		{name: "ping", data: `{"type":"ping"}`, want: false},
+		{name: "ping", data: `{"type":"ping"}`, want: true},
 		{name: "empty text delta", data: `{"type":"response.output_text.delta","delta":" "}`, want: false},
 		{name: "text delta", data: `{"type":"response.output_text.delta","delta":"hi"}`, want: true},
 		{name: "thinking progress", data: `{"type":"content_block_delta","delta":{"type":"thinking_delta","thinking":"","estimated_tokens":50}}`, want: true},
@@ -777,6 +777,43 @@ func TestStreamScannerHandler_IdleTimeoutIgnoresKeepalive(t *testing.T) {
 	other := service.GenerateTextOtherInfo(c, info, 1, 1, 1, 0, 0, 0, 1)
 	assert.Contains(t, other.JSONString(), `"upstream_body"`)
 	assert.Contains(t, other.JSONString(), "keepalive")
+}
+
+func TestStreamScannerHandler_PingResetsIdleTimeout(t *testing.T) {
+	oldTimeout := constant.StreamingTimeout
+	constant.StreamingTimeout = 1
+	t.Cleanup(func() { constant.StreamingTimeout = oldTimeout })
+
+	pr, pw := io.Pipe()
+	go func() {
+		fmt.Fprint(pw, "data: {\"type\":\"ping\"}\n\n")
+		time.Sleep(700 * time.Millisecond)
+		fmt.Fprint(pw, "data: {\"type\":\"ping\"}\n\n")
+		time.Sleep(500 * time.Millisecond)
+		fmt.Fprint(pw, "data: {\"type\":\"ping\"}\n\n")
+		time.Sleep(2 * time.Second)
+		_ = pw.Close()
+	}()
+
+	c, resp, info := setupStreamTest(t, pr)
+	resp.Body = pr
+	var count atomic.Int64
+	done := make(chan struct{})
+	go func() {
+		StreamScannerHandler(c, resp, info, func(data string, sr *StreamResult) {
+			count.Add(1)
+		})
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(4 * time.Second):
+		t.Fatal("ping did not keep the stream within the idle timeout")
+	}
+	assert.Equal(t, int64(3), count.Load())
+	require.NotNil(t, info.StreamStatus)
+	assert.Equal(t, relaycommon.StreamEndReasonTimeout, info.StreamStatus.EndReason)
 }
 
 func TestStreamScannerHandler_RealOutputResetsIdleTimeout(t *testing.T) {
