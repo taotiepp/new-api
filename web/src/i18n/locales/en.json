@@ -4591,6 +4591,7 @@
     "Recommended": "Recommended",
     "Recommended actions": "Recommended actions",
     "Recommended to keep this high to avoid upstream throttling.": "Recommended to keep this high to avoid upstream throttling.",
+    "Record charges for this user and do not reject requests when the balance is insufficient.": "Record charges for this user and do not reject requests when the balance is insufficient.",
     "Record IP Address": "Record IP Address",
     "Record quota usage": "Record quota usage",
     "Recover auto-disabled channels only": "Recover auto-disabled channels only",

@@ -96,6 +96,7 @@ type User struct {
 	AccessToken          *string                    `json:"-" gorm:"type:char(32);column:access_token;uniqueIndex"` // this token is for system management
 	AccessTokenCreatedAt *int64                     `json:"-" gorm:"type:bigint;column:access_token_created_at"`
 	Quota                int                        `json:"quota" gorm:"type:int;default:0"`
+	UnlimitedQuota       bool                       `json:"unlimited_quota"`                                        // 只计费，余额不足时不拒绝请求
 	TestQuota            int                        `json:"test_quota" gorm:"type:int;default:0;column:test_quota"` // 测试额度，开票时作为抵扣券
 	UsedQuota            int                        `json:"used_quota" gorm:"type:int;default:0;column:used_quota"` // used quota
 	RequestCount         int                        `json:"request_count" gorm:"type:int;default:0;"`               // request number
@@ -127,6 +128,7 @@ func (user *User) ToBaseUser() *UserBase {
 		Id:                  user.Id,
 		Group:               user.Group,
 		Quota:               user.Quota,
+		UnlimitedQuota:      user.UnlimitedQuota,
 		Status:              user.Status,
 		Role:                user.Role,
 		Username:            user.Username,
@@ -862,6 +864,7 @@ func (user *User) UpdateWithTx(tx *gorm.DB, updatePassword bool) error {
 	if err = tx.Model(&current).Omit(
 		"access_token",
 		"quota",
+		"unlimited_quota",
 		"used_quota",
 		"request_count",
 		"aff_count",
@@ -913,6 +916,7 @@ func (user *User) EditWithTx(tx *gorm.DB, updatePassword bool) error {
 	updates := map[string]any{
 		"username":              newUser.Username,
 		"display_name":          newUser.DisplayName,
+		"unlimited_quota":       newUser.UnlimitedQuota,
 		"group":                 newUser.Group,
 		"remark":                newUser.Remark,
 		"discount":              newUser.Discount,

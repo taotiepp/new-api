@@ -78,18 +78,22 @@ redis.call('HSET', KEYS[1],
   'Setting', ARGV[8], 'AuthVersion', ARGV[1], 'CacheSchema', ARGV[9],
   'UsableGroups', ARGV[13], 'ModelDiscounts', ARGV[14],
   'GroupDiscounts', ARGV[15], 'GroupModelDiscounts', ARGV[16],
-  'VirtualGroups', ARGV[17])
+  'VirtualGroups', ARGV[17], 'UnlimitedQuota', ARGV[18])
 if ARGV[10] == '1' and redis.call('HEXISTS', KEYS[1], 'Quota') == 0 then
   redis.call('HSET', KEYS[1], 'Quota', ARGV[11])
 end
 redis.call('EXPIRE', KEYS[1], ARGV[12])
 return 1`
+	unlimitedQuota := "0"
+	if user.UnlimitedQuota {
+		unlimitedQuota = "1"
+	}
 	result, err := common.RDB.Eval(context.Background(), script,
 		[]string{getUserCacheKey(user.Id), getUserAuthFenceKey(user.Id), getUserAuthVersionKey(user.Id)},
 		user.AuthVersion, user.Id, user.Group, user.Email, user.Status, user.Role,
 		user.Username, user.Setting, user.CacheSchema, includeQuotaArg, user.Quota, ttl,
 		user.UsableGroups, user.ModelDiscounts, user.GroupDiscounts, user.GroupModelDiscounts,
-		user.VirtualGroups,
+		user.VirtualGroups, unlimitedQuota,
 	).Int()
 	if err != nil {
 		return err

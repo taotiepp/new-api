@@ -563,6 +563,31 @@ export function UsersMutateDrawer({
 
                   <FormField
                     control={form.control}
+                    name='unlimited_quota'
+                    render={({ field }) => (
+                      <FormItem className={sideDrawerSwitchItemClassName()}>
+                        <div className='flex flex-col gap-0.5'>
+                          <FormLabel className='text-sm'>
+                            {t('Unlimited Quota')}
+                          </FormLabel>
+                          <FormDescription className='text-xs'>
+                            {t(
+                              'Record charges for this user and do not reject requests when the balance is insufficient.'
+                            )}
+                          </FormDescription>
+                        </div>
+                        <FormControl>
+                          <Switch
+                            checked={field.value === true}
+                            onCheckedChange={field.onChange}
+                          />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
                     name='group_discount_entries'
                     render={({ field }) => (
                       <FormItem>

@@ -112,4 +112,32 @@ describe('user form discount payload', () => {
     expect(payload.group_discounts).toBe('{"vip":0.8}')
     expect(payload.group_model_discounts).toBe('{"vip":{"gpt-4o":0.5}}')
   })
+
+  test('saves the unlimited quota flag and can turn it off', () => {
+    const defaults = transformUserToFormDefaults({
+      ...user,
+      unlimited_quota: true,
+    })
+    expect(defaults.unlimited_quota).toBe(true)
+
+    const enabled = transformFormDataToPayload(
+      {
+        username: 'alice',
+        display_name: 'Alice',
+        unlimited_quota: true,
+      },
+      9
+    )
+    expect(enabled.unlimited_quota).toBe(true)
+
+    const disabled = transformFormDataToPayload(
+      {
+        username: 'alice',
+        display_name: 'Alice',
+        unlimited_quota: false,
+      },
+      9
+    )
+    expect(disabled.unlimited_quota).toBe(false)
+  })
 })

@@ -135,6 +135,7 @@ type RelayInfo struct {
 	UserSetting         dto.UserSetting
 	UserEmail           string
 	UserQuota           int
+	UserUnlimited       bool
 	RelayFormat         types.RelayFormat
 	SendResponseCount   int
 	// ClaudeToChatStreamState / ChatToGeminiStreamState hold per-attempt
@@ -338,8 +339,8 @@ func (info *RelayInfo) ToString() string {
 	fmt.Fprintf(b, "FinalPreConsumedQuota: %d, ", info.FinalPreConsumedQuota)
 
 	// User & token info (mask secrets)
-	fmt.Fprintf(b, "User{ Id: %d, Email: %q, Group: %q, UsingGroup: %q, Quota: %d }, ",
-		info.UserId, common.MaskEmail(info.UserEmail), info.UserGroup, info.UsingGroup, info.UserQuota)
+	fmt.Fprintf(b, "User{ Id: %d, Email: %q, Group: %q, UsingGroup: %q, Quota: %d, Unlimited: %t }, ",
+		info.UserId, common.MaskEmail(info.UserEmail), info.UserGroup, info.UsingGroup, info.UserQuota, info.UserUnlimited)
 	fmt.Fprintf(b, "Token{ Id: %d, Unlimited: %t, Key: ***masked*** }, ", info.TokenId, info.TokenUnlimited)
 
 	// Time info
@@ -585,6 +586,7 @@ func genBaseRelayInfo(c *gin.Context, request dto.Request) *RelayInfo {
 		UsingGroup:              common.GetContextKeyString(c, constant.ContextKeyUsingGroup),
 		UserGroup:               common.GetContextKeyString(c, constant.ContextKeyUserGroup),
 		UserQuota:               common.GetContextKeyInt(c, constant.ContextKeyUserQuota),
+		UserUnlimited:           common.GetContextKeyBool(c, constant.ContextKeyUserUnlimited),
 		UserEmail:               common.GetContextKeyString(c, constant.ContextKeyUserEmail),
 		UserDiscount:            userDiscountFromContext(c),
 		UserModelDiscounts:      common.GetContextKeyString(c, constant.ContextKeyUserModelDiscounts),

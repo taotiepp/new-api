@@ -45,6 +45,7 @@ export const userFormSchema = z.object({
   password: z.string().optional(),
   role: z.number().optional(),
   quota_dollars: z.number().min(0).optional(),
+  unlimited_quota: z.boolean().optional(),
   group: z.string().optional(),
   custom_usable_groups: z.boolean().optional(),
   usable_groups: z.array(z.string()).optional(),
@@ -81,6 +82,7 @@ export const USER_FORM_DEFAULT_VALUES: UserFormValues = {
   password: '',
   role: 1, // Default to common user
   quota_dollars: 0,
+  unlimited_quota: false,
   group: DEFAULT_GROUP,
   custom_usable_groups: false,
   usable_groups: [] as string[],
@@ -121,6 +123,8 @@ export function transformFormDataToPayload(
   }
 
   // For create: only send required fields
+  payload.unlimited_quota = data.unlimited_quota === true
+
   if (userId === undefined) {
     payload.role = role
   } else {
@@ -161,6 +165,7 @@ export function transformUserToFormDefaults(
     password: '',
     role: user.role,
     quota_dollars: quotaUnitsToDollars(user.quota),
+    unlimited_quota: user.unlimited_quota === true,
     group: user.group || DEFAULT_GROUP,
     custom_usable_groups: parseUsableGroups(user.usable_groups) != null,
     usable_groups: parseUsableGroups(user.usable_groups) ?? [],

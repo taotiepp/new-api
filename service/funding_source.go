@@ -33,14 +33,22 @@ type FundingSource interface {
 var ErrInsufficientWalletQuota = errors.New("wallet quota insufficient")
 
 type WalletFunding struct {
-	userId   int
-	consumed int // 实际预扣的用户额度
+	userId    int
+	consumed  int  // 实际预扣的用户额度
+	unlimited bool // 不限额用户仍扣费，允许余额变为负数
 }
 
 func (w *WalletFunding) Source() string { return BillingSourceWallet }
 
 func (w *WalletFunding) PreConsume(amount int) error {
 	if amount <= 0 {
+		return nil
+	}
+	if w.unlimited {
+		if err := model.DecreaseUserQuota(w.userId, amount, false); err != nil {
+			return err
+		}
+		w.consumed = amount
 		return nil
 	}
 	reserved, err := model.TryReserveUserQuota(w.userId, amount)

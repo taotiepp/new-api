@@ -74,6 +74,26 @@ func resetBatchUpdateTestState(t *testing.T) {
 	})
 }
 
+func TestEditUserUnlimitedQuota(t *testing.T) {
+	truncateTables(t)
+
+	user := createReserveTestUser(t, 10)
+	user.DisplayName = user.Username
+	user.UnlimitedQuota = true
+	require.NoError(t, user.EditWithTx(DB, false))
+
+	enabled, err := GetUserById(user.Id, false)
+	require.NoError(t, err)
+	assert.True(t, enabled.UnlimitedQuota)
+
+	user.UnlimitedQuota = false
+	require.NoError(t, user.EditWithTx(DB, false))
+	disabled, err := GetUserById(user.Id, false)
+	require.NoError(t, err)
+	assert.False(t, disabled.UnlimitedQuota)
+	assert.Equal(t, 10, disabled.Quota)
+}
+
 func TestTryReserveQuotaWithoutRedis(t *testing.T) {
 	truncateTables(t)
 	resetBatchUpdateTestState(t)

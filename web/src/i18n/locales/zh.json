@@ -4591,6 +4591,7 @@
     "Recommended": "推荐",
     "Recommended actions": "推荐操作",
     "Recommended to keep this high to avoid upstream throttling.": "建议保持此值较高，以避免上游限流。",
+    "Record charges for this user and do not reject requests when the balance is insufficient.": "只记录费用，余额不足时也不拒绝请求。",
     "Record IP Address": "记录 IP 地址",
     "Record quota usage": "记录配额使用量",
     "Recover auto-disabled channels only": "仅恢复自动禁用的渠道",

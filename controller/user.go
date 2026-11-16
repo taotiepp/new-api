@@ -712,10 +712,14 @@ func UpdateUser(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
-	recordManageAuditFor(c, updatedUser.Id, "user.update", map[string]any{
+	updateAudit := map[string]any{
 		"username": originUser.Username,
 		"id":       updatedUser.Id,
-	})
+	}
+	if updatedUser.UnlimitedQuota != originUser.UnlimitedQuota {
+		updateAudit["unlimited_quota"] = updatedUser.UnlimitedQuota
+	}
+	recordManageAuditFor(c, updatedUser.Id, "user.update", updateAudit)
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "",
@@ -996,10 +1000,11 @@ func CreateUser(c *gin.Context) {
 	}
 	// Even for admin users, we cannot fully trust them!
 	cleanUser := model.User{
-		Username:    user.Username,
-		Password:    user.Password,
-		DisplayName: user.DisplayName,
-		Role:        user.Role, // 保持管理员设置的角色
+		Username:       user.Username,
+		Password:       user.Password,
+		DisplayName:    user.DisplayName,
+		Role:           user.Role, // 保持管理员设置的角色
+		UnlimitedQuota: user.UnlimitedQuota,
 	}
 	authzTouched := false
 	if err := model.DB.Transaction(func(tx *gorm.DB) error {
@@ -1021,10 +1026,14 @@ func CreateUser(c *gin.Context) {
 	}
 	cleanUser.FinishInsert(0)
 
-	recordManageAuditFor(c, cleanUser.Id, "user.create", map[string]any{
+	createAudit := map[string]any{
 		"username": cleanUser.Username,
 		"role":     cleanUser.Role,
-	})
+	}
+	if cleanUser.UnlimitedQuota {
+		createAudit["unlimited_quota"] = true
+	}
+	recordManageAuditFor(c, cleanUser.Id, "user.create", createAudit)
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "",
