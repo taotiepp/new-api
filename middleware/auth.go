@@ -469,6 +469,7 @@ func TokenAuth() func(c *gin.Context) {
 		tokenGroup := token.Group
 		if tokenGroup != "" {
 			if _, virtual := model.FindVirtualGroup(userCache.VirtualGroups, tokenGroup); virtual {
+				// The catalog name is resolved to a source group before its permission is checked.
 				userGroup = tokenGroup
 			} else {
 				// check common.UserUsableGroups[userGroup]

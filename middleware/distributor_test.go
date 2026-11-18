@@ -247,6 +247,43 @@ func TestNoAvailableChannelMessageNamesClaimingTaskPlugin(t *testing.T) {
 	assert.Contains(t, generic, "gpt-4o")
 }
 
+func TestDistributeVirtualGroupRequiresSourceGroupPermission(t *testing.T) {
+	require.NoError(t, i18n.Init())
+	const (
+		virtualGroup = "coding"
+		sourceGroup  = "aws"
+		modelName    = "opus"
+	)
+	virtualGroups := fmt.Sprintf(
+		`[{"name":%q,"models":[{"name":%q,"source_group":%q,"source_model":%q}]}]`,
+		virtualGroup, modelName, sourceGroup, modelName,
+	)
+	deny := func(t *testing.T, path, body, usingGroup string) {
+		t.Helper()
+		recorder := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(recorder)
+		c.Request = httptest.NewRequest(http.MethodPost, path, strings.NewReader(body))
+		c.Request.Header.Set("Content-Type", "application/json")
+		c.Request.Header.Set("Accept-Language", "en")
+		common.SetContextKey(c, constant.ContextKeyUserGroup, "default")
+		common.SetContextKey(c, constant.ContextKeyUsingGroup, usingGroup)
+		common.SetContextKey(c, constant.ContextKeyTokenGroup, usingGroup)
+		common.SetContextKey(c, constant.ContextKeyUserUsableGroups, `["default"]`)
+		common.SetContextKey(c, constant.ContextKeyUserVirtualGroups, virtualGroups)
+
+		Distribute()(c)
+
+		require.True(t, c.IsAborted())
+		assert.Equal(t, http.StatusForbidden, recorder.Code)
+		assert.Contains(t, recorder.Body.String(), "No permission to access this group")
+		assert.Zero(t, common.GetContextKeyInt(c, constant.ContextKeyChannelId))
+	}
+
+	body := fmt.Sprintf(`{"model":%q,"messages":[{"role":"user","content":"hi"}]}`, modelName)
+	deny(t, "/v1/chat/completions", body, virtualGroup)
+	deny(t, "/pg/chat/completions", fmt.Sprintf(`{"model":%q,"group":%q}`, modelName, virtualGroup), "default")
+}
+
 func TestDistributeVirtualGroupRetriesUseSourceGroupChannels(t *testing.T) {
 	require.NoError(t, i18n.Init())
 	originalDB := model.DB

@@ -64,6 +64,10 @@ func Distribute() func(c *gin.Context) {
 		}
 		limitModel := modelRequest.Model
 		if virtualResolution.Handled {
+			if !sourceGroupPermitted(c, virtualResolution.SourceGroup) {
+				abortWithOpenAiMessage(c, http.StatusForbidden, i18n.T(c, i18n.MsgDistributorGroupAccessDenied))
+				return
+			}
 			limitModel = virtualResolution.ClientModel
 			if err := applyVirtualGroupResolution(c, modelRequest.Model, virtualResolution); err != nil {
 				abortWithOpenAiMessage(c, http.StatusBadRequest, i18n.T(c, i18n.MsgDistributorInvalidRequest, map[string]any{"Error": err.Error()}))
@@ -163,6 +167,10 @@ func Distribute() func(c *gin.Context) {
 								return
 							}
 							if playgroundResolution.Handled {
+								if !sourceGroupPermitted(c, playgroundResolution.SourceGroup) {
+									abortWithOpenAiMessage(c, http.StatusForbidden, i18n.T(c, i18n.MsgDistributorGroupAccessDenied))
+									return
+								}
 								if err := applyVirtualGroupResolution(c, modelRequest.Model, playgroundResolution); err != nil {
 									abortWithOpenAiMessage(c, http.StatusBadRequest, i18n.T(c, i18n.MsgDistributorInvalidRequest, map[string]any{"Error": err.Error()}))
 									return
@@ -757,6 +765,16 @@ func SetupContextForSelectedChannel(c *gin.Context, channel *model.Channel, mode
 		c.Set("bot_id", channel.Other)
 	}
 	return nil
+}
+
+// sourceGroupPermitted applies the ordinary usable-group check to the group a
+// virtual catalog entry resolves into.
+func sourceGroupPermitted(c *gin.Context, sourceGroup string) bool {
+	return service.GroupAllowed(
+		common.GetContextKeyString(c, constant.ContextKeyUserGroup),
+		common.GetContextKeyString(c, constant.ContextKeyUserUsableGroups),
+		sourceGroup,
+	)
 }
 
 // selectableGroupModel treats a leading "group/model" segment as an explicit
