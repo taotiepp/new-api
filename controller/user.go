@@ -1478,6 +1478,7 @@ func userSettingFromRequest(user *model.User, req UpdateUserSettingRequest) dto.
 		Language:                         existingSettings.Language,
 		SidebarModules:                   existingSettings.SidebarModules,
 		BillingPreference:                existingSettings.BillingPreference,
+		GroupChannelAllowlist:            existingSettings.GroupChannelAllowlist,
 		InvoiceProfile:                   existingSettings.InvoiceProfile,
 	}
 	if req.QuotaWarningType == dto.NotifyTypeWebhook {

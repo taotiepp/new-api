@@ -110,6 +110,7 @@ func GetChannel(
 	model string,
 	retry int,
 	filters []dto.ChannelFilter,
+	allowed ...map[int]struct{},
 ) (*Channel, error) {
 	var abilities []Ability
 	err := DB.Where(commonGroupCol+" = ? and model = ? and enabled = ?", group, model, true).Order("priority DESC, weight DESC").Find(&abilities).Error
@@ -117,6 +118,12 @@ func GetChannel(
 		return nil, err
 	}
 	abilities = filterAbilitiesByConstraints(abilities, model, filters)
+	if allow := firstChannelAllowlist(allowed); allow != nil {
+		abilities = lo.Filter(abilities, func(ability Ability, _ int) bool {
+			_, ok := allow[ability.ChannelId]
+			return ok
+		})
+	}
 	if len(abilities) > 0 {
 		priorities := make([]int64, 0)
 		seen := make(map[int64]bool)

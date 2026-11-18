@@ -99,7 +99,7 @@ func TestUpdateUserSettingKeepsLanguageAndSidebar(t *testing.T) {
 		Group:    "default",
 		AffCode:  "notify-test-cara",
 		Email:    "cara@example.com",
-		Setting:  `{"notify_type":"email","quota_warning_threshold":10,"language":"zhCN","sidebar_modules":"keys","billing_preference":"subscription_only","record_ip_log":true}`,
+		Setting:  `{"notify_type":"email","quota_warning_threshold":10,"language":"zhCN","sidebar_modules":"keys","billing_preference":"subscription_only","record_ip_log":true,"group_channel_allowlist":{"aws":[7]}}`,
 	}
 	require.NoError(t, model.DB.Create(user).Error)
 
@@ -124,6 +124,7 @@ func TestUpdateUserSettingKeepsLanguageAndSidebar(t *testing.T) {
 	assert.Equal(t, "zhCN", got.Language)
 	assert.Equal(t, "keys", got.SidebarModules)
 	assert.Equal(t, "subscription_only", got.BillingPreference)
+	assert.Equal(t, []int{7}, got.GroupChannelAllowlist["aws"])
 	assert.True(t, got.RecordIpLog)
 	assert.Equal(t, 1200.0, got.QuotaWarningThreshold)
 }

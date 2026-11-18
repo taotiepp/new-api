@@ -119,10 +119,12 @@ func GetRandomSatisfiedChannel(
 	model string,
 	retry int,
 	filters []dto.ChannelFilter,
+	allowed ...map[int]struct{},
 ) (*Channel, error) {
+	allow := firstChannelAllowlist(allowed)
 	// if memory cache is disabled, get channel directly from database
 	if !common.MemoryCacheEnabled {
-		return GetChannel(group, model, retry, filters)
+		return GetChannel(group, model, retry, filters, allow)
 	}
 
 	channelSyncLock.RLock()
@@ -130,11 +132,13 @@ func GetRandomSatisfiedChannel(
 
 	// First, try to find channels with the exact model name.
 	channels, _ := filterCandidateIDs(group2model2channels[group][model], model, filters)
+	channels = keepAllowedChannelIDs(channels, allow)
 
 	// If no channels found, try to find channels with the normalized model name.
 	if len(channels) == 0 {
 		normalizedModel := ratio_setting.RoutingMatchModelName(model)
 		channels, _ = filterCandidateIDs(group2model2channels[group][normalizedModel], model, filters)
+		channels = keepAllowedChannelIDs(channels, allow)
 	}
 
 	if len(channels) == 0 {

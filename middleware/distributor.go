@@ -91,6 +91,10 @@ func Distribute() func(c *gin.Context) {
 				}
 				return
 			}
+			if !service.UserAllowsChannel(c, common.GetContextKeyString(c, constant.ContextKeyUsingGroup), channel.Id) {
+				abortWithOpenAiMessage(c, http.StatusForbidden, noAvailableChannelMessage(c, common.GetContextKeyString(c, constant.ContextKeyUsingGroup), modelRequest.Model), types.ErrorCodeModelNotFound)
+				return
+			}
 			if channel.Status != common.ChannelStatusEnabled {
 				if pin.Source == taskdto.PinSourceOriginTask {
 					abortWithOpenAiMessage(c, http.StatusBadRequest, "origin_task_channel_disabled", types.ErrorCode("origin_task_channel_disabled"))
@@ -184,7 +188,7 @@ func Distribute() func(c *gin.Context) {
 							userGroup := common.GetContextKeyString(c, constant.ContextKeyUserGroup)
 							autoGroups := service.GetRequestAutoGroups(c, userGroup)
 							for _, g := range autoGroups {
-								if model.IsChannelEnabledForGroupModel(g, modelRequest.Model, preferred.Id) {
+								if model.IsChannelEnabledForGroupModel(g, modelRequest.Model, preferred.Id) && service.UserAllowsChannel(c, g, preferred.Id) {
 									selectGroup = g
 									common.SetContextKey(c, constant.ContextKeyAutoGroup, g)
 									channel = preferred
@@ -193,7 +197,7 @@ func Distribute() func(c *gin.Context) {
 									break
 								}
 							}
-						} else if model.IsChannelEnabledForGroupModel(usingGroup, modelRequest.Model, preferred.Id) {
+						} else if model.IsChannelEnabledForGroupModel(usingGroup, modelRequest.Model, preferred.Id) && service.UserAllowsChannel(c, usingGroup, preferred.Id) {
 							channel = preferred
 							selectGroup = usingGroup
 							affinityUsable = true

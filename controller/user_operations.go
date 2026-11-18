@@ -29,20 +29,30 @@ type userOperationsGroup struct {
 	Discount     *float64 `json:"discount"`
 }
 
+type userOperationsChannel struct {
+	Id     int      `json:"id"`
+	Name   string   `json:"name"`
+	Status int      `json:"status"`
+	Groups []string `json:"groups"`
+}
+
 type userOperationsView struct {
-	UserId         int                   `json:"user_id"`
-	Username       string                `json:"username"`
-	DisplayName    string                `json:"display_name"`
-	Group          string                `json:"group"`
-	Custom         bool                  `json:"custom"`
-	Groups         []userOperationsGroup `json:"groups"`
-	InvoiceProfile dto.InvoiceParty      `json:"invoice_profile"`
+	UserId         int                     `json:"user_id"`
+	Username       string                  `json:"username"`
+	DisplayName    string                  `json:"display_name"`
+	Group          string                  `json:"group"`
+	Custom         bool                    `json:"custom"`
+	Groups         []userOperationsGroup   `json:"groups"`
+	Channels       []userOperationsChannel `json:"channels"`
+	GroupChannels  map[string][]int        `json:"group_channels"`
+	InvoiceProfile dto.InvoiceParty        `json:"invoice_profile"`
 }
 
 type userOperationsUpdate struct {
-	Custom    bool                `json:"custom"`
-	Groups    []string            `json:"groups"`
-	Discounts map[string]*float64 `json:"discounts"`
+	Custom        bool                `json:"custom"`
+	Groups        []string            `json:"groups"`
+	Discounts     map[string]*float64 `json:"discounts"`
+	GroupChannels map[string][]int    `json:"group_channels"`
 }
 
 func GetUserOperations(c *gin.Context) {
@@ -50,10 +60,15 @@ func GetUserOperations(c *gin.Context) {
 	if !ok {
 		return
 	}
+	channels, err := model.ListChannelGroupOptions()
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "",
-		"data":    buildUserOperations(user),
+		"data":    buildUserOperations(user, channels),
 	})
 }
 
@@ -77,15 +92,32 @@ func UpdateUserOperations(c *gin.Context) {
 		common.ApiErrorI18n(c, i18n.MsgUserInputInvalid, map[string]any{"Error": err.Error()})
 		return
 	}
+	var groupChannels map[string][]int
+	if request.GroupChannels != nil {
+		groupChannels, err = model.NormalizeGroupChannelAllowlist(request.GroupChannels)
+		if err != nil {
+			common.ApiErrorMsg(c, err.Error())
+			return
+		}
+	}
 	if err := user.UpdateOperationsSettings(usableGroups, groupDiscounts); err != nil {
 		common.ApiError(c, err)
 		return
 	}
+	if request.GroupChannels != nil {
+		settings := user.GetSetting()
+		settings.GroupChannelAllowlist = groupChannels
+		if err := model.UpdateUserSetting(user.Id, settings); err != nil {
+			common.ApiError(c, err)
+			return
+		}
+	}
 	recordManageAuditFor(c, user.Id, "user.operations_update", map[string]any{
-		"username": user.Username,
-		"id":       user.Id,
-		"custom":   request.Custom,
-		"groups":   usableGroups,
+		"username":       user.Username,
+		"id":             user.Id,
+		"custom":         request.Custom,
+		"groups":         usableGroups,
+		"group_channels": groupChannels,
 	})
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
@@ -112,7 +144,7 @@ func loadOperationsUser(c *gin.Context) (*model.User, bool) {
 	return user, true
 }
 
-func buildUserOperations(user *model.User) userOperationsView {
+func buildUserOperations(user *model.User, channels []model.Channel) userOperationsView {
 	_, custom := service.ParseUserUsableGroups(user.UsableGroups)
 	inherited := service.ResolveUserUsableGroups(user.Group, "")
 	effective := service.ResolveUserUsableGroups(user.Group, user.UsableGroups)
@@ -137,6 +169,23 @@ func buildUserOperations(user *model.User) userOperationsView {
 		}
 		groups = append(groups, group)
 	}
+	allowlist := user.GetSetting().GroupChannelAllowlist
+	if allowlist == nil {
+		allowlist = map[string][]int{}
+	}
+	options := make([]userOperationsChannel, 0, len(channels))
+	for _, channel := range channels {
+		names := channel.GetGroups()
+		if len(names) == 0 {
+			continue
+		}
+		options = append(options, userOperationsChannel{
+			Id:     channel.Id,
+			Name:   channel.Name,
+			Status: channel.Status,
+			Groups: names,
+		})
+	}
 	return userOperationsView{
 		UserId:         user.Id,
 		Username:       user.Username,
@@ -144,6 +193,8 @@ func buildUserOperations(user *model.User) userOperationsView {
 		Group:          user.Group,
 		Custom:         custom,
 		Groups:         groups,
+		Channels:       options,
+		GroupChannels:  allowlist,
 		InvoiceProfile: user.GetSetting().InvoiceProfile,
 	}
 }

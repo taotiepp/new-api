@@ -146,6 +146,7 @@ func CacheGetRandomSatisfiedChannel(param *RetryParam) (*model.Channel, string, 
 				param.ModelName,
 				priorityRetry,
 				filters,
+				UserChannelAllowSet(param.Ctx, autoGroup),
 			)
 			if channel == nil {
 				// Current group has no available channel for this model, try next group
@@ -189,6 +190,7 @@ func CacheGetRandomSatisfiedChannel(param *RetryParam) (*model.Channel, string, 
 			param.ModelName,
 			param.GetRetry(),
 			filters,
+			UserChannelAllowSet(param.Ctx, param.TokenGroup),
 		)
 		if err != nil {
 			return nil, param.TokenGroup, err

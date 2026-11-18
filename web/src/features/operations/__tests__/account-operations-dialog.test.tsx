@@ -159,6 +159,33 @@ describe('account operations dialog', () => {
       custom: true,
       groups: ['default', 'svip'],
       discounts: { default: null, svip: null },
+      group_channels: {},
+    })
+  })
+
+  test('saves the channels checked for a usable group', async () => {
+    const user = userEvent.setup()
+    getAccountOperations.mockResolvedValue({
+      ...settings,
+      channels: [
+        { id: 7, name: 'aws-a', status: 1, groups: ['vip'] },
+        { id: 8, name: 'aws-b', status: 1, groups: ['vip'] },
+      ],
+      group_channels: { vip: [7] },
+    })
+    renderDialog()
+
+    expect(
+      await screen.findByRole('checkbox', { name: /aws-a/ })
+    ).toBeChecked()
+    await user.click(screen.getByRole('checkbox', { name: /aws-b/ }))
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    expect(updateAccountOperations).toHaveBeenCalledWith(2, {
+      custom: false,
+      groups: [],
+      discounts: { default: null, vip: 0.4 },
+      group_channels: { vip: [7, 8] },
     })
   })
 

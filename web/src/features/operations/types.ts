@@ -45,6 +45,13 @@ export type AccountOperationsGroup = {
   discount: number | null
 }
 
+export type AccountOperationsChannel = {
+  id: number
+  name: string
+  status: number
+  groups: string[]
+}
+
 export type AccountOperations = {
   user_id: number
   username: string
@@ -52,6 +59,8 @@ export type AccountOperations = {
   group: string
   custom: boolean
   groups: AccountOperationsGroup[]
+  channels?: AccountOperationsChannel[]
+  group_channels?: Record<string, number[]>
   invoice_profile?: InvoiceParty
 }
 
@@ -59,6 +68,7 @@ export type AccountOperationsUpdate = {
   custom: boolean
   groups: string[]
   discounts: Record<string, number | null>
+  group_channels: Record<string, number[]>
 }
 
 export type CostControlView = 'user' | 'channel'

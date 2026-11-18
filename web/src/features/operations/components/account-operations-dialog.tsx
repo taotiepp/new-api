@@ -49,6 +49,9 @@ export function AccountOperationsDialog(props: AccountOperationsDialogProps) {
   const [custom, setCustom] = useState(false)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [drafts, setDrafts] = useState<Record<string, string>>({})
+  const [channelDrafts, setChannelDrafts] = useState<Record<string, number[]>>(
+    {}
+  )
   const [saving, setSaving] = useState(false)
 
   const settings = useQuery({
@@ -70,6 +73,7 @@ export function AccountOperationsDialog(props: AccountOperationsDialogProps) {
     setCustom(settings.data.custom)
     setSelected(new Set(allowed))
     setDrafts(nextDrafts)
+    setChannelDrafts(settings.data.group_channels ?? {})
   }, [settings.data, userId])
 
   const groups = settings.data?.groups ?? []
@@ -94,12 +98,30 @@ export function AccountOperationsDialog(props: AccountOperationsDialogProps) {
       }
       discounts[group.name] = value
     }
+    const visible = new Set(discountGroups.map((group) => group.name))
+    const groupChannels: Record<string, number[]> = {}
+    for (const [group, ids] of Object.entries(
+      settings.data?.group_channels ?? {}
+    )) {
+      if (!visible.has(group) && ids.length > 0) {
+        groupChannels[group] = ids
+      }
+    }
+    for (const group of discountGroups) {
+      const ids = [...(channelDrafts[group.name] ?? [])].sort(
+        (left, right) => left - right
+      )
+      if (ids.length > 0) {
+        groupChannels[group.name] = ids
+      }
+    }
     setSaving(true)
     try {
       await updateAccountOperations(userId, {
         custom,
         groups: custom ? [...selected] : [],
         discounts,
+        group_channels: groupChannels,
       })
       toast.success(t('Operations settings saved'))
       props.onClose()
@@ -268,6 +290,73 @@ export function AccountOperationsDialog(props: AccountOperationsDialogProps) {
                   </tbody>
                 </table>
               </div>
+            )}
+          </section>
+          <section className='space-y-3'>
+            <div className='space-y-1'>
+              <h3 className='text-sm font-medium'>{t('Group channels')}</h3>
+              <p className='text-muted-foreground text-xs'>
+                {t(
+                  "By default, requests follow each group's priority and weight. Check channels to limit this user to those channels."
+                )}
+              </p>
+            </div>
+            {discountGroups.length === 0 ? (
+              <p className='text-muted-foreground text-xs'>
+                {t('No resource groups available.')}
+              </p>
+            ) : (
+              discountGroups.map((group) => {
+                const channels = (settings.data.channels ?? []).filter(
+                  (channel) => channel.groups.includes(group.name)
+                )
+                const checked = new Set(channelDrafts[group.name] ?? [])
+                return (
+                  <div key={group.name} className='space-y-2 rounded-md border p-3'>
+                    <div className='text-sm font-medium'>{group.name}</div>
+                    {channels.length === 0 ? (
+                      <p className='text-muted-foreground text-xs'>
+                        {t('This group has no channels.')}
+                      </p>
+                    ) : (
+                      channels.map((channel) => (
+                        <label
+                          key={channel.id}
+                          className='flex items-start gap-3'
+                        >
+                          <Checkbox
+                            checked={checked.has(channel.id)}
+                            aria-label={t('Channel {{name}} for {{group}}', {
+                              name: channel.name,
+                              group: group.name,
+                            })}
+                            onCheckedChange={(next) => {
+                              setChannelDrafts((current) => {
+                                const ids = new Set(current[group.name] ?? [])
+                                if (next === true) ids.add(channel.id)
+                                else ids.delete(channel.id)
+                                return {
+                                  ...current,
+                                  [group.name]: [...ids],
+                                }
+                              })
+                            }}
+                          />
+                          <span className='text-sm'>
+                            {channel.name} (#{channel.id})
+                            {channel.status !== 1 ? (
+                              <span className='text-muted-foreground'>
+                                {' '}
+                                · {t('Disabled')}
+                              </span>
+                            ) : null}
+                          </span>
+                        </label>
+                      ))
+                    )}
+                  </div>
+                )
+              })
             )}
           </section>
           <PortalSettingsInvoice

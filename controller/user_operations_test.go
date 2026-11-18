@@ -50,6 +50,7 @@ func performUserOperationsRequest(t *testing.T, method string, userID int, role 
 
 func TestUserOperationsSettingsReadAndUpdate(t *testing.T) {
 	db := setupManageUserTestDB(t)
+	require.NoError(t, db.AutoMigrate(&model.Channel{}))
 	useOperationsGroupRatios(t)
 	user := model.User{
 		Username: "ops-member", Password: "password", DisplayName: "Member",
@@ -109,6 +110,8 @@ func TestUserOperationsSettingsReadAndUpdate(t *testing.T) {
 	assert.Empty(t, updated.UsableGroups)
 	assert.Empty(t, updated.GroupDiscounts)
 	assert.JSONEq(t, `{"vip":{"gpt":0.2}}`, updated.GroupModelDiscounts)
+	assert.Equal(t, "Ada Labs", updated.GetSetting().InvoiceProfile.Name)
+	assert.Empty(t, updated.GetSetting().GroupChannelAllowlist)
 }
 
 func TestUserOperationsSettingsRejectsUnauthorizedAndInvalidDiscounts(t *testing.T) {
@@ -149,4 +152,42 @@ func TestUserOperationsSettingsRejectsUnauthorizedAndInvalidDiscounts(t *testing
 	require.NoError(t, db.First(&memberAfter, member.Id).Error)
 	assert.Empty(t, memberAfter.UsableGroups)
 	assert.Empty(t, memberAfter.GroupDiscounts)
+}
+
+func TestUserOperationsSettingsStoresGroupChannels(t *testing.T) {
+	db := setupManageUserTestDB(t)
+	require.NoError(t, db.AutoMigrate(&model.Channel{}, &model.Ability{}))
+	useOperationsGroupRatios(t)
+	user := model.User{
+		Username: "ops-channel", Password: "password", Role: common.RoleCommonUser,
+		Status: common.UserStatusEnabled, Group: "vip", AuthVersion: 1,
+		AffCode: "ops-channel",
+		Setting: `{"language":"zh","invoice_profile":{"name":"Ada Labs","line1":"1 Road","city":"Shanghai","postal_code":"200000","country":"CN","email":"ada@example.com"}}`,
+	}
+	require.NoError(t, db.Create(&user).Error)
+	priority := int64(10)
+	weight := uint(1)
+	channel := model.Channel{
+		Id: 910021, Type: 1, Key: "sk-ops", Status: common.ChannelStatusEnabled,
+		Name: "aws-a", Models: "opus", Group: "vip", Priority: &priority, Weight: &weight,
+	}
+	require.NoError(t, channel.Insert())
+
+	recorder := performUserOperationsRequest(t, http.MethodPut, user.Id, common.RoleAdminUser, `{"custom":false,"groups":[],"discounts":{},"group_channels":{"default":[910021]}}`)
+	assert.Contains(t, recorder.Body.String(), `"success":false`)
+	var unchanged model.User
+	require.NoError(t, db.First(&unchanged, user.Id).Error)
+	assert.Empty(t, unchanged.UsableGroups)
+	assert.Equal(t, "zh", unchanged.GetSetting().Language)
+
+	recorder = performUserOperationsRequest(t, http.MethodPut, user.Id, common.RoleAdminUser, `{"custom":false,"groups":[],"discounts":{},"group_channels":{"vip":[910021]}}`)
+	assert.Contains(t, recorder.Body.String(), `"success":true`)
+	require.NoError(t, db.First(&unchanged, user.Id).Error)
+	assert.Equal(t, []int{910021}, unchanged.GetSetting().GroupChannelAllowlist["vip"])
+	assert.Equal(t, "zh", unchanged.GetSetting().Language)
+	assert.Equal(t, "Ada Labs", unchanged.GetSetting().InvoiceProfile.Name)
+
+	recorder = performUserOperationsRequest(t, http.MethodGet, user.Id, common.RoleAdminUser, "")
+	assert.Contains(t, recorder.Body.String(), `"group_channels":{"vip":[910021]}`)
+	assert.Contains(t, recorder.Body.String(), `"name":"aws-a"`)
 }
