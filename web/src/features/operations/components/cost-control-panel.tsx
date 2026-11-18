@@ -18,7 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { useQuery } from '@tanstack/react-query'
 import { ChevronsUpDown } from 'lucide-react'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { StaticDataTable } from '@/components/data-table'
@@ -40,6 +40,15 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover'
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import { listPortalBillMonths } from '@/features/user-portal/lib/billing'
 import { searchChannels } from '@/features/channels/api'
 import { searchUsers } from '@/features/users/api'
 import { useDebounce } from '@/hooks/use-debounce'
@@ -67,11 +76,24 @@ type PickedEntity = {
   label: string
 }
 
-export function CostControlPanel(props: { period: string }) {
+export function CostControlPanel(props: {
+  initialPeriod?: string
+  initialUser?: { id: number; username: string } | null
+}) {
   const { t } = useTranslation()
   const { formatQuota } = usePricingCurrency()
+  const months = useMemo(() => listPortalBillMonths(), [])
+  const [monthValue, setMonthValue] = useState(
+    months.some((month) => month.value === props.initialPeriod)
+      ? (props.initialPeriod ?? '')
+      : (months[0]?.value ?? '')
+  )
   const [view, setView] = useState<CostControlView>('user')
-  const [user, setUser] = useState<PickedEntity | null>(null)
+  const [user, setUser] = useState<PickedEntity | null>(
+    props.initialUser
+      ? { id: props.initialUser.id, label: props.initialUser.username }
+      : null
+  )
   const [channel, setChannel] = useState<PickedEntity | null>(null)
   const [dimensions, setDimensions] = useState<CostControlDimension[]>([
     ...USER_DIMENSIONS,
@@ -81,11 +103,11 @@ export function CostControlPanel(props: { period: string }) {
   const selected = options.filter((dimension) => dimensions.includes(dimension))
   const subjectId = view === 'user' ? user?.id : channel?.id
   const costs = useQuery({
-    queryKey: ['month-cost-control', props.period, view, subjectId, selected],
-    enabled: props.period.length > 0 && subjectId != null,
+    queryKey: ['month-cost-control', monthValue, view, subjectId, selected],
+    enabled: monthValue.length > 0 && subjectId != null,
     queryFn: () =>
       getMonthCostControl({
-        period: props.period,
+        period: monthValue,
         view,
         userId: user?.id,
         channelId: channel?.id,
@@ -136,15 +158,60 @@ export function CostControlPanel(props: { period: string }) {
   ]
 
   return (
-    <section className='flex flex-col gap-3 border-t pt-4'>
-      <div className='flex flex-col gap-1'>
-        <h2 className='text-sm font-medium'>{t('Cost control')}</h2>
-        <p className='text-muted-foreground text-sm'>
-          {t(
-            'Group one month of channel cost and the amount billed to users.'
-          )}
-        </p>
-      </div>
+    <div className='flex w-full flex-col gap-6'>
+      <header className='flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between'>
+        <div className='flex flex-col gap-2'>
+          <h1 className='text-2xl font-semibold tracking-tight text-[var(--portal-ink)]'>
+            {t('Cost control')}
+          </h1>
+          <p className='text-muted-foreground text-sm'>
+            {t(
+              'Group one month of channel cost and the amount billed to users.'
+            )}
+          </p>
+          {view === 'user' && user ? (
+            <p className='text-sm text-[var(--portal-ink)]'>
+              {t('Viewing {{username}}', { username: user.label })}
+            </p>
+          ) : null}
+          {view === 'channel' && channel ? (
+            <p className='text-sm text-[var(--portal-ink)]'>
+              {t('Viewing {{username}}', { username: channel.label })}
+            </p>
+          ) : null}
+        </div>
+        <div className='flex flex-wrap items-center gap-2'>
+          <Select
+            items={months.map((month) => ({
+              value: month.value,
+              label: month.value,
+            }))}
+            value={monthValue}
+            onValueChange={(value) => {
+              if (value) setMonthValue(value)
+            }}
+          >
+            <SelectTrigger
+              size='sm'
+              className='w-40'
+              aria-label={t('Billing period')}
+            >
+              <SelectValue>
+                <span>{monthValue}</span>
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectGroup>
+                {months.map((month) => (
+                  <SelectItem key={month.value} value={month.value}>
+                    {month.value}
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+            </SelectContent>
+          </Select>
+        </div>
+      </header>
       <div className='flex flex-wrap items-center gap-2'>
         <Button
           size='sm'
@@ -244,7 +311,7 @@ export function CostControlPanel(props: { period: string }) {
           />
         </>
       ) : null}
-    </section>
+    </div>
   )
 }
 

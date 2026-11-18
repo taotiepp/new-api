@@ -56,6 +56,7 @@ describe('user portal navigation', () => {
     expect(isUserPortalConsolePath('/app/bills')).toBe(true)
     expect(isUserPortalConsolePath('/app/settings')).toBe(true)
     expect(isUserPortalConsolePath('/app/security')).toBe(true)
+    expect(isUserPortalConsolePath('/app/costs')).toBe(true)
     expect(isUserPortalConsolePath('/app')).toBe(false)
     expect(isUserPortalConsolePath('/app/playground')).toBe(false)
     expect(isUserPortalPlazaPath('/app')).toBe(true)

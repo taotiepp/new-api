@@ -68,6 +68,13 @@ describe('account cost table', () => {
     expect(billHref).toContain('username=bob')
     expect(billHref).toContain('period=2026-10')
 
+    const cost = screen.getByRole('link', { name: 'View cost' })
+    const costHref = cost.getAttribute('href') ?? ''
+    expect(costHref).toContain('/app/costs?')
+    expect(costHref).toContain('userId=2')
+    expect(costHref).toContain('username=bob')
+    expect(costHref).toContain('period=2026-10')
+
     const link = screen.getByRole('link', { name: 'bob' })
     const href = link.getAttribute('href') ?? ''
     expect(href).toContain('/app/usage?')

@@ -41,6 +41,8 @@ export const appBillsSearchSchema = z.object({
   period: z.string().optional(),
 })
 
+export const appCostsSearchSchema = appBillsSearchSchema
+
 export const appUsageSearchSchema = z.object({
   startTime: z.number().optional(),
   endTime: z.number().optional(),

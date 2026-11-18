@@ -125,7 +125,7 @@ export const USER_PORTAL_CONSOLE_NAV_ITEMS: UserPortalNavItem[] = [
   },
 ]
 
-const USER_PORTAL_CONSOLE_PAGE_PREFIXES = ['/app/security']
+const USER_PORTAL_CONSOLE_PAGE_PREFIXES = ['/app/security', '/app/costs']
 
 export function isUserPortalConsolePath(pathname: string): boolean {
   if (

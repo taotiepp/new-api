@@ -64,6 +64,7 @@ import { Route as AuthenticatedVirtualGroupsIndexRouteImport } from './routes/_a
 import { Route as AuthenticatedWalletIndexRouteImport } from './routes/_authenticated/wallet/index'
 import { Route as PricingModelIdIndexRouteImport } from './routes/pricing/$modelId/index'
 import { Route as AuthenticatedAppBillsIndexRouteImport } from './routes/_authenticated/app/bills/index'
+import { Route as AuthenticatedAppCostsIndexRouteImport } from './routes/_authenticated/app/costs/index'
 import { Route as AuthenticatedAppDocsIndexRouteImport } from './routes/_authenticated/app/docs/index'
 import { Route as AuthenticatedAppDocsSplatRouteImport } from './routes/_authenticated/app/docs/$'
 import { Route as AuthenticatedAppKeysIndexRouteImport } from './routes/_authenticated/app/keys/index'
@@ -386,6 +387,12 @@ const AuthenticatedAppBillsIndexRoute =
     path: '/bills/',
     getParentRoute: () => AuthenticatedAppRouteRoute,
   } as any)
+const AuthenticatedAppCostsIndexRoute =
+  AuthenticatedAppCostsIndexRouteImport.update({
+    id: '/costs/',
+    path: '/costs/',
+    getParentRoute: () => AuthenticatedAppRouteRoute,
+  } as any)
 const AuthenticatedAppDocsIndexRoute =
   AuthenticatedAppDocsIndexRouteImport.update({
     id: '/',
@@ -605,6 +612,7 @@ export interface FileRoutesByFullPath {
   '/system-settings/security/$section': typeof AuthenticatedSystemSettingsSecuritySectionRoute
   '/system-settings/site/$section': typeof AuthenticatedSystemSettingsSiteSectionRoute
   '/app/bills/': typeof AuthenticatedAppBillsIndexRoute
+  '/app/costs/': typeof AuthenticatedAppCostsIndexRoute
   '/app/docs/': typeof AuthenticatedAppDocsIndexRoute
   '/app/keys/': typeof AuthenticatedAppKeysIndexRoute
   '/app/logs/': typeof AuthenticatedAppLogsIndexRoute
@@ -682,6 +690,7 @@ export interface FileRoutesByTo {
   '/system-settings/security/$section': typeof AuthenticatedSystemSettingsSecuritySectionRoute
   '/system-settings/site/$section': typeof AuthenticatedSystemSettingsSiteSectionRoute
   '/app/bills': typeof AuthenticatedAppBillsIndexRoute
+  '/app/costs': typeof AuthenticatedAppCostsIndexRoute
   '/app/docs': typeof AuthenticatedAppDocsIndexRoute
   '/app/keys': typeof AuthenticatedAppKeysIndexRoute
   '/app/logs': typeof AuthenticatedAppLogsIndexRoute
@@ -766,6 +775,7 @@ export interface FileRoutesById {
   '/_authenticated/system-settings/security/$section': typeof AuthenticatedSystemSettingsSecuritySectionRoute
   '/_authenticated/system-settings/site/$section': typeof AuthenticatedSystemSettingsSiteSectionRoute
   '/_authenticated/app/bills/': typeof AuthenticatedAppBillsIndexRoute
+  '/_authenticated/app/costs/': typeof AuthenticatedAppCostsIndexRoute
   '/_authenticated/app/docs/': typeof AuthenticatedAppDocsIndexRoute
   '/_authenticated/app/keys/': typeof AuthenticatedAppKeysIndexRoute
   '/_authenticated/app/logs/': typeof AuthenticatedAppLogsIndexRoute
@@ -849,6 +859,7 @@ export interface FileRouteTypes {
     | '/system-settings/security/$section'
     | '/system-settings/site/$section'
     | '/app/bills/'
+    | '/app/costs/'
     | '/app/docs/'
     | '/app/keys/'
     | '/app/logs/'
@@ -926,6 +937,7 @@ export interface FileRouteTypes {
     | '/system-settings/security/$section'
     | '/system-settings/site/$section'
     | '/app/bills'
+    | '/app/costs'
     | '/app/docs'
     | '/app/keys'
     | '/app/logs'
@@ -1009,6 +1021,7 @@ export interface FileRouteTypes {
     | '/_authenticated/system-settings/security/$section'
     | '/_authenticated/system-settings/site/$section'
     | '/_authenticated/app/bills/'
+    | '/_authenticated/app/costs/'
     | '/_authenticated/app/docs/'
     | '/_authenticated/app/keys/'
     | '/_authenticated/app/logs/'
@@ -1436,6 +1449,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAppBillsIndexRouteImport
       parentRoute: typeof AuthenticatedAppRouteRoute
     }
+    '/_authenticated/app/costs/': {
+      id: '/_authenticated/app/costs/'
+      path: '/costs'
+      fullPath: '/app/costs/'
+      preLoaderRoute: typeof AuthenticatedAppCostsIndexRouteImport
+      parentRoute: typeof AuthenticatedAppRouteRoute
+    }
     '/_authenticated/app/docs/': {
       id: '/_authenticated/app/docs/'
       path: '/'
@@ -1667,6 +1687,7 @@ interface AuthenticatedAppRouteRouteChildren {
   AuthenticatedAppDocsRouteRoute: typeof AuthenticatedAppDocsRouteRouteWithChildren
   AuthenticatedAppIndexRoute: typeof AuthenticatedAppIndexRoute
   AuthenticatedAppBillsIndexRoute: typeof AuthenticatedAppBillsIndexRoute
+  AuthenticatedAppCostsIndexRoute: typeof AuthenticatedAppCostsIndexRoute
   AuthenticatedAppKeysIndexRoute: typeof AuthenticatedAppKeysIndexRoute
   AuthenticatedAppLogsIndexRoute: typeof AuthenticatedAppLogsIndexRoute
   AuthenticatedAppOperationsIndexRoute: typeof AuthenticatedAppOperationsIndexRoute
@@ -1683,6 +1704,7 @@ const AuthenticatedAppRouteRouteChildren: AuthenticatedAppRouteRouteChildren = {
   AuthenticatedAppDocsRouteRoute: AuthenticatedAppDocsRouteRouteWithChildren,
   AuthenticatedAppIndexRoute: AuthenticatedAppIndexRoute,
   AuthenticatedAppBillsIndexRoute: AuthenticatedAppBillsIndexRoute,
+  AuthenticatedAppCostsIndexRoute: AuthenticatedAppCostsIndexRoute,
   AuthenticatedAppKeysIndexRoute: AuthenticatedAppKeysIndexRoute,
   AuthenticatedAppLogsIndexRoute: AuthenticatedAppLogsIndexRoute,
   AuthenticatedAppOperationsIndexRoute: AuthenticatedAppOperationsIndexRoute,

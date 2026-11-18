@@ -28,7 +28,7 @@ export function UserPortalOperations() {
   return (
     <UserPortalPage
       description={t(
-        'Monthly cost for each account, plus channel cost grouped by user or by channel.'
+        'Monthly cost for each account. Open an account to see its usage.'
       )}
       title={t('Operations management')}
     >

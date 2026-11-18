@@ -40,7 +40,6 @@ import {
 
 import { getAccountMonthCosts } from './api'
 import { AccountCostTable } from './components/account-cost-table'
-import { CostControlPanel } from './components/cost-control-panel'
 
 export function OperationsPage() {
   const { t } = useTranslation()
@@ -158,7 +157,6 @@ export function OperationsPage() {
           </Button>
         </div>
       ) : null}
-      <CostControlPanel period={monthValue} />
     </div>
   )
 }

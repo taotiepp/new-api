@@ -105,6 +105,28 @@ export function AccountCostTable(props: AccountCostTableProps) {
           ),
         },
         {
+          id: 'cost',
+          header: t('View cost'),
+          cell: (account) => (
+            <Button
+              size='sm'
+              variant='outline'
+              render={
+                <Link
+                  to='/app/costs'
+                  search={{
+                    userId: account.user_id,
+                    username: account.username,
+                    period: props.period,
+                  }}
+                />
+              }
+            >
+              {t('View cost')}
+            </Button>
+          ),
+        },
+        {
           id: 'display-name',
           header: t('Display name'),
           cell: (account) => account.display_name || unset,
