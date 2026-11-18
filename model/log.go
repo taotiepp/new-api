@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -14,6 +15,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 func applyExplicitLogTextFilter(tx *gorm.DB, column string, value string) (*gorm.DB, error) {
@@ -799,6 +801,163 @@ func SumChannelSettlement(startTimestamp int64, endTimestamp int64, modelName st
 		return nil, errors.New("查询渠道结算失败")
 	}
 	return rows, nil
+}
+
+const monthCostControlLimit = 500
+
+// ErrInvalidMonthCostControl is returned when the view, subject, or dimensions
+// cannot be queried.
+var ErrInvalidMonthCostControl = errors.New("invalid month cost control")
+
+// MonthCostControlQuery aggregates consume logs for one calendar month.
+// View "user" requires UserID and may group by group, channel, token, and model.
+// View "channel" requires ChannelID and may group by user and model.
+// CostQuota is the channel cost. Quota is the amount billed to the user.
+type MonthCostControlQuery struct {
+	Period     string
+	View       string
+	UserID     int
+	ChannelID  *int
+	Dimensions []string
+}
+
+// MonthCostRow is one aggregated cost-control line.
+type MonthCostRow struct {
+	GroupName   string `json:"group_name" gorm:"column:group_name"`
+	ChannelId   int    `json:"channel_id" gorm:"column:channel_id"`
+	ChannelName string `json:"channel_name" gorm:"-"`
+	TokenId     int    `json:"token_id" gorm:"column:token_id"`
+	TokenName   string `json:"token_name" gorm:"column:token_name"`
+	ModelName   string `json:"model_name" gorm:"column:model_name"`
+	UserId      int    `json:"user_id" gorm:"column:user_id"`
+	Username    string `json:"username" gorm:"column:username"`
+	Quota       int    `json:"quota" gorm:"column:quota"`
+	CostQuota   int    `json:"cost_quota" gorm:"column:cost_quota"`
+	Count       int    `json:"count" gorm:"column:count"`
+}
+
+func ListMonthCostControl(query MonthCostControlQuery) ([]MonthCostRow, bool, error) {
+	start, end, ok := ParseBillPeriod(query.Period)
+	if !ok {
+		return nil, false, ErrInvalidMonthCostControl
+	}
+	dimensions, err := monthCostControlDimensions(query.View, query.Dimensions)
+	if err != nil {
+		return nil, false, err
+	}
+	switch query.View {
+	case "user":
+		if query.UserID <= 0 {
+			return nil, false, ErrInvalidMonthCostControl
+		}
+	case "channel":
+		if query.ChannelID == nil || *query.ChannelID < 0 {
+			return nil, false, ErrInvalidMonthCostControl
+		}
+	default:
+		return nil, false, ErrInvalidMonthCostControl
+	}
+
+	selects := []string{
+		"COALESCE(SUM(quota), 0) AS quota",
+		"COALESCE(SUM(cost_quota), 0) AS cost_quota",
+		"COUNT(*) AS count",
+	}
+	groups := make([]string, 0, len(dimensions))
+	includeChannel := false
+	for _, dimension := range dimensions {
+		switch dimension {
+		case "group":
+			selects = append(selects, logGroupCol+" AS group_name")
+			groups = append(groups, logGroupCol)
+		case "channel":
+			selects = append(selects, "channel_id")
+			groups = append(groups, "channel_id")
+			includeChannel = true
+		case "token":
+			selects = append(selects, "token_id", "MAX(token_name) AS token_name")
+			groups = append(groups, "token_id")
+		case "model":
+			selects = append(selects, "model_name")
+			groups = append(groups, "model_name")
+		case "user":
+			selects = append(selects, "user_id", "MAX(username) AS username")
+			groups = append(groups, "user_id")
+		}
+	}
+
+	tx := LOG_DB.Table("logs").
+		Select(strings.Join(selects, ", ")).
+		Where("type = ?", LogTypeConsume).
+		Where("created_at >= ? AND created_at <= ?", start.Unix(), end.Unix())
+	if query.View == "user" {
+		tx = tx.Where("user_id = ?", query.UserID)
+	} else {
+		tx = tx.Where("channel_id = ?", *query.ChannelID)
+	}
+	if len(groups) > 0 {
+		tx = tx.Clauses(clause.GroupBy{
+			Columns: []clause.Column{{
+				Name: strings.Join(groups, ", "),
+				Raw:  true,
+			}},
+		})
+	}
+	var rows []MonthCostRow
+	if err := tx.Order("cost_quota DESC").Limit(monthCostControlLimit + 1).Scan(&rows).Error; err != nil {
+		return nil, false, err
+	}
+	if len(groups) == 0 && len(rows) == 1 && rows[0].Count == 0 {
+		rows = nil
+	}
+	truncated := len(rows) > monthCostControlLimit
+	if truncated {
+		rows = rows[:monthCostControlLimit]
+	}
+	if rows == nil {
+		rows = []MonthCostRow{}
+	}
+	if includeChannel {
+		names := make(map[int]string, len(rows))
+		for i := range rows {
+			id := rows[i].ChannelId
+			name, seen := names[id]
+			if !seen {
+				channel, lookupErr := CacheGetChannel(id)
+				if lookupErr == nil && channel != nil {
+					name = channel.Name
+				}
+				names[id] = name
+			}
+			rows[i].ChannelName = name
+		}
+	}
+	return rows, truncated, nil
+}
+
+func monthCostControlDimensions(view string, requested []string) ([]string, error) {
+	var allowed []string
+	switch view {
+	case "user":
+		allowed = []string{"group", "channel", "token", "model"}
+	case "channel":
+		allowed = []string{"user", "model"}
+	default:
+		return nil, ErrInvalidMonthCostControl
+	}
+	seen := make(map[string]struct{}, len(requested))
+	dimensions := make([]string, 0, len(requested))
+	for _, name := range requested {
+		if !slices.Contains(allowed, name) {
+			return nil, ErrInvalidMonthCostControl
+		}
+		if _, ok := seen[name]; ok {
+			continue
+		}
+		seen[name] = struct{}{}
+		dimensions = append(dimensions, name)
+	}
+	return dimensions, nil
 }
 
 func SumUsedToken(logType int, startTimestamp int64, endTimestamp int64, modelName string, username string, tokenName string) (token int) {

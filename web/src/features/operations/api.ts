@@ -23,6 +23,9 @@ import type {
   AccountMonthCostList,
   AccountOperations,
   AccountOperationsUpdate,
+  CostControlDimension,
+  CostControlView,
+  MonthCostControl,
 } from './types'
 
 export async function getAccountMonthCosts(params: {
@@ -38,6 +41,29 @@ export async function getAccountMonthCosts(params: {
         keyword: params.keyword,
         p: params.page,
         page_size: 20,
+      },
+      skipErrorHandler: true,
+    }
+  )
+  return requireServerSuccess(response.data).data
+}
+
+export async function getMonthCostControl(params: {
+  period: string
+  view: CostControlView
+  userId?: number
+  channelId?: number
+  dimensions: CostControlDimension[]
+}): Promise<MonthCostControl> {
+  const response = await api.get<{ success: boolean; data: MonthCostControl }>(
+    '/api/data/cost-control',
+    {
+      params: {
+        period: params.period,
+        view: params.view,
+        user_id: params.view === 'user' ? params.userId : undefined,
+        channel_id: params.view === 'channel' ? params.channelId : undefined,
+        dimensions: params.dimensions.join(','),
       },
       skipErrorHandler: true,
     }

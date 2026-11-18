@@ -1,8 +1,10 @@
 package controller
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
@@ -135,6 +137,57 @@ func GetAccountMonthCosts(c *gin.Context) {
 		"total":     total,
 		"page":      pageInfo.GetPage(),
 		"page_size": pageInfo.GetPageSize(),
+		"period":    period,
+	})
+}
+
+func GetMonthCostControl(c *gin.Context) {
+	period := c.Query("period")
+	if period == "" {
+		period = model.CurrentBillPeriod(time.Now())
+	}
+	query := model.MonthCostControlQuery{
+		Period: period,
+		View:   c.Query("view"),
+	}
+	if raw := strings.TrimSpace(c.Query("user_id")); raw != "" {
+		id, err := strconv.Atoi(raw)
+		if err != nil || id <= 0 {
+			common.ApiErrorMsg(c, "invalid cost control query")
+			return
+		}
+		query.UserID = id
+	}
+	if raw := strings.TrimSpace(c.Query("channel_id")); raw != "" {
+		id, err := strconv.Atoi(raw)
+		if err != nil || id < 0 {
+			common.ApiErrorMsg(c, "invalid cost control query")
+			return
+		}
+		query.ChannelID = &id
+	}
+	if raw := strings.TrimSpace(c.Query("dimensions")); raw != "" {
+		for part := range strings.SplitSeq(raw, ",") {
+			part = strings.TrimSpace(part)
+			if part == "" {
+				continue
+			}
+			query.Dimensions = append(query.Dimensions, part)
+		}
+	}
+	rows, truncated, err := model.ListMonthCostControl(query)
+	if errors.Is(err, model.ErrInvalidMonthCostControl) {
+		common.ApiErrorMsg(c, "invalid cost control query")
+		return
+	}
+	if err != nil {
+		common.SysError("failed to list month cost control: " + err.Error())
+		common.ApiErrorMsg(c, "failed to list cost control")
+		return
+	}
+	common.ApiSuccess(c, gin.H{
+		"items":     rows,
+		"truncated": truncated,
 		"period":    period,
 	})
 }

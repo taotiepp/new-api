@@ -60,3 +60,32 @@ export type AccountOperationsUpdate = {
   groups: string[]
   discounts: Record<string, number | null>
 }
+
+export type CostControlView = 'user' | 'channel'
+
+export type CostControlDimension =
+  | 'group'
+  | 'channel'
+  | 'token'
+  | 'model'
+  | 'user'
+
+export type MonthCostRow = {
+  group_name: string
+  channel_id: number
+  channel_name: string
+  token_id: number
+  token_name: string
+  model_name: string
+  user_id: number
+  username: string
+  quota: number
+  cost_quota: number
+  count: number
+}
+
+export type MonthCostControl = {
+  items: MonthCostRow[]
+  truncated: boolean
+  period: string
+}
