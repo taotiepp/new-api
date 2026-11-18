@@ -192,6 +192,28 @@ func GetMonthCostControl(c *gin.Context) {
 	})
 }
 
+func GetMonthChannelCosts(c *gin.Context) {
+	period := c.Query("period")
+	if period == "" {
+		period = model.CurrentBillPeriod(time.Now())
+	}
+	rows, truncated, err := model.ListMonthChannelCosts(period, c.Query("keyword"))
+	if errors.Is(err, model.ErrInvalidMonthCostControl) {
+		common.ApiErrorMsg(c, "invalid cost control query")
+		return
+	}
+	if err != nil {
+		common.SysError("failed to list month channel costs: " + err.Error())
+		common.ApiErrorMsg(c, "failed to list channel costs")
+		return
+	}
+	common.ApiSuccess(c, gin.H{
+		"items":     rows,
+		"truncated": truncated,
+		"period":    period,
+	})
+}
+
 func GetAllFlowQuotaDates(c *gin.Context) {
 	startTimestamp, endTimestamp, ok := parseFlowQuotaTimeRange(c)
 	if !ok {

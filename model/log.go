@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -918,21 +919,65 @@ func ListMonthCostControl(query MonthCostControlQuery) ([]MonthCostRow, bool, er
 		rows = []MonthCostRow{}
 	}
 	if includeChannel {
-		names := make(map[int]string, len(rows))
-		for i := range rows {
-			id := rows[i].ChannelId
-			name, seen := names[id]
-			if !seen {
-				channel, lookupErr := CacheGetChannel(id)
-				if lookupErr == nil && channel != nil {
-					name = channel.Name
-				}
-				names[id] = name
-			}
-			rows[i].ChannelName = name
-		}
+		fillMonthCostChannelNames(rows)
 	}
 	return rows, truncated, nil
+}
+
+// ListMonthChannelCosts returns one row per channel for a calendar month.
+// CostQuota is the channel cost. Quota is the amount billed to users.
+func ListMonthChannelCosts(period string, keyword string) ([]MonthCostRow, bool, error) {
+	start, end, ok := ParseBillPeriod(period)
+	if !ok {
+		return nil, false, ErrInvalidMonthCostControl
+	}
+	var rows []MonthCostRow
+	err := LOG_DB.Table("logs").
+		Select("channel_id, COALESCE(SUM(quota), 0) AS quota, COALESCE(SUM(cost_quota), 0) AS cost_quota, COUNT(*) AS count").
+		Where("type = ?", LogTypeConsume).
+		Where("created_at >= ? AND created_at <= ?", start.Unix(), end.Unix()).
+		Clauses(clause.GroupBy{Columns: []clause.Column{{Name: "channel_id", Raw: true}}}).
+		Order("cost_quota DESC").
+		Limit(monthCostControlLimit + 1).
+		Scan(&rows).Error
+	if err != nil {
+		return nil, false, err
+	}
+	truncated := len(rows) > monthCostControlLimit
+	if truncated {
+		rows = rows[:monthCostControlLimit]
+	}
+	if rows == nil {
+		rows = []MonthCostRow{}
+	}
+	fillMonthCostChannelNames(rows)
+	needle := strings.ToLower(strings.TrimSpace(keyword))
+	if needle == "" {
+		return rows, truncated, nil
+	}
+	matched := make([]MonthCostRow, 0, len(rows))
+	for _, row := range rows {
+		if strings.Contains(strings.ToLower(row.ChannelName), needle) || strings.Contains(strconv.Itoa(row.ChannelId), needle) {
+			matched = append(matched, row)
+		}
+	}
+	return matched, truncated, nil
+}
+
+func fillMonthCostChannelNames(rows []MonthCostRow) {
+	names := make(map[int]string, len(rows))
+	for i := range rows {
+		id := rows[i].ChannelId
+		name, seen := names[id]
+		if !seen {
+			channel, lookupErr := CacheGetChannel(id)
+			if lookupErr == nil && channel != nil {
+				name = channel.Name
+			}
+			names[id] = name
+		}
+		rows[i].ChannelName = name
+	}
 }
 
 func monthCostControlDimensions(view string, requested []string) ([]string, error) {

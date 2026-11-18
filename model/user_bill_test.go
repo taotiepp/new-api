@@ -161,4 +161,20 @@ func TestListMonthCostControlGroupsUserAndChannelViews(t *testing.T) {
 	assert.Equal(t, 120, byGroup[0].CostQuota)
 	assert.Equal(t, "azure", byGroup[1].GroupName)
 	assert.Equal(t, 30, byGroup[1].CostQuota)
+
+	channels, truncated, err := ListMonthChannelCosts("2026-11", "")
+	require.NoError(t, err)
+	assert.False(t, truncated)
+	require.Len(t, channels, 2)
+	assert.Equal(t, 7, channels[0].ChannelId)
+	assert.Equal(t, 129, channels[0].CostQuota)
+	assert.Equal(t, 157, channels[0].Quota)
+	assert.Equal(t, 3, channels[0].Count)
+	assert.Equal(t, 8, channels[1].ChannelId)
+	assert.Equal(t, 30, channels[1].CostQuota)
+
+	matched, _, err := ListMonthChannelCosts("2026-11", "8")
+	require.NoError(t, err)
+	require.Len(t, matched, 1)
+	assert.Equal(t, 8, matched[0].ChannelId)
 }

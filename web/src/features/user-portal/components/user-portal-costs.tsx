@@ -23,15 +23,19 @@ import { UserPortalPage } from './user-portal-page'
 
 type UserPortalCostsProps = {
   subject?: PortalSubjectUser
+  channel?: { id: number; name: string }
   period?: string
+  view?: 'user' | 'channel'
 }
 
 export function UserPortalCosts(props: UserPortalCostsProps) {
   return (
     <UserPortalPage framed={false}>
       <CostControlPanel
+        initialChannel={props.channel}
         initialPeriod={props.period}
         initialUser={props.subject}
+        initialView={props.view}
       />
     </UserPortalPage>
   )

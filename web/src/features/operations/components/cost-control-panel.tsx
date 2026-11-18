@@ -79,25 +79,33 @@ type PickedEntity = {
 export function CostControlPanel(props: {
   initialPeriod?: string
   initialUser?: { id: number; username: string } | null
+  initialChannel?: { id: number; name: string } | null
+  initialView?: CostControlView
 }) {
   const { t } = useTranslation()
   const { formatQuota } = usePricingCurrency()
   const months = useMemo(() => listPortalBillMonths(), [])
+  const startingView: CostControlView =
+    props.initialView === 'channel' || props.initialChannel ? 'channel' : 'user'
   const [monthValue, setMonthValue] = useState(
     months.some((month) => month.value === props.initialPeriod)
       ? (props.initialPeriod ?? '')
       : (months[0]?.value ?? '')
   )
-  const [view, setView] = useState<CostControlView>('user')
+  const [view, setView] = useState<CostControlView>(startingView)
   const [user, setUser] = useState<PickedEntity | null>(
     props.initialUser
       ? { id: props.initialUser.id, label: props.initialUser.username }
       : null
   )
-  const [channel, setChannel] = useState<PickedEntity | null>(null)
-  const [dimensions, setDimensions] = useState<CostControlDimension[]>([
-    ...USER_DIMENSIONS,
-  ])
+  const [channel, setChannel] = useState<PickedEntity | null>(
+    props.initialChannel
+      ? { id: props.initialChannel.id, label: props.initialChannel.name }
+      : null
+  )
+  const [dimensions, setDimensions] = useState<CostControlDimension[]>(
+    startingView === 'channel' ? [...CHANNEL_DIMENSIONS] : [...USER_DIMENSIONS]
+  )
 
   const options = view === 'user' ? USER_DIMENSIONS : CHANNEL_DIMENSIONS
   const selected = options.filter((dimension) => dimensions.includes(dimension))

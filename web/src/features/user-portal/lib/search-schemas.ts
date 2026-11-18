@@ -41,7 +41,14 @@ export const appBillsSearchSchema = z.object({
   period: z.string().optional(),
 })
 
-export const appCostsSearchSchema = appBillsSearchSchema
+export const appCostsSearchSchema = z.object({
+  userId: z.number().optional(),
+  username: z.string().optional(),
+  period: z.string().optional(),
+  channelId: z.number().optional(),
+  channelName: z.string().optional(),
+  view: z.enum(['user', 'channel']).optional(),
+})
 
 export const appUsageSearchSchema = z.object({
   startTime: z.number().optional(),

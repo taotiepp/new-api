@@ -38,8 +38,9 @@ import {
   listPortalBillMonths,
 } from '@/features/user-portal/lib/billing'
 
-import { getAccountMonthCosts } from './api'
+import { getAccountMonthCosts, getMonthChannelCosts } from './api'
 import { AccountCostTable } from './components/account-cost-table'
+import { ChannelCostTable } from './components/channel-cost-table'
 
 export function OperationsPage() {
   const { t } = useTranslation()
@@ -47,8 +48,11 @@ export function OperationsPage() {
   const [monthValue, setMonthValue] = useState(months[0]?.value ?? '')
   const [keyword, setKeyword] = useState('')
   const [query, setQuery] = useState('')
+  const [channelKeyword, setChannelKeyword] = useState('')
+  const [channelQuery, setChannelQuery] = useState('')
   const [page, setPage] = useState(1)
   const appliedQuery = useRef('')
+  const appliedChannelQuery = useRef('')
   const month = months.find((item) => item.value === monthValue) ?? months[0]
   const range = createPortalBillMonthRange(month?.date)
 
@@ -63,11 +67,28 @@ export function OperationsPage() {
     return () => window.clearTimeout(timer)
   }, [keyword])
 
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      const next = channelKeyword.trim()
+      if (next === appliedChannelQuery.current) return
+      appliedChannelQuery.current = next
+      setChannelQuery(next)
+    }, 300)
+    return () => window.clearTimeout(timer)
+  }, [channelKeyword])
+
   const costs = useQuery({
     queryKey: ['account-month-costs', monthValue, query, page],
     enabled: monthValue.length > 0,
     queryFn: () =>
       getAccountMonthCosts({ period: monthValue, keyword: query, page }),
+  })
+
+  const channels = useQuery({
+    queryKey: ['month-channel-costs', monthValue, channelQuery],
+    enabled: monthValue.length > 0,
+    queryFn: () =>
+      getMonthChannelCosts({ period: monthValue, keyword: channelQuery }),
   })
 
   const items = costs.data?.items ?? []
@@ -157,6 +178,49 @@ export function OperationsPage() {
           </Button>
         </div>
       ) : null}
+      <section className='flex flex-col gap-3 border-t pt-4'>
+        <div className='flex flex-col gap-1'>
+          <h2 className='text-sm font-medium'>{t('Channel cost')}</h2>
+          <p className='text-muted-foreground text-sm'>
+            {t(
+              'Monthly cost for each channel. Open a channel to group it by model and user.'
+            )}
+          </p>
+        </div>
+        <Input
+          aria-label={t('Search channels')}
+          placeholder={t('Search channels')}
+          value={channelKeyword}
+          onChange={(event) => setChannelKeyword(event.target.value)}
+        />
+        {channels.isLoading ? <LoadingState /> : null}
+        {channels.isError ? (
+          <ErrorState
+            description={channels.error.message}
+            title={t('Could not load channel costs')}
+            onRetry={() => void channels.refetch()}
+          />
+        ) : null}
+        {channels.isSuccess && channels.data.items.length === 0 ? (
+          <EmptyState
+            description={t('No channel costs for this month.')}
+            title={t('No channel costs')}
+          />
+        ) : null}
+        {channels.isSuccess && channels.data.items.length > 0 ? (
+          <>
+            {channels.data.truncated ? (
+              <p className='text-muted-foreground text-sm'>
+                {t('Showing the 500 highest-cost rows.')}
+              </p>
+            ) : null}
+            <ChannelCostTable
+              channels={channels.data.items}
+              period={monthValue}
+            />
+          </>
+        ) : null}
+      </section>
     </div>
   )
 }

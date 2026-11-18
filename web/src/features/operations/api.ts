@@ -71,6 +71,23 @@ export async function getMonthCostControl(params: {
   return requireServerSuccess(response.data).data
 }
 
+export async function getMonthChannelCosts(params: {
+  period: string
+  keyword: string
+}): Promise<MonthCostControl> {
+  const response = await api.get<{ success: boolean; data: MonthCostControl }>(
+    '/api/data/channel-costs',
+    {
+      params: {
+        period: params.period,
+        keyword: params.keyword,
+      },
+      skipErrorHandler: true,
+    }
+  )
+  return requireServerSuccess(response.data).data
+}
+
 export async function getAccountOperations(
   userId: number
 ): Promise<AccountOperations> {

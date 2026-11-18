@@ -40,11 +40,17 @@ function UserPortalCostsPage() {
     search.userId != null
       ? { id: search.userId, username: search.username ?? '' }
       : undefined
+  const channel =
+    search.channelId != null
+      ? { id: search.channelId, name: search.channelName ?? '' }
+      : undefined
   return (
     <UserPortalCosts
-      key={`${search.userId ?? 0}:${search.period ?? ''}`}
+      key={`${search.view ?? ''}:${search.userId ?? 0}:${search.channelId ?? 0}:${search.period ?? ''}`}
+      channel={channel}
       period={search.period}
       subject={subject}
+      view={search.view}
     />
   )
 }
