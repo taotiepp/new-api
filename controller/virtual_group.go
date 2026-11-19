@@ -6,7 +6,6 @@ import (
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/i18n"
 	"github.com/QuantumNous/new-api/model"
-	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
 
 	"github.com/gin-gonic/gin"
@@ -39,17 +38,13 @@ func UpdateSelfVirtualGroups(c *gin.Context) {
 		return
 	}
 	userID := c.GetInt("id")
-	user, err := model.GetUserCache(userID)
-	if err != nil {
-		common.ApiError(c, err)
-		return
-	}
 	encoded, err := common.Marshal(groups)
 	if err != nil {
 		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
 		return
 	}
-	normalized, failure := model.NormalizeVirtualGroups(string(encoded), sourceGroupsForUser(user), reservedGroupNames())
+	// Permission is checked when the catalog is used, against the resolved source group.
+	normalized, failure := model.NormalizeVirtualGroups(string(encoded), configuredSourceGroups(), reservedGroupNames())
 	if failure != nil {
 		common.ApiErrorI18n(c, failure.MessageID, failure.Data)
 		return
@@ -68,11 +63,11 @@ func UpdateSelfVirtualGroups(c *gin.Context) {
 	})
 }
 
-func sourceGroupsForUser(user *model.UserBase) map[string]struct{} {
-	resolved := service.ResolveUserUsableGroups(user.Group, user.UsableGroups)
-	source := make(map[string]struct{}, len(resolved))
-	for name := range resolved {
-		if name == "auto" || !ratio_setting.ContainsGroupRatio(name) {
+func configuredSourceGroups() map[string]struct{} {
+	ratios := ratio_setting.GetGroupRatioCopy()
+	source := make(map[string]struct{}, len(ratios))
+	for name := range ratios {
+		if name == "" || name == "auto" {
 			continue
 		}
 		source[name] = struct{}{}
