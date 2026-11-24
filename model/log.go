@@ -857,8 +857,11 @@ type MonthCostRow struct {
 	UserId      int    `json:"user_id" gorm:"column:user_id"`
 	Username    string `json:"username" gorm:"column:username"`
 	Quota       int    `json:"quota" gorm:"column:quota"`
-	CostQuota   int    `json:"cost_quota" gorm:"column:cost_quota"`
-	Count       int    `json:"count" gorm:"column:count"`
+	// cost_total avoids the source column name. ClickHouse rewrites an alias
+	// that matches a real column, and also rewrites SUM(cost_quota) in ORDER BY
+	// back through that alias into SUM(SUM(cost_quota)).
+	CostQuota int `json:"cost_quota" gorm:"column:cost_total"`
+	Count     int `json:"count" gorm:"column:count"`
 }
 
 func ListMonthCostControl(query MonthCostControlQuery) ([]MonthCostRow, bool, error) {
@@ -885,7 +888,7 @@ func ListMonthCostControl(query MonthCostControlQuery) ([]MonthCostRow, bool, er
 
 	selects := []string{
 		"COALESCE(SUM(quota), 0) AS quota",
-		"COALESCE(SUM(cost_quota), 0) AS cost_quota",
+		"COALESCE(SUM(cost_quota), 0) AS cost_total",
 		"COUNT(*) AS count",
 	}
 	groups := make([]string, 0, len(dimensions))
@@ -929,13 +932,7 @@ func ListMonthCostControl(query MonthCostControlQuery) ([]MonthCostRow, bool, er
 		})
 	}
 	var rows []MonthCostRow
-	// Order by the aggregate, not the cost_quota alias. ClickHouse resolves an
-	// alias that matches a real column back to that column, which is not in
-	// GROUP BY and makes the query fail.
-	if err := tx.Order(clause.OrderByColumn{
-		Column: clause.Column{Name: "SUM(cost_quota)", Raw: true},
-		Desc:   true,
-	}).Limit(monthCostControlLimit + 1).Scan(&rows).Error; err != nil {
+	if err := tx.Order("cost_total DESC").Limit(monthCostControlLimit + 1).Scan(&rows).Error; err != nil {
 		return nil, false, err
 	}
 	if len(groups) == 0 && len(rows) == 1 && rows[0].Count == 0 {
@@ -963,14 +960,11 @@ func ListMonthChannelCosts(period string, keyword string) ([]MonthCostRow, bool,
 	}
 	var rows []MonthCostRow
 	err := LOG_DB.Table("logs").
-		Select("channel_id, COALESCE(SUM(quota), 0) AS quota, COALESCE(SUM(cost_quota), 0) AS cost_quota, COUNT(*) AS count").
+		Select("channel_id, COALESCE(SUM(quota), 0) AS quota, COALESCE(SUM(cost_quota), 0) AS cost_total, COUNT(*) AS count").
 		Where("type = ?", LogTypeConsume).
 		Where("created_at >= ? AND created_at <= ?", start.Unix(), end.Unix()).
 		Clauses(clause.GroupBy{Columns: []clause.Column{{Name: "channel_id", Raw: true}}}).
-		Order(clause.OrderByColumn{
-			Column: clause.Column{Name: "SUM(cost_quota)", Raw: true},
-			Desc:   true,
-		}).
+		Order("cost_total DESC").
 		Limit(monthCostControlLimit + 1).
 		Scan(&rows).Error
 	if err != nil {
