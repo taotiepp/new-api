@@ -53,9 +53,13 @@ func TestFormatUserLogsStripsQuotaSaturation(t *testing.T) {
 	require.Contains(t, parsed, "model_price")
 }
 
-func TestFormatUserLogsKeepsFailedRequestBody(t *testing.T) {
+func TestFormatUserLogsOmitsRequestBodyAndKeepsCacheTokens(t *testing.T) {
 	other := common.MapToJsonStr(map[string]any{
-		"status_code": 500,
+		"status_code":              500,
+		"cache_tokens":             128,
+		"cache_creation_tokens":    64,
+		"cache_creation_tokens_5m": 40,
+		"cache_creation_tokens_1h": 24,
 		"admin_info": map[string]any{
 			"request_body":           "H4sIAAAA",
 			"request_body_truncated": true,
@@ -66,12 +70,32 @@ func TestFormatUserLogsKeepsFailedRequestBody(t *testing.T) {
 
 	formatUserLogs(logs, 0)
 
+	assert.Equal(t, 128, logs[0].CacheReadTokens)
+	assert.Equal(t, 64, logs[0].CacheWriteTokens)
 	parsed, err := common.StrToMap(logs[0].Other)
 	require.NoError(t, err)
-	assert.Equal(t, "H4sIAAAA", parsed["request_body"])
-	assert.Equal(t, true, parsed["request_body_truncated"])
-	assert.NotContains(t, parsed, "admin_info")
+	assert.EqualValues(t, 500, parsed["status_code"])
+	for _, key := range []string{
+		"cache_tokens",
+		"cache_creation_tokens",
+		"cache_creation_tokens_5m",
+		"cache_creation_tokens_1h",
+		"cache_write_tokens",
+		"request_body",
+		"request_body_truncated",
+		"admin_info",
+	} {
+		assert.NotContains(t, parsed, key)
+	}
 	assert.NotContains(t, logs[0].Other, "secret-upstream")
+
+	detail := formatLogOtherJSON(other, logOtherVisibilityUser)
+	detailParsed, err := common.StrToMap(detail)
+	require.NoError(t, err)
+	assert.Equal(t, "H4sIAAAA", detailParsed["request_body"])
+	assert.Equal(t, true, detailParsed["request_body_truncated"])
+	assert.EqualValues(t, 128, detailParsed["cache_tokens"])
+	assert.NotContains(t, detailParsed, "admin_info")
 }
 
 func TestFormatUserLogsZerosCostQuota(t *testing.T) {
@@ -335,4 +359,42 @@ func TestGetLogsKeepsResponsesSlowerThanThreshold(t *testing.T) {
 	stat, err := SumUsedQuota(LogTypeConsume, 0, 0, "", username, "", 0, "", 480)
 	require.NoError(t, err)
 	assert.Equal(t, 30, stat.Quota)
+}
+
+func TestGetUserLogsReturnsCacheTokensWithoutRequestBody(t *testing.T) {
+	require.NoError(t, LOG_DB.AutoMigrate(&Log{}))
+	const userID = 88002
+	require.NoError(t, LOG_DB.Where("user_id = ?", userID).Delete(&Log{}).Error)
+	t.Cleanup(func() {
+		LOG_DB.Where("user_id = ?", userID).Delete(&Log{})
+	})
+	require.NoError(t, LOG_DB.Create(&Log{
+		UserId:           userID,
+		Username:         "cache-log-owner",
+		Type:             LogTypeConsume,
+		ModelName:        "claude",
+		PromptTokens:     200,
+		CompletionTokens: 10,
+		RequestId:        "req-cache",
+		Other:            `{"cache_tokens":128,"cache_creation_tokens":64,"cache_creation_tokens_5m":40,"cache_creation_tokens_1h":24,"model_ratio":1,"admin_info":{"request_body":"H4sIAAAA","request_body_truncated":true,"upstream_body":"secret"}}`,
+	}).Error)
+
+	logs, total, err := GetUserLogs(userID, LogTypeConsume, 0, 0, "", "", 0, 20, "", "", "", -1)
+	require.NoError(t, err)
+	assert.EqualValues(t, 1, total)
+	require.Len(t, logs, 1)
+	assert.Equal(t, 128, logs[0].CacheReadTokens)
+	assert.Equal(t, 64, logs[0].CacheWriteTokens)
+	assert.NotContains(t, logs[0].Other, "cache_tokens")
+	assert.NotContains(t, logs[0].Other, "cache_creation_tokens")
+	assert.NotContains(t, logs[0].Other, "request_body")
+	assert.NotContains(t, logs[0].Other, "admin_info")
+	assert.NotContains(t, logs[0].Other, "secret")
+	assert.Contains(t, logs[0].Other, `"model_ratio":1`)
+
+	detail, err := GetLogOther(userID, *logs[0], false)
+	require.NoError(t, err)
+	assert.Contains(t, detail, `"cache_tokens":128`)
+	assert.Contains(t, detail, `"request_body":"H4sIAAAA"`)
+	assert.NotContains(t, detail, "secret")
 }

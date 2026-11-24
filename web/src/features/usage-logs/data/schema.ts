@@ -36,6 +36,8 @@ export const usageLogSchema = z.object({
   cost_quota: z.number().optional(),
   prompt_tokens: z.number().default(0),
   completion_tokens: z.number().default(0),
+  cache_read_tokens: z.number().optional(),
+  cache_write_tokens: z.number().optional(),
   use_time: z.number().default(0),
   is_stream: z.boolean().default(false),
   channel: z.number().default(0),

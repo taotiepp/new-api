@@ -42,6 +42,7 @@ const getUserGroups = vi.hoisted(() => vi.fn())
 const getUserModels = vi.hoisted(() => vi.fn())
 const getUserLogs = vi.hoisted(() => vi.fn())
 const getUserLogStats = vi.hoisted(() => vi.fn())
+const getLogOther = vi.hoisted(() => vi.fn(async () => ''))
 
 vi.mock('@/features/keys/api', () => ({
   getApiKeys,
@@ -62,6 +63,7 @@ vi.mock('@/lib/api', async (importOriginal) => {
 vi.mock('@/features/usage-logs/api', () => ({
   getUserLogs,
   getUserLogStats,
+  getLogOther,
 }))
 
 vi.mock('@/hooks/use-status', () => ({
@@ -303,6 +305,8 @@ describe('portal console pages', () => {
             quota: 120,
             prompt_tokens: 10,
             completion_tokens: 20,
+            cache_read_tokens: 5,
+            cache_write_tokens: 2,
             use_time: 1,
             is_stream: true,
             channel: 3,
@@ -346,8 +350,16 @@ describe('portal console pages', () => {
       screen.getByRole('columnheader', { name: 'Input' })
     ).toBeInTheDocument()
     expect(
-      screen.getByRole('columnheader', { name: 'Cache' })
+      screen.getByRole('columnheader', { name: 'Cache Read' })
     ).toBeInTheDocument()
+    expect(
+      screen.getByRole('columnheader', { name: 'Cache Write' })
+    ).toBeInTheDocument()
+    const logRow = screen.getByRole('row', { name: /gpt-4.1/ })
+    expect(logRow).toHaveTextContent('10')
+    expect(logRow).toHaveTextContent('20')
+    expect(logRow).toHaveTextContent('5')
+    expect(logRow).toHaveTextContent('2')
     expect(screen.getAllByText('Stream').length).toBeGreaterThan(1)
     expect(screen.getByText('20 t/s')).toBeInTheDocument()
     expect(screen.getByText('1.0s')).toBeInTheDocument()

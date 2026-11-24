@@ -476,8 +476,7 @@ interface DetailsDialogProps {
 export function DetailsDialog(props: DetailsDialogProps) {
   const { t } = useTranslation()
   const { copiedText, copyToClipboard } = useCopyToClipboard({ notify: false })
-  const detailEnabled =
-    props.open && !props.log.other && Boolean(props.log.request_id)
+  const detailEnabled = props.open && Boolean(props.log.request_id)
   const detailQuery = useQuery({
     queryKey: [
       'usage-log-other',
@@ -495,7 +494,7 @@ export function DetailsDialog(props: DetailsDialogProps) {
     retry: false,
     queryFn: () => getLogOther(props.log, props.isAdmin),
   })
-  const other = parseLogOther(props.log.other || detailQuery.data || '')
+  const other = parseLogOther(detailQuery.data || props.log.other || '')
   const requestPayload = props.isAdmin
     ? other?.admin_info?.request_body
     : other?.request_body

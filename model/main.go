@@ -416,6 +416,11 @@ func migrateClickHouseLogDB() error {
 	if err := LOG_DB.Exec("ALTER TABLE logs ADD COLUMN IF NOT EXISTS cost_quota Int32 DEFAULT 0").Error; err != nil {
 		return err
 	}
+	// Tables created before the group column existed are not rebuilt by
+	// CREATE TABLE IF NOT EXISTS. Cost control groups by this column.
+	if err := LOG_DB.Exec("ALTER TABLE logs ADD COLUMN IF NOT EXISTS `group` String DEFAULT ''").Error; err != nil {
+		return err
+	}
 	return syncClickHouseLogTTL(ttlDays)
 }
 

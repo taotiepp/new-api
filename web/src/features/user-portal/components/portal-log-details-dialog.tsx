@@ -66,7 +66,7 @@ export function PortalLogDetailsDialog(props: PortalLogDetailsDialogProps) {
   const { t } = useTranslation()
   const { formatQuota } = usePricingCurrency()
   const log = props.log
-  const detailEnabled = log != null && !log.other && Boolean(log.request_id)
+  const detailEnabled = log != null && Boolean(log.request_id)
   const detailQuery = useQuery({
     queryKey: [
       'portal-log-other',
@@ -88,7 +88,7 @@ export function PortalLogDetailsDialog(props: PortalLogDetailsDialogProps) {
       return getLogOther(log, false)
     },
   })
-  const other = log ? parseLogOther(log.other || detailQuery.data || '') : null
+  const other = log ? parseLogOther(detailQuery.data || log.other || '') : null
   const requestPayload = other?.request_body
   const [decodedRequest, setDecodedRequest] = useState<string | null>(null)
   const [requestDecodeFailed, setRequestDecodeFailed] = useState(false)

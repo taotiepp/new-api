@@ -141,11 +141,22 @@ export function PortalLogsTable(props: PortalLogsTableProps) {
             : DASH,
       },
       {
-        id: 'cache',
-        header: t('Cache'),
+        id: 'cacheRead',
+        header: t('Cache Read'),
         cellClassName: numericClass,
         cell: (log) =>
-          isTimingLogType(log.type) ? formatNumber(cacheTokenTotal(log)) : DASH,
+          isTimingLogType(log.type)
+            ? formatNumber(log.cache_read_tokens || 0)
+            : DASH,
+      },
+      {
+        id: 'cacheWrite',
+        header: t('Cache Write'),
+        cellClassName: numericClass,
+        cell: (log) =>
+          isTimingLogType(log.type)
+            ? formatNumber(log.cache_write_tokens || 0)
+            : DASH,
       },
       {
         id: 'duration',
@@ -247,17 +258,6 @@ export function PortalLogsTable(props: PortalLogsTableProps) {
         </TableRow>
       )}
     />
-  )
-}
-
-function cacheTokenTotal(log: UsageLog): number {
-  const other = parseLogOther(log.other)
-  if (!other) return 0
-  return (
-    (other.cache_tokens || 0) +
-    (other.cache_creation_tokens || 0) +
-    (other.cache_creation_tokens_5m || 0) +
-    (other.cache_creation_tokens_1h || 0)
   )
 }
 

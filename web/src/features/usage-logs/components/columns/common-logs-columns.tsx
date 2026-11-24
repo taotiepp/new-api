@@ -715,13 +715,16 @@ export function useCommonLogsColumns(
           return <span className='text-muted-foreground text-xs'>-</span>
         }
 
-        const cacheReadTokens = other?.cache_tokens || 0
+        const cacheReadTokens = log.cache_read_tokens || other?.cache_tokens || 0
+        const listedCacheWrite = log.cache_write_tokens || 0
         const cacheWrite5m = other?.cache_creation_tokens_5m || 0
         const cacheWrite1h = other?.cache_creation_tokens_1h || 0
         const hasSplitCache = cacheWrite5m > 0 || cacheWrite1h > 0
-        const cacheWriteTokens = hasSplitCache
-          ? cacheWrite5m + cacheWrite1h
-          : other?.cache_creation_tokens || 0
+        const cacheWriteTokens =
+          listedCacheWrite ||
+          (hasSplitCache
+            ? cacheWrite5m + cacheWrite1h
+            : other?.cache_creation_tokens || 0)
 
         return (
           <div className='flex flex-col gap-0.5'>

@@ -182,7 +182,7 @@ func GetMonthCostControl(c *gin.Context) {
 	}
 	if err != nil {
 		common.SysError("failed to list month cost control: " + err.Error())
-		common.ApiErrorMsg(c, "failed to list cost control")
+		common.ApiErrorMsg(c, "failed to list cost control: "+err.Error())
 		return
 	}
 	common.ApiSuccess(c, gin.H{

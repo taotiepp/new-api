@@ -232,6 +232,76 @@ func exposeFailedRequestBody(values map[string]json.RawMessage) bool {
 	return changed
 }
 
+// logListOmittedOtherKeys are removed from user list rows. Cache counts are
+// returned as log fields, and the stored request body stays on the detail read.
+var logListOmittedOtherKeys = []string{
+	LogOtherAdminRequestBodyKey,
+	LogOtherAdminRequestBodyTruncatedKey,
+	"cache_tokens",
+	"cache_creation_tokens",
+	"cache_creation_tokens_5m",
+	"cache_creation_tokens_1h",
+	"cache_write_tokens",
+}
+
+type logCacheTokenFields struct {
+	CacheTokens           int `json:"cache_tokens"`
+	CacheCreationTokens   int `json:"cache_creation_tokens"`
+	CacheCreationTokens5m int `json:"cache_creation_tokens_5m"`
+	CacheCreationTokens1h int `json:"cache_creation_tokens_1h"`
+	CacheWriteTokens      int `json:"cache_write_tokens"`
+}
+
+func cacheTokensFromLogOther(value string) (int, int) {
+	if value == "" {
+		return 0, 0
+	}
+	var fields logCacheTokenFields
+	if err := common.UnmarshalJsonStr(value, &fields); err != nil {
+		return 0, 0
+	}
+	write := fields.CacheWriteTokens
+	if write == 0 {
+		split := fields.CacheCreationTokens5m + fields.CacheCreationTokens1h
+		if split > 0 {
+			write = split
+		} else {
+			write = fields.CacheCreationTokens
+		}
+	}
+	return fields.CacheTokens, write
+}
+
+// omitLogListPayload drops the stored request body and cache token counts from
+// a user list row. Detail reads still return both.
+func omitLogListPayload(value string) string {
+	if value == "" || value == "{}" {
+		return value
+	}
+	var values map[string]json.RawMessage
+	if err := common.UnmarshalJsonStr(value, &values); err != nil {
+		return value
+	}
+	changed := false
+	for _, key := range logListOmittedOtherKeys {
+		if _, exists := values[key]; exists {
+			delete(values, key)
+			changed = true
+		}
+	}
+	if !changed {
+		return value
+	}
+	if len(values) == 0 {
+		return ""
+	}
+	formatted, err := common.Marshal(values)
+	if err != nil {
+		return ""
+	}
+	return string(formatted)
+}
+
 // formatLogOtherJSON applies the role projection while keeping untouched JSON
 // values as RawMessage. This preserves integers larger than JavaScript's safe
 // range instead of round-tripping them through float64.

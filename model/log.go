@@ -60,18 +60,22 @@ func sanitizeClickHouseLikePattern(input string) (string, error) {
 }
 
 type Log struct {
-	Id                int    `json:"id" gorm:"index:idx_created_at_id,priority:2;index:idx_user_id_id,priority:2"`
-	UserId            int    `json:"user_id" gorm:"index;index:idx_user_id_id,priority:1"`
-	CreatedAt         int64  `json:"created_at" gorm:"bigint;index:idx_created_at_id,priority:1;index:idx_created_at_type"`
-	Type              int    `json:"type" gorm:"index:idx_created_at_type"`
-	Content           string `json:"content"`
-	Username          string `json:"username" gorm:"index;index:index_username_model_name,priority:2;default:''"`
-	TokenName         string `json:"token_name" gorm:"index;default:''"`
-	ModelName         string `json:"model_name" gorm:"index;index:index_username_model_name,priority:1;default:''"`
-	Quota             int    `json:"quota" gorm:"default:0"`
-	CostQuota         int    `json:"cost_quota,omitempty" gorm:"default:0"`
-	PromptTokens      int    `json:"prompt_tokens" gorm:"default:0"`
-	CompletionTokens  int    `json:"completion_tokens" gorm:"default:0"`
+	Id               int    `json:"id" gorm:"index:idx_created_at_id,priority:2;index:idx_user_id_id,priority:2"`
+	UserId           int    `json:"user_id" gorm:"index;index:idx_user_id_id,priority:1"`
+	CreatedAt        int64  `json:"created_at" gorm:"bigint;index:idx_created_at_id,priority:1;index:idx_created_at_type"`
+	Type             int    `json:"type" gorm:"index:idx_created_at_type"`
+	Content          string `json:"content"`
+	Username         string `json:"username" gorm:"index;index:index_username_model_name,priority:2;default:''"`
+	TokenName        string `json:"token_name" gorm:"index;default:''"`
+	ModelName        string `json:"model_name" gorm:"index;index:index_username_model_name,priority:1;default:''"`
+	Quota            int    `json:"quota" gorm:"default:0"`
+	CostQuota        int    `json:"cost_quota,omitempty" gorm:"default:0"`
+	PromptTokens     int    `json:"prompt_tokens" gorm:"default:0"`
+	CompletionTokens int    `json:"completion_tokens" gorm:"default:0"`
+	// Cache counts are list fields. They are derived from stored usage metadata
+	// and are not columns; detail responses keep the original metadata in other.
+	CacheReadTokens   int    `json:"cache_read_tokens,omitempty" gorm:"-"`
+	CacheWriteTokens  int    `json:"cache_write_tokens,omitempty" gorm:"-"`
 	UseTime           int    `json:"use_time" gorm:"default:0"`
 	IsStream          bool   `json:"is_stream"`
 	ChannelId         int    `json:"channel" gorm:"index"`
@@ -121,7 +125,8 @@ func formatUserLogs(logs []*Log, startIdx int) {
 	for i := range logs {
 		logs[i].ChannelName = ""
 		logs[i].CostQuota = 0
-		logs[i].Other = formatLogOtherJSON(logs[i].Other, logOtherVisibilityUser)
+		logs[i].CacheReadTokens, logs[i].CacheWriteTokens = cacheTokensFromLogOther(logs[i].Other)
+		logs[i].Other = omitLogListPayload(formatLogOtherJSON(logs[i].Other, logOtherVisibilityUser))
 	}
 	assignDisplayLogIds(logs, startIdx)
 }
@@ -171,7 +176,7 @@ func GetLogByTokenId(tokenId int) (logs []*Log, err error) {
 		order = clickHouseLogOrder("")
 	}
 	tx := excludeRetriedAttemptLogs(LOG_DB.Model(&Log{}).Where("token_id = ?", tokenId), "other")
-	err = tx.Select(logListColumns()).Order(order).Limit(common.MaxRecentItems).Find(&logs).Error
+	err = tx.Select(logListColumnsWithOther()).Order(order).Limit(common.MaxRecentItems).Find(&logs).Error
 	formatUserLogs(logs, 0)
 	return logs, err
 }
@@ -667,7 +672,7 @@ func GetUserLogs(userId int, logType int, startTimestamp int64, endTimestamp int
 	if common.UsingLogDatabase(common.DatabaseTypeClickHouse) {
 		order = clickHouseLogOrder("logs.")
 	}
-	err = tx.Select(logListColumns()).Order(order).Limit(num).Offset(startIdx).Find(&logs).Error
+	err = tx.Select(logListColumnsWithOther()).Order(order).Limit(num).Offset(startIdx).Find(&logs).Error
 	if err != nil {
 		common.SysError("failed to search user logs: " + err.Error())
 		return nil, 0, errors.New("查询日志失败")
@@ -905,7 +910,13 @@ func ListMonthCostControl(query MonthCostControlQuery) ([]MonthCostRow, bool, er
 		})
 	}
 	var rows []MonthCostRow
-	if err := tx.Order("cost_quota DESC").Limit(monthCostControlLimit + 1).Scan(&rows).Error; err != nil {
+	// Order by the aggregate, not the cost_quota alias. ClickHouse resolves an
+	// alias that matches a real column back to that column, which is not in
+	// GROUP BY and makes the query fail.
+	if err := tx.Order(clause.OrderByColumn{
+		Column: clause.Column{Name: "SUM(cost_quota)", Raw: true},
+		Desc:   true,
+	}).Limit(monthCostControlLimit + 1).Scan(&rows).Error; err != nil {
 		return nil, false, err
 	}
 	if len(groups) == 0 && len(rows) == 1 && rows[0].Count == 0 {
@@ -937,7 +948,10 @@ func ListMonthChannelCosts(period string, keyword string) ([]MonthCostRow, bool,
 		Where("type = ?", LogTypeConsume).
 		Where("created_at >= ? AND created_at <= ?", start.Unix(), end.Unix()).
 		Clauses(clause.GroupBy{Columns: []clause.Column{{Name: "channel_id", Raw: true}}}).
-		Order("cost_quota DESC").
+		Order(clause.OrderByColumn{
+			Column: clause.Column{Name: "SUM(cost_quota)", Raw: true},
+			Desc:   true,
+		}).
 		Limit(monthCostControlLimit + 1).
 		Scan(&rows).Error
 	if err != nil {
