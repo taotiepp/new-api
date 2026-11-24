@@ -72,12 +72,13 @@ type Log struct {
 	CostQuota        int    `json:"cost_quota,omitempty" gorm:"default:0"`
 	PromptTokens     int    `json:"prompt_tokens" gorm:"default:0"`
 	CompletionTokens int    `json:"completion_tokens" gorm:"default:0"`
-	// Cache counts are list fields. They are derived from stored usage metadata
-	// and are not columns; detail responses keep the original metadata in other.
-	CacheReadTokens   int    `json:"cache_read_tokens,omitempty" gorm:"-"`
-	CacheWriteTokens  int    `json:"cache_write_tokens,omitempty" gorm:"-"`
-	UseTime           int    `json:"use_time" gorm:"default:0"`
-	IsStream          bool   `json:"is_stream"`
+	CacheReadTokens  int    `json:"cache_read_tokens,omitempty"`
+	CacheWriteTokens int    `json:"cache_write_tokens,omitempty"`
+	UseTime          int    `json:"use_time" gorm:"default:0"`
+	IsStream         bool   `json:"is_stream"`
+	// Retried marks an error attempt that was not the failure returned to the caller.
+	// List queries filter this column and do not read other.
+	Retried           bool   `json:"retried,omitempty"`
 	ChannelId         int    `json:"channel" gorm:"index"`
 	ChannelName       string `json:"channel_name" gorm:"->"`
 	TokenId           int    `json:"token_id" gorm:"default:0;index"`
@@ -125,10 +126,18 @@ func formatUserLogs(logs []*Log, startIdx int) {
 	for i := range logs {
 		logs[i].ChannelName = ""
 		logs[i].CostQuota = 0
-		logs[i].CacheReadTokens, logs[i].CacheWriteTokens = cacheTokensFromLogOther(logs[i].Other)
-		logs[i].Other = omitLogListPayload(formatLogOtherJSON(logs[i].Other, logOtherVisibilityUser))
+		logs[i].Other = ""
 	}
 	assignDisplayLogIds(logs, startIdx)
+}
+
+func assignLogListColumns(log *Log, other *LogOther) {
+	if log == nil || other == nil {
+		return
+	}
+	log.CacheReadTokens = other.CacheReadTokens()
+	log.CacheWriteTokens = other.CacheWriteTokens()
+	log.Retried = other.Retried()
 }
 
 // FormatAdminLogs removes root-only diagnostics while retaining operational
@@ -165,9 +174,17 @@ func applyMinUseTime(tx *gorm.DB, column string, minUseTime int) *gorm.DB {
 	return tx.Where(column+" > ?", minUseTime)
 }
 
-func excludeRetriedAttemptLogs(tx *gorm.DB, column string) *gorm.DB {
-	marker := `"` + LogOtherAdminRetriedKey + `":true`
-	return tx.Where("("+column+" IS NULL OR "+column+" NOT LIKE ?)", "%"+marker+"%")
+func excludeRetriedAttemptLogs(tx *gorm.DB) *gorm.DB {
+	if tx == nil {
+		return nil
+	}
+	// ClickHouse stores the flag as UInt8 and adds it with DEFAULT 0.
+	// Other databases can leave rows written before the column existed as NULL;
+	// those rows stay visible until an offline backfill sets the flag.
+	if common.UsingLogDatabase(common.DatabaseTypeClickHouse) {
+		return tx.Where("retried = 0")
+	}
+	return tx.Where("retried = ? OR retried IS NULL", false)
 }
 
 func GetLogByTokenId(tokenId int) (logs []*Log, err error) {
@@ -175,8 +192,8 @@ func GetLogByTokenId(tokenId int) (logs []*Log, err error) {
 	if common.UsingLogDatabase(common.DatabaseTypeClickHouse) {
 		order = clickHouseLogOrder("")
 	}
-	tx := excludeRetriedAttemptLogs(LOG_DB.Model(&Log{}).Where("token_id = ?", tokenId), "other")
-	err = tx.Select(logListColumnsWithOther()).Order(order).Limit(common.MaxRecentItems).Find(&logs).Error
+	tx := excludeRetriedAttemptLogs(LOG_DB.Model(&Log{}).Where("token_id = ?", tokenId))
+	err = tx.Select(logListColumns()).Order(order).Limit(common.MaxRecentItems).Find(&logs).Error
 	formatUserLogs(logs, 0)
 	return logs, err
 }
@@ -350,6 +367,7 @@ func RecordErrorLog(c *gin.Context, userId int, channelId int, modelName string,
 		UpstreamRequestId: upstreamRequestId,
 		Other:             otherStr,
 	}
+	assignLogListColumns(log, other)
 	err := createLog(log)
 	if err != nil {
 		logger.LogError(c, "failed to record log: "+err.Error())
@@ -453,6 +471,7 @@ func RecordConsumeLog(c *gin.Context, userId int, params RecordConsumeLogParams)
 		UpstreamRequestId: upstreamRequestId,
 		Other:             otherStr,
 	}
+	assignLogListColumns(log, params.Other)
 	err := createLog(log)
 	if err != nil {
 		logger.LogError(c, "failed to record log: "+err.Error())
@@ -662,7 +681,7 @@ func GetUserLogs(userId int, logType int, startTimestamp int64, endTimestamp int
 	if group != "" {
 		tx = tx.Where("logs."+logGroupCol+" = ?", group)
 	}
-	tx = excludeRetriedAttemptLogs(tx, "logs.other")
+	tx = excludeRetriedAttemptLogs(tx)
 	err = tx.Model(&Log{}).Limit(logSearchCountLimit).Count(&total).Error
 	if err != nil {
 		common.SysError("failed to count user logs: " + err.Error())
@@ -672,7 +691,7 @@ func GetUserLogs(userId int, logType int, startTimestamp int64, endTimestamp int
 	if common.UsingLogDatabase(common.DatabaseTypeClickHouse) {
 		order = clickHouseLogOrder("logs.")
 	}
-	err = tx.Select(logListColumnsWithOther()).Order(order).Limit(num).Offset(startIdx).Find(&logs).Error
+	err = tx.Select(logListColumns()).Order(order).Limit(num).Offset(startIdx).Find(&logs).Error
 	if err != nil {
 		common.SysError("failed to search user logs: " + err.Error())
 		return nil, 0, errors.New("查询日志失败")

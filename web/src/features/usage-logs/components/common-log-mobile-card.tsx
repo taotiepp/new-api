@@ -142,13 +142,8 @@ export function CommonLogMobileCard<TData>(props: {
   const costCell = props.cells.get('quota')
   const contentCell = props.cells.get('content')
   const channelCell = props.cells.get('channel')
-  const cacheRead = log.cache_read_tokens || other?.cache_tokens || 0
-  const cacheWrite =
-    log.cache_write_tokens ||
-    (other?.cache_creation_tokens_5m || 0) +
-      (other?.cache_creation_tokens_1h || 0) ||
-    other?.cache_creation_tokens ||
-    0
+  const cacheRead = log.cache_read_tokens || 0
+  const cacheWrite = log.cache_write_tokens || 0
   const showTokens =
     displayable &&
     props.cells.has('prompt_tokens') &&

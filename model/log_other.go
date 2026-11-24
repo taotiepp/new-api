@@ -171,6 +171,61 @@ func (o *LogOther) JSONString() string {
 	return o.jsonString()
 }
 
+// CacheReadTokens is the list column copied from public cache_tokens at write time.
+func (o *LogOther) CacheReadTokens() int {
+	if o == nil {
+		return 0
+	}
+	return logOtherInt(o.public["cache_tokens"])
+}
+
+// CacheWriteTokens is the list column copied at write time. An explicit
+// cache_write_tokens value wins; otherwise the 5m and 1h creation counts are
+// summed, then cache_creation_tokens is used.
+func (o *LogOther) CacheWriteTokens() int {
+	if o == nil {
+		return 0
+	}
+	if write := logOtherInt(o.public["cache_write_tokens"]); write != 0 {
+		return write
+	}
+	split := logOtherInt(o.public["cache_creation_tokens_5m"]) + logOtherInt(o.public["cache_creation_tokens_1h"])
+	if split > 0 {
+		return split
+	}
+	return logOtherInt(o.public["cache_creation_tokens"])
+}
+
+// Retried reports the admin flag stored for an error attempt that was retried.
+func (o *LogOther) Retried() bool {
+	if o == nil || o.adminInfo == nil {
+		return false
+	}
+	retried, _ := o.adminInfo[LogOtherAdminRetriedKey].(bool)
+	return retried
+}
+
+func logOtherInt(value any) int {
+	switch n := value.(type) {
+	case int:
+		return n
+	case int32:
+		return int(n)
+	case int64:
+		return int(n)
+	case float64:
+		return int(n)
+	case json.Number:
+		parsed, err := n.Int64()
+		if err != nil {
+			return 0
+		}
+		return int(parsed)
+	default:
+		return 0
+	}
+}
+
 // Snapshot returns a detached top-level view for tests and read-only
 // inspection. Mutating it cannot add or replace fields in LogOther.
 func (o *LogOther) Snapshot() map[string]any {
@@ -230,76 +285,6 @@ func exposeFailedRequestBody(values map[string]json.RawMessage) bool {
 		changed = true
 	}
 	return changed
-}
-
-// logListOmittedOtherKeys are removed from user list rows. Cache counts are
-// returned as log fields, and the stored request body stays on the detail read.
-var logListOmittedOtherKeys = []string{
-	LogOtherAdminRequestBodyKey,
-	LogOtherAdminRequestBodyTruncatedKey,
-	"cache_tokens",
-	"cache_creation_tokens",
-	"cache_creation_tokens_5m",
-	"cache_creation_tokens_1h",
-	"cache_write_tokens",
-}
-
-type logCacheTokenFields struct {
-	CacheTokens           int `json:"cache_tokens"`
-	CacheCreationTokens   int `json:"cache_creation_tokens"`
-	CacheCreationTokens5m int `json:"cache_creation_tokens_5m"`
-	CacheCreationTokens1h int `json:"cache_creation_tokens_1h"`
-	CacheWriteTokens      int `json:"cache_write_tokens"`
-}
-
-func cacheTokensFromLogOther(value string) (int, int) {
-	if value == "" {
-		return 0, 0
-	}
-	var fields logCacheTokenFields
-	if err := common.UnmarshalJsonStr(value, &fields); err != nil {
-		return 0, 0
-	}
-	write := fields.CacheWriteTokens
-	if write == 0 {
-		split := fields.CacheCreationTokens5m + fields.CacheCreationTokens1h
-		if split > 0 {
-			write = split
-		} else {
-			write = fields.CacheCreationTokens
-		}
-	}
-	return fields.CacheTokens, write
-}
-
-// omitLogListPayload drops the stored request body and cache token counts from
-// a user list row. Detail reads still return both.
-func omitLogListPayload(value string) string {
-	if value == "" || value == "{}" {
-		return value
-	}
-	var values map[string]json.RawMessage
-	if err := common.UnmarshalJsonStr(value, &values); err != nil {
-		return value
-	}
-	changed := false
-	for _, key := range logListOmittedOtherKeys {
-		if _, exists := values[key]; exists {
-			delete(values, key)
-			changed = true
-		}
-	}
-	if !changed {
-		return value
-	}
-	if len(values) == 0 {
-		return ""
-	}
-	formatted, err := common.Marshal(values)
-	if err != nil {
-		return ""
-	}
-	return string(formatted)
 }
 
 // formatLogOtherJSON applies the role projection while keeping untouched JSON

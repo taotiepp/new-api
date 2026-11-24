@@ -48,9 +48,9 @@ const log = usageLogSchema.parse({
   use_time: 1.5,
   prompt_tokens: 1200,
   completion_tokens: 800,
+  cache_read_tokens: 300,
+  cache_write_tokens: 200,
   other: JSON.stringify({
-    cache_tokens: 300,
-    cache_creation_tokens_5m: 200,
     model_ratio: 1,
   }),
 })
@@ -220,6 +220,8 @@ it('omits unused token and throughput placeholders for async jobs', () => {
         ...log,
         prompt_tokens: 0,
         completion_tokens: 0,
+        cache_read_tokens: 0,
+        cache_write_tokens: 0,
         other: JSON.stringify({ is_task: true }),
       },
     ],

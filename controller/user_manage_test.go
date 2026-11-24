@@ -245,8 +245,7 @@ func TestManageUserQuotaRecordsTopupAndAudit(t *testing.T) {
 			require.NoError(t, err)
 			assert.EqualValues(t, 1, total)
 			require.Len(t, logs, 1)
-			assert.NotContains(t, logs[0].Other, "admin_info")
-			assert.Contains(t, logs[0].Other, tc.action)
+			assert.Empty(t, logs[0].Other)
 			userOtherJSON, err := model.GetLogOther(user.Id, *logs[0], false)
 			require.NoError(t, err)
 			other = model.AuditOther{}

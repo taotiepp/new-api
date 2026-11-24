@@ -27,10 +27,9 @@ func TestCompressLogPayloadRoundTrip(t *testing.T) {
 	assert.Equal(t, huge[:maxErrorRequestBodyBytes], decoded)
 }
 
-// TestFormatUserLogsStripsQuotaSaturation verifies the admin-only quota
-// saturation marker (nested under other.admin_info) is removed for non-admin
-// log views, since formatUserLogs strips the whole admin_info object.
-func TestFormatUserLogsStripsQuotaSaturation(t *testing.T) {
+// TestFormatUserLogsOmitsStoredOther verifies list rows do not carry other.
+// Detail reads still project it, including stripping admin-only quota saturation.
+func TestFormatUserLogsOmitsStoredOther(t *testing.T) {
 	other := common.MapToJsonStr(map[string]any{
 		"model_price": 0.004,
 		"admin_info": map[string]any{
@@ -41,19 +40,23 @@ func TestFormatUserLogsStripsQuotaSaturation(t *testing.T) {
 			},
 		},
 	})
-	logs := []*Log{{Other: other}}
+	logs := []*Log{{Other: other, Quota: 120, CostQuota: 80}}
 
 	formatUserLogs(logs, 0)
 
-	parsed, err := common.StrToMap(logs[0].Other)
+	assert.Empty(t, logs[0].Other)
+	assert.Equal(t, 0, logs[0].CostQuota)
+	assert.Equal(t, 120, logs[0].Quota)
+
+	detail := formatLogOtherJSON(other, logOtherVisibilityUser)
+	parsed, err := common.StrToMap(detail)
 	require.NoError(t, err)
 	_, hasAdminInfo := parsed["admin_info"]
-	require.False(t, hasAdminInfo, "admin_info (and nested quota_saturation) must be stripped for non-admin views")
-	// Non-admin billing fields remain visible.
+	require.False(t, hasAdminInfo, "admin_info (and nested quota_saturation) must be stripped for non-admin detail")
 	require.Contains(t, parsed, "model_price")
 }
 
-func TestFormatUserLogsOmitsRequestBodyAndKeepsCacheTokens(t *testing.T) {
+func TestFormatUserLogsKeepsCacheColumnsAndOmitsOther(t *testing.T) {
 	other := common.MapToJsonStr(map[string]any{
 		"status_code":              500,
 		"cache_tokens":             128,
@@ -66,28 +69,13 @@ func TestFormatUserLogsOmitsRequestBodyAndKeepsCacheTokens(t *testing.T) {
 			"upstream_body":          "secret-upstream",
 		},
 	})
-	logs := []*Log{{Other: other}}
+	logs := []*Log{{Other: other, CacheReadTokens: 128, CacheWriteTokens: 64}}
 
 	formatUserLogs(logs, 0)
 
 	assert.Equal(t, 128, logs[0].CacheReadTokens)
 	assert.Equal(t, 64, logs[0].CacheWriteTokens)
-	parsed, err := common.StrToMap(logs[0].Other)
-	require.NoError(t, err)
-	assert.EqualValues(t, 500, parsed["status_code"])
-	for _, key := range []string{
-		"cache_tokens",
-		"cache_creation_tokens",
-		"cache_creation_tokens_5m",
-		"cache_creation_tokens_1h",
-		"cache_write_tokens",
-		"request_body",
-		"request_body_truncated",
-		"admin_info",
-	} {
-		assert.NotContains(t, parsed, key)
-	}
-	assert.NotContains(t, logs[0].Other, "secret-upstream")
+	assert.Empty(t, logs[0].Other)
 
 	detail := formatLogOtherJSON(other, logOtherVisibilityUser)
 	detailParsed, err := common.StrToMap(detail)
@@ -105,10 +93,7 @@ func TestFormatUserLogsZerosCostQuota(t *testing.T) {
 
 	assert.Equal(t, 0, logs[0].CostQuota)
 	assert.Equal(t, 120, logs[0].Quota)
-	parsed, err := common.StrToMap(logs[0].Other)
-	require.NoError(t, err)
-	assert.Equal(t, 0.8, parsed["user_discount"])
-	assert.NotContains(t, parsed, "admin_info")
+	assert.Empty(t, logs[0].Other)
 }
 
 func TestTaskPluginLogVisibilityIsRoleSeparated(t *testing.T) {
@@ -132,8 +117,9 @@ func TestTaskPluginLogVisibilityIsRoleSeparated(t *testing.T) {
 	t.Run("user", func(t *testing.T) {
 		logs := []*Log{{Other: other}}
 		formatUserLogs(logs, 0)
+		assert.Empty(t, logs[0].Other)
 
-		parsed, err := common.StrToMap(logs[0].Other)
+		parsed, err := common.StrToMap(formatLogOtherJSON(other, logOtherVisibilityUser))
 		require.NoError(t, err)
 		assert.NotContains(t, parsed, "admin_info")
 		assert.NotContains(t, parsed, "root_info")
@@ -192,7 +178,9 @@ func TestLegacyLogOtherVisibilityIsRoleSeparated(t *testing.T) {
 		assert.Equal(t, 11, logs[0].Id)
 		assert.Equal(t, 77, logs[0].ChannelId)
 		assert.Empty(t, logs[0].ChannelName)
-		parsed, err := common.StrToMap(logs[0].Other)
+		assert.Empty(t, logs[0].Other)
+
+		parsed, err := common.StrToMap(formatLogOtherJSON(other, logOtherVisibilityUser))
 		require.NoError(t, err)
 		assert.Equal(t, "/v1/chat/completions", parsed["request_path"])
 		for _, key := range []string{
@@ -283,9 +271,11 @@ func TestLogFormattingPreservesLargeIntegerLexemes(t *testing.T) {
 
 		formatUserLogs(logs, 0)
 
-		assert.Contains(t, logs[0].Other, `"public_id":9007199254740993`)
-		assert.NotContains(t, logs[0].Other, "admin_id")
-		assert.NotContains(t, logs[0].Other, "generation")
+		assert.Empty(t, logs[0].Other)
+		detail := formatLogOtherJSON(other, logOtherVisibilityUser)
+		assert.Contains(t, detail, `"public_id":9007199254740993`)
+		assert.NotContains(t, detail, "admin_id")
+		assert.NotContains(t, detail, "generation")
 	})
 
 	t.Run("admin", func(t *testing.T) {
@@ -311,7 +301,8 @@ func TestLogFormattingPreservesLargeIntegerLexemes(t *testing.T) {
 
 		userLogs := []*Log{{Other: unprivileged}}
 		formatUserLogs(userLogs, 0)
-		assert.Equal(t, unprivileged, userLogs[0].Other)
+		assert.Empty(t, userLogs[0].Other)
+		assert.Equal(t, unprivileged, formatLogOtherJSON(unprivileged, logOtherVisibilityUser))
 
 		adminLogs := []*Log{{Other: unprivileged}}
 		FormatAdminLogs(adminLogs)
@@ -375,8 +366,10 @@ func TestGetUserLogsReturnsCacheTokensWithoutRequestBody(t *testing.T) {
 		ModelName:        "claude",
 		PromptTokens:     200,
 		CompletionTokens: 10,
+		CacheReadTokens:  128,
+		CacheWriteTokens: 64,
 		RequestId:        "req-cache",
-		Other:            `{"cache_tokens":128,"cache_creation_tokens":64,"cache_creation_tokens_5m":40,"cache_creation_tokens_1h":24,"model_ratio":1,"admin_info":{"request_body":"H4sIAAAA","request_body_truncated":true,"upstream_body":"secret"}}`,
+		Other:            `{"cache_tokens":999,"model_ratio":1,"admin_info":{"request_body":"H4sIAAAA","request_body_truncated":true,"upstream_body":"secret"}}`,
 	}).Error)
 
 	logs, total, err := GetUserLogs(userID, LogTypeConsume, 0, 0, "", "", 0, 20, "", "", "", -1)
@@ -385,16 +378,77 @@ func TestGetUserLogsReturnsCacheTokensWithoutRequestBody(t *testing.T) {
 	require.Len(t, logs, 1)
 	assert.Equal(t, 128, logs[0].CacheReadTokens)
 	assert.Equal(t, 64, logs[0].CacheWriteTokens)
-	assert.NotContains(t, logs[0].Other, "cache_tokens")
-	assert.NotContains(t, logs[0].Other, "cache_creation_tokens")
-	assert.NotContains(t, logs[0].Other, "request_body")
-	assert.NotContains(t, logs[0].Other, "admin_info")
-	assert.NotContains(t, logs[0].Other, "secret")
-	assert.Contains(t, logs[0].Other, `"model_ratio":1`)
+	assert.Empty(t, logs[0].Other)
 
 	detail, err := GetLogOther(userID, *logs[0], false)
 	require.NoError(t, err)
-	assert.Contains(t, detail, `"cache_tokens":128`)
+	assert.Contains(t, detail, `"cache_tokens":999`)
 	assert.Contains(t, detail, `"request_body":"H4sIAAAA"`)
 	assert.NotContains(t, detail, "secret")
+}
+
+func TestLogOtherListColumns(t *testing.T) {
+	other := NewLogOther()
+	other.SetPublic("cache_tokens", 11)
+	other.SetPublic("cache_creation_tokens_5m", 2)
+	other.SetPublic("cache_creation_tokens_1h", 5)
+	other.SetAdmin(LogOtherAdminRetriedKey, true)
+	assert.Equal(t, 11, other.CacheReadTokens())
+	assert.Equal(t, 7, other.CacheWriteTokens())
+	assert.True(t, other.Retried())
+
+	other.SetPublic("cache_write_tokens", 9)
+	assert.Equal(t, 9, other.CacheWriteTokens())
+
+	creationOnly := NewLogOther()
+	creationOnly.SetPublic("cache_creation_tokens", 6)
+	assert.Equal(t, 6, creationOnly.CacheWriteTokens())
+	assert.False(t, creationOnly.Retried())
+}
+
+func TestGetUserLogsFiltersRetriedColumnWithoutReadingOther(t *testing.T) {
+	require.NoError(t, LOG_DB.AutoMigrate(&Log{}))
+	const userID = 88003
+	require.NoError(t, LOG_DB.Where("user_id = ?", userID).Delete(&Log{}).Error)
+	t.Cleanup(func() {
+		LOG_DB.Where("user_id = ?", userID).Delete(&Log{})
+	})
+	require.NoError(t, LOG_DB.Create([]Log{
+		{
+			UserId:    userID,
+			Type:      LogTypeError,
+			Content:   "hidden",
+			Retried:   true,
+			RequestId: "req-hidden",
+			Other:     `{"admin_info":{"retried":false}}`,
+		},
+		{
+			UserId:           userID,
+			Type:             LogTypeError,
+			Content:          "shown",
+			Retried:          false,
+			CacheReadTokens:  3,
+			CacheWriteTokens: 4,
+			RequestId:        "req-shown",
+			Other:            `{"cache_tokens":9,"admin_info":{"retried":true,"request_body":"secret"}}`,
+		},
+	}).Error)
+
+	logs, total, err := GetUserLogs(userID, LogTypeError, 0, 0, "", "", 0, 20, "", "", "", -1)
+	require.NoError(t, err)
+	assert.EqualValues(t, 1, total)
+	require.Len(t, logs, 1)
+	assert.Equal(t, "shown", logs[0].Content)
+	assert.Equal(t, 3, logs[0].CacheReadTokens)
+	assert.Equal(t, 4, logs[0].CacheWriteTokens)
+	assert.Empty(t, logs[0].Other)
+
+	detail, err := GetLogOther(userID, *logs[0], false)
+	require.NoError(t, err)
+	assert.Contains(t, detail, "secret")
+	assert.NotContains(t, detail, "retried")
+
+	adminDetail, err := GetLogOther(0, *logs[0], false)
+	require.NoError(t, err)
+	assert.Contains(t, adminDetail, `"retried":true`)
 }

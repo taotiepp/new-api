@@ -121,9 +121,9 @@ function buildDetailSegments(
   if (isAdmin && other?.admin_info?.quota_saturation) {
     adminSegments.push({ text: t('Quota clamped'), danger: true })
   }
-  if (isAdmin && other?.admin_info?.retried === true) {
+  if (isAdmin && log.retried) {
     adminSegments.push({ text: t('Intermediate failure') })
-  } else if (isAdmin && other?.admin_info?.retried === false && log.type === 5) {
+  } else if (isAdmin && log.type === 5) {
     adminSegments.push({ text: t('Final failure') })
   }
   return [...adminSegments, ...segments]
@@ -707,24 +707,18 @@ export function useCommonLogsColumns(
         const log = row.original
         if (!isDisplayableLogType(log.type)) return null
 
-        const other = parseLogOther(log.other)
-
         const promptTokens = log.prompt_tokens || 0
         const completionTokens = log.completion_tokens || 0
-        if (promptTokens === 0 && completionTokens === 0) {
+        const cacheReadTokens = log.cache_read_tokens || 0
+        const cacheWriteTokens = log.cache_write_tokens || 0
+        if (
+          promptTokens === 0 &&
+          completionTokens === 0 &&
+          cacheReadTokens === 0 &&
+          cacheWriteTokens === 0
+        ) {
           return <span className='text-muted-foreground text-xs'>-</span>
         }
-
-        const cacheReadTokens = log.cache_read_tokens || other?.cache_tokens || 0
-        const listedCacheWrite = log.cache_write_tokens || 0
-        const cacheWrite5m = other?.cache_creation_tokens_5m || 0
-        const cacheWrite1h = other?.cache_creation_tokens_1h || 0
-        const hasSplitCache = cacheWrite5m > 0 || cacheWrite1h > 0
-        const cacheWriteTokens =
-          listedCacheWrite ||
-          (hasSplitCache
-            ? cacheWrite5m + cacheWrite1h
-            : other?.cache_creation_tokens || 0)
 
         return (
           <div className='flex flex-col gap-0.5'>

@@ -421,6 +421,16 @@ func migrateClickHouseLogDB() error {
 	if err := LOG_DB.Exec("ALTER TABLE logs ADD COLUMN IF NOT EXISTS `group` String DEFAULT ''").Error; err != nil {
 		return err
 	}
+	// List queries read these columns instead of the other payload.
+	if err := LOG_DB.Exec("ALTER TABLE logs ADD COLUMN IF NOT EXISTS cache_read_tokens Int32 DEFAULT 0").Error; err != nil {
+		return err
+	}
+	if err := LOG_DB.Exec("ALTER TABLE logs ADD COLUMN IF NOT EXISTS cache_write_tokens Int32 DEFAULT 0").Error; err != nil {
+		return err
+	}
+	if err := LOG_DB.Exec("ALTER TABLE logs ADD COLUMN IF NOT EXISTS retried UInt8 DEFAULT 0").Error; err != nil {
+		return err
+	}
 	return syncClickHouseLogTTL(ttlDays)
 }
 
@@ -471,8 +481,11 @@ CREATE TABLE IF NOT EXISTS logs (
 	cost_quota Int32 DEFAULT 0,
 	prompt_tokens Int32 DEFAULT 0,
 	completion_tokens Int32 DEFAULT 0,
+	cache_read_tokens Int32 DEFAULT 0,
+	cache_write_tokens Int32 DEFAULT 0,
 	use_time Int32 DEFAULT 0,
 	is_stream UInt8 DEFAULT 0,
+	retried UInt8 DEFAULT 0,
 	channel_id Int32 DEFAULT 0,
 	token_id Int32 DEFAULT 0,
 	`+"`group`"+` String DEFAULT '',

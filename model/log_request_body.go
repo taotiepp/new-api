@@ -91,10 +91,6 @@ func decompressLogPayload(encoded string) ([]byte, error) {
 	return io.ReadAll(reader)
 }
 
-func logListColumnsWithOther() []string {
-	return append(logListColumns(), "logs.other")
-}
-
 func logListColumns() []string {
 	groupCol := "`group`"
 	if common.UsingLogDatabase(common.DatabaseTypePostgreSQL) {
@@ -113,8 +109,11 @@ func logListColumns() []string {
 		"logs.cost_quota",
 		"logs.prompt_tokens",
 		"logs.completion_tokens",
+		"logs.cache_read_tokens",
+		"logs.cache_write_tokens",
 		"logs.use_time",
 		"logs.is_stream",
+		"logs.retried",
 		"logs.channel_id",
 		"logs.token_id",
 		"logs." + groupCol,
