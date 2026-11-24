@@ -13,6 +13,7 @@ import (
 	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/types"
 
+	"github.com/ClickHouse/clickhouse-go/v2"
 	"github.com/gin-gonic/gin"
 
 	"gorm.io/gorm"
@@ -830,6 +831,28 @@ func SumChannelSettlement(startTimestamp int64, endTimestamp int64, modelName st
 
 const monthCostControlLimit = 500
 
+// clickHouseCostAggregation disables bucketed GROUP BY. ClickHouse 25.9 writes
+// out-of-order aggregation buckets into BlockInfo, and clickhouse-go negotiates
+// a protocol revision that cannot read them. The server then fails the query
+// with UNKNOWN_BLOCK_INFO_FIELD, for example "Unknown BlockInfo field number: 54".
+func clickHouseCostAggregation(tx *gorm.DB) *gorm.DB {
+	if tx == nil || !common.UsingLogDatabase(common.DatabaseTypeClickHouse) {
+		return tx
+	}
+	settings := clickhouse.Settings{
+		"group_by_two_level_threshold":       0,
+		"group_by_two_level_threshold_bytes": 0,
+	}
+	if clickHouseVersionAtLeast(clickHouseServerVersion(), 25, 9) {
+		settings["enable_producing_buckets_out_of_order_in_aggregation"] = 0
+	}
+	ctx := context.Background()
+	if tx.Statement != nil && tx.Statement.Context != nil {
+		ctx = tx.Statement.Context
+	}
+	return tx.WithContext(clickhouse.Context(ctx, clickhouse.WithSettings(settings)))
+}
+
 // ErrInvalidMonthCostControl is returned when the view, subject, or dimensions
 // cannot be queried.
 var ErrInvalidMonthCostControl = errors.New("invalid month cost control")
@@ -914,7 +937,7 @@ func ListMonthCostControl(query MonthCostControlQuery) ([]MonthCostRow, bool, er
 		}
 	}
 
-	tx := LOG_DB.Table("logs").
+	tx := clickHouseCostAggregation(LOG_DB).Table("logs").
 		Select(strings.Join(selects, ", ")).
 		Where("type = ?", LogTypeConsume).
 		Where("created_at >= ? AND created_at <= ?", start.Unix(), end.Unix())
@@ -959,7 +982,7 @@ func ListMonthChannelCosts(period string, keyword string) ([]MonthCostRow, bool,
 		return nil, false, ErrInvalidMonthCostControl
 	}
 	var rows []MonthCostRow
-	err := LOG_DB.Table("logs").
+	err := clickHouseCostAggregation(LOG_DB).Table("logs").
 		Select("channel_id, COALESCE(SUM(quota), 0) AS quota, COALESCE(SUM(cost_quota), 0) AS cost_total, COUNT(*) AS count").
 		Where("type = ?", LogTypeConsume).
 		Where("created_at >= ? AND created_at <= ?", start.Unix(), end.Unix()).
