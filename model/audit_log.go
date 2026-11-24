@@ -125,12 +125,14 @@ func RecordAuditLog(c *gin.Context, entry AuditLog) {
 			logger.LogError(ctx, fmt.Sprintf("audit log write failed (request_id=%s): %v", entry.RequestId, err))
 			return
 		}
-		// The ClickHouse GORM insert callback passes structs to the native
-		// driver without resolving their Valuer. Bind this column's JSON
-		// encoding while retaining AuditOther in the domain and API models.
+		// GORM's ClickHouse insert passes the struct to the native driver
+		// without calling AuditOther.Value. Store the JSON text in a String
+		// column. clickhouse-go writes a JSON column as a serialization-version
+		// prefix that ClickHouse 24.8 rejects (code 117) and then leaves the
+		// pooled connection unreadable (code 261 on the next query).
 		row = &struct {
 			AuditLog     `gorm:"embedded"`
-			EncodedOther string `gorm:"column:other;type:json"`
+			EncodedOther string `gorm:"column:other"`
 		}{AuditLog: entry, EncodedOther: string(encoded)}
 	}
 	if err := LOG_DB.Table("audit_logs").Create(row).Error; err != nil {
@@ -243,14 +245,34 @@ func MigrateAuditLogs() error {
 	if !common.UsingLogDatabase(common.DatabaseTypeClickHouse) {
 		return LOG_DB.AutoMigrate(&AuditLog{})
 	}
-	return LOG_DB.Exec(`CREATE TABLE IF NOT EXISTS audit_logs (
+	if err := LOG_DB.Exec(`CREATE TABLE IF NOT EXISTS audit_logs (
 		id Int64 DEFAULT 0, event_id String, user_id Int64, username String, actor_role Int32,
 		created_at Int64, category String, action String, token_ref String,
 		auth_method String, ip String, user_agent String, method String, route String,
-		status Int32, success UInt8, request_id String, content String, other JSON
+		status Int32, success UInt8, request_id String, content String, other String
 	) ENGINE = MergeTree()
 	PARTITION BY toYYYYMM(toDateTime(created_at))
-	ORDER BY (created_at, event_id)`).Error
+	ORDER BY (created_at, event_id)`).Error; err != nil {
+		return err
+	}
+	return clickHouseAuditOtherAsString()
+}
+
+// clickHouseAuditOtherAsString rewrites a legacy JSON column to String.
+// Native JSON inserts from clickhouse-go desynchronize ClickHouse 24.8 connections.
+func clickHouseAuditOtherAsString() error {
+	var columnType string
+	if err := LOG_DB.Raw(`
+		SELECT type FROM system.columns
+		WHERE database = currentDatabase() AND table = 'audit_logs' AND name = 'other'
+	`).Scan(&columnType).Error; err != nil {
+		return err
+	}
+	normalized := strings.ToLower(strings.TrimSpace(columnType))
+	if normalized == "" || strings.HasPrefix(normalized, "string") {
+		return nil
+	}
+	return LOG_DB.Exec("ALTER TABLE audit_logs MODIFY COLUMN other String").Error
 }
 
 var (

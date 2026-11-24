@@ -532,7 +532,11 @@ func verifyAuditJSONStorage(t *testing.T) {
 			otherType = strings.ToLower(column.DatabaseTypeName())
 		}
 	}
-	assert.Equal(t, "json", otherType)
+	wantType := "json"
+	if common.UsingLogDatabase(common.DatabaseTypeClickHouse) {
+		wantType = "string"
+	}
+	assert.Equal(t, wantType, otherType)
 
 	metadata := model.AuditOther{
 		Op: &model.AuditOperation{Action: "channel.update", Params: model.AuditFields{
