@@ -532,6 +532,11 @@ func shouldRetry(c *gin.Context, openaiErr *types.NewAPIError, retryTimes int) b
 	if openaiErr == nil {
 		return false
 	}
+	// The incoming request is already gone. Another attempt uses the same
+	// context and fails immediately, so it only writes another error log.
+	if c != nil && c.Request != nil && c.Request.Context().Err() != nil {
+		return false
+	}
 	if service.ShouldSkipRetryAfterChannelAffinityFailure(c) {
 		return false
 	}
@@ -1093,6 +1098,9 @@ func respondTaskError(c *gin.Context, taskErr *taskdto.TaskError) {
 
 func shouldRetryTaskRelay(c *gin.Context, channelId int, taskErr *taskdto.TaskError, retryTimes int) bool {
 	if taskErr == nil {
+		return false
+	}
+	if c != nil && c.Request != nil && c.Request.Context().Err() != nil {
 		return false
 	}
 	if service.ShouldSkipRetryAfterChannelAffinityFailure(c) {
