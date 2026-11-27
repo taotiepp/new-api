@@ -139,11 +139,11 @@ func TestListUserKeyQuotaSumsTheSelectedRangeByKey(t *testing.T) {
 	require.NoError(t, DB.Create(&Token{Id: 11, UserId: 1, Key: "sk-primary", Name: "primary"}).Error)
 	require.NoError(t, DB.Create(&Token{Id: 22, UserId: 2, Key: "sk-backup", Name: "backup"}).Error)
 
-	seedFlowQuotaData(t, QuotaData{UserID: 1, TokenID: 11, ModelName: "gpt", CreatedAt: 1000, Count: 2, Quota: 70, TokenUsed: 10})
-	seedFlowQuotaData(t, QuotaData{UserID: 1, TokenID: 11, ModelName: "gpt", CreatedAt: 2000, Count: 1, Quota: 30, TokenUsed: 4})
-	seedFlowQuotaData(t, QuotaData{UserID: 1, TokenID: 11, ModelName: "claude", CreatedAt: 1500, Count: 1, Quota: 40, TokenUsed: 6})
-	seedFlowQuotaData(t, QuotaData{UserID: 1, TokenID: 22, ModelName: "gpt", CreatedAt: 1500, Count: 1, Quota: 10, TokenUsed: 2})
-	seedFlowQuotaData(t, QuotaData{UserID: 1, TokenID: 0, ModelName: "", CreatedAt: 1500, Count: 1, Quota: 5, TokenUsed: 1})
+	seedFlowQuotaData(t, QuotaData{UserID: 1, TokenID: 11, ModelName: "gpt", CreatedAt: 1000, Count: 2, Quota: 70, CostQuota: 20, TokenUsed: 10})
+	seedFlowQuotaData(t, QuotaData{UserID: 1, TokenID: 11, ModelName: "gpt", CreatedAt: 2000, Count: 1, Quota: 30, CostQuota: 10, TokenUsed: 4})
+	seedFlowQuotaData(t, QuotaData{UserID: 1, TokenID: 11, ModelName: "claude", CreatedAt: 1500, Count: 1, Quota: 40, CostQuota: 8, TokenUsed: 6})
+	seedFlowQuotaData(t, QuotaData{UserID: 1, TokenID: 22, ModelName: "gpt", CreatedAt: 1500, Count: 1, Quota: 10, CostQuota: 4, TokenUsed: 2})
+	seedFlowQuotaData(t, QuotaData{UserID: 1, TokenID: 0, ModelName: "", CreatedAt: 1500, Count: 1, Quota: 5, CostQuota: 1, TokenUsed: 1})
 	seedFlowQuotaData(t, QuotaData{UserID: 1, TokenID: 11, ModelName: "gpt", CreatedAt: 999, Count: 9, Quota: 999, TokenUsed: 9})
 	seedFlowQuotaData(t, QuotaData{UserID: 1, TokenID: 11, ModelName: "gpt", CreatedAt: 2001, Count: 9, Quota: 999, TokenUsed: 9})
 	seedFlowQuotaData(t, QuotaData{UserID: 2, TokenID: 22, ModelName: "gpt", CreatedAt: 1500, Count: 4, Quota: 80, TokenUsed: 8})
@@ -151,10 +151,10 @@ func TestListUserKeyQuotaSumsTheSelectedRangeByKey(t *testing.T) {
 	rows, err := ListUserKeyQuota(1, 1000, 2000)
 	require.NoError(t, err)
 	require.Len(t, rows, 4)
-	require.Equal(t, KeyQuotaUsage{TokenID: 11, TokenName: "primary", ModelName: "gpt", Count: 3, Quota: 100, TokenUsed: 14}, rows[0])
-	require.Equal(t, KeyQuotaUsage{TokenID: 11, TokenName: "primary", ModelName: "claude", Count: 1, Quota: 40, TokenUsed: 6}, rows[1])
-	require.Equal(t, KeyQuotaUsage{TokenID: 22, TokenName: "", ModelName: "gpt", Count: 1, Quota: 10, TokenUsed: 2}, rows[2])
-	require.Equal(t, KeyQuotaUsage{TokenID: 0, TokenName: "", ModelName: "", Count: 1, Quota: 5, TokenUsed: 1}, rows[3])
+	require.Equal(t, KeyQuotaUsage{TokenID: 11, TokenName: "primary", ModelName: "gpt", Count: 3, Quota: 100, CostQuota: 30, TokenUsed: 14}, rows[0])
+	require.Equal(t, KeyQuotaUsage{TokenID: 11, TokenName: "primary", ModelName: "claude", Count: 1, Quota: 40, CostQuota: 8, TokenUsed: 6}, rows[1])
+	require.Equal(t, KeyQuotaUsage{TokenID: 22, TokenName: "", ModelName: "gpt", Count: 1, Quota: 10, CostQuota: 4, TokenUsed: 2}, rows[2])
+	require.Equal(t, KeyQuotaUsage{TokenID: 0, TokenName: "", ModelName: "", Count: 1, Quota: 5, CostQuota: 1, TokenUsed: 1}, rows[3])
 
 	require.NoError(t, DB.Delete(&Token{Id: 11}).Error)
 	deleted, err := ListUserKeyQuota(1, 1000, 2000)
@@ -179,6 +179,7 @@ func TestLogQuotaDataSplitsRowsByUseGroupTokenChannelAndNode(t *testing.T) {
 		ChannelID: 1,
 		NodeName:  "node-a",
 		Quota:     100,
+		CostQuota: 12,
 		TokenUsed: 40,
 	})
 	LogQuotaData(QuotaDataLogParams{
@@ -191,6 +192,7 @@ func TestLogQuotaDataSplitsRowsByUseGroupTokenChannelAndNode(t *testing.T) {
 		ChannelID: 1,
 		NodeName:  "node-a",
 		Quota:     50,
+		CostQuota: 8,
 		TokenUsed: 20,
 	})
 	LogQuotaData(QuotaDataLogParams{
@@ -203,6 +205,7 @@ func TestLogQuotaDataSplitsRowsByUseGroupTokenChannelAndNode(t *testing.T) {
 		ChannelID: 1,
 		NodeName:  "node-a",
 		Quota:     25,
+		CostQuota: 5,
 		TokenUsed: 10,
 	})
 
@@ -218,7 +221,29 @@ func TestLogQuotaDataSplitsRowsByUseGroupTokenChannelAndNode(t *testing.T) {
 	require.Equal(t, "node-a", rows[0].NodeName)
 	require.Equal(t, 2, rows[0].Count)
 	require.Equal(t, 150, rows[0].Quota)
+	require.Equal(t, 20, rows[0].CostQuota)
 	require.Equal(t, 60, rows[0].TokenUsed)
 	require.Equal(t, "default", rows[1].UseGroup)
 	require.Equal(t, 25, rows[1].Quota)
+	require.Equal(t, 5, rows[1].CostQuota)
+
+	LogQuotaData(QuotaDataLogParams{
+		UserID:    1,
+		Username:  "alice",
+		ModelName: "gpt-a",
+		CreatedAt: 3800,
+		UseGroup:  "vip",
+		TokenID:   11,
+		ChannelID: 1,
+		NodeName:  "node-a",
+		Quota:     7,
+		CostQuota: 3,
+		TokenUsed: 1,
+	})
+	SaveQuotaDataCache()
+	var updated []QuotaData
+	require.NoError(t, DB.Order("quota DESC").Find(&updated).Error)
+	require.Equal(t, 157, updated[0].Quota)
+	require.Equal(t, 23, updated[0].CostQuota)
+	require.Equal(t, 3, updated[0].Count)
 }

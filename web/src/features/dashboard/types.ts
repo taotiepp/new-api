@@ -40,6 +40,7 @@ export interface KeyQuotaItem {
   token_used?: number
   count?: number
   quota?: number
+  cost_quota?: number
 }
 
 export interface FlowQuotaDataItem {

@@ -36,6 +36,7 @@ func setupFlowControllerTestDB(t *testing.T) {
 		CreatedAt: 1100,
 		Count:     2,
 		Quota:     100,
+		CostQuota: 40,
 		TokenUsed: 40,
 	}).Error)
 	require.NoError(t, model.DB.Create(&model.QuotaData{
@@ -49,6 +50,7 @@ func setupFlowControllerTestDB(t *testing.T) {
 		CreatedAt: 1200,
 		Count:     1,
 		Quota:     70,
+		CostQuota: 25,
 		TokenUsed: 30,
 	}).Error)
 }
@@ -222,6 +224,8 @@ func TestGetUserKeyQuotaReturnsOnlyTheAuthenticatedUsersKeys(t *testing.T) {
 	require.Equal(t, 100, payload.Data[0].Quota)
 	require.Equal(t, 2, payload.Data[0].Count)
 	require.Equal(t, 40, payload.Data[0].TokenUsed)
+	require.Zero(t, payload.Data[0].CostQuota)
+	require.NotContains(t, recorder.Body.String(), "cost_quota")
 }
 
 func TestGetUserKeyQuotaLetsAdminReadAnotherUser(t *testing.T) {
@@ -253,6 +257,8 @@ func TestGetUserKeyQuotaLetsAdminReadAnotherUser(t *testing.T) {
 	require.Equal(t, 22, payload.Data[0].TokenID)
 	require.Equal(t, "backup", payload.Data[0].TokenName)
 	require.Equal(t, 70, payload.Data[0].Quota)
+	require.Equal(t, 25, payload.Data[0].CostQuota)
+	require.Contains(t, recorder.Body.String(), `"cost_quota":25`)
 }
 
 func TestGetUserKeyQuotaRejectsOtherUserForCommonRole(t *testing.T) {

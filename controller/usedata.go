@@ -113,6 +113,12 @@ func GetUserKeyQuota(c *gin.Context) {
 		common.ApiErrorMsg(c, "failed to list key usage")
 		return
 	}
+	// Channel cost stays on the admin response. The same route serves users.
+	if c.GetInt("role") < common.RoleAdminUser {
+		for i := range rows {
+			rows[i].CostQuota = 0
+		}
+	}
 	common.ApiSuccess(c, rows)
 }
 

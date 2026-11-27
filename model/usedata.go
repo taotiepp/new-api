@@ -23,6 +23,8 @@ type QuotaData struct {
 	TokenUsed int    `json:"token_used" gorm:"default:0"`
 	Count     int    `json:"count" gorm:"default:0"`
 	Quota     int    `json:"quota" gorm:"default:0"`
+	// CostQuota is the channel cost. User-facing responses omit it.
+	CostQuota int `json:"cost_quota,omitempty" gorm:"default:0"`
 }
 
 // KeyQuotaUsage is one user's usage for a selected time range, split by API key and model.
@@ -34,6 +36,7 @@ type KeyQuotaUsage struct {
 	TokenUsed int    `json:"token_used" gorm:"column:token_used"`
 	Count     int    `json:"count" gorm:"column:count"`
 	Quota     int    `json:"quota" gorm:"column:quota"`
+	CostQuota int    `json:"cost_quota,omitempty" gorm:"column:cost_quota"`
 }
 
 type QuotaDataLogParams struct {
@@ -41,6 +44,7 @@ type QuotaDataLogParams struct {
 	Username  string
 	ModelName string
 	Quota     int
+	CostQuota int
 	CreatedAt int64
 	TokenUsed int
 	UseGroup  string
@@ -75,11 +79,13 @@ func logQuotaDataCache(quotaData *QuotaData) {
 	)
 	count := quotaData.Count
 	quota := quotaData.Quota
+	costQuota := quotaData.CostQuota
 	tokenUsed := quotaData.TokenUsed
 	cachedQuotaData, ok := CacheQuotaData[key]
 	if ok {
 		cachedQuotaData.Count += count
 		cachedQuotaData.Quota += quota
+		cachedQuotaData.CostQuota += costQuota
 		cachedQuotaData.TokenUsed += tokenUsed
 		quotaData = cachedQuotaData
 	}
@@ -100,6 +106,7 @@ func LogQuotaData(params QuotaDataLogParams) {
 		NodeName:  params.NodeName,
 		Count:     1,
 		Quota:     params.Quota,
+		CostQuota: params.CostQuota,
 		TokenUsed: params.TokenUsed,
 	}
 
@@ -142,6 +149,7 @@ func increaseQuotaData(quotaData *QuotaData) {
 		Updates(map[string]any{
 			"count":      gorm.Expr("count + ?", quotaData.Count),
 			"quota":      gorm.Expr("quota + ?", quotaData.Quota),
+			"cost_quota": gorm.Expr("cost_quota + ?", quotaData.CostQuota),
 			"token_used": gorm.Expr("token_used + ?", quotaData.TokenUsed),
 		}).Error
 	if err != nil {
@@ -163,7 +171,7 @@ func GetQuotaDataByUsername(username string, startTime int64, endTime int64) (qu
 func ListUserKeyQuota(userId int, startTime int64, endTime int64) ([]KeyQuotaUsage, error) {
 	rows := make([]KeyQuotaUsage, 0)
 	err := DB.Table("quota_data").
-		Select("token_id, model_name, sum(count) as count, sum(quota) as quota, sum(token_used) as token_used").
+		Select("token_id, model_name, sum(count) as count, sum(quota) as quota, sum(cost_quota) as cost_quota, sum(token_used) as token_used").
 		Where("user_id = ? and created_at >= ? and created_at <= ?", userId, startTime, endTime).
 		Group("token_id, model_name").
 		Order("quota DESC, token_id ASC").
