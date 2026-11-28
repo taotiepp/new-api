@@ -83,10 +83,12 @@ export function VirtualGroupsPage(props: { embedded?: boolean }) {
   const saveMutation = useMutation({
     mutationFn: async (next: EditorGroup[]) =>
       requireServerSuccess(await updateVirtualGroups(toVirtualGroups(next))),
-    onSuccess: async (_data, next) => {
+    onSuccess: async (data, next) => {
       setGroups(next)
       setSession(null)
       toast.success(t('Virtual groups saved'))
+      const reminder = data.message?.trim()
+      if (reminder) toast.warning(reminder)
       await queryClient.invalidateQueries({ queryKey: ['virtual-groups'] })
       await queryClient.invalidateQueries({ queryKey: ['user-groups'] })
     },

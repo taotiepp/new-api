@@ -54,6 +54,8 @@ func TestUpdateSelfVirtualGroupsDoesNotRequireSourcePermission(t *testing.T) {
 	assert.Contains(t, stored.VirtualGroups, `"source_group":"vip"`)
 
 	recorder = save(`[{"name":"coding","models":[{"name":"opus","source_group":"missing","source_model":"opus"}]}]`)
-	assert.Contains(t, recorder.Body.String(), `"success":false`)
+	assert.Contains(t, recorder.Body.String(), `"success":true`)
 	assert.Contains(t, recorder.Body.String(), "missing")
+	require.NoError(t, db.First(&stored, user.Id).Error)
+	assert.Contains(t, stored.VirtualGroups, `"source_group":"missing"`)
 }

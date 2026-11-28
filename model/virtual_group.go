@@ -75,48 +75,52 @@ func ParseVirtualGroups(raw string) ([]VirtualGroup, error) {
 
 // NormalizeVirtualGroups validates the catalog and returns the compact JSON
 // stored on the user. An empty catalog is stored as an empty string.
-func NormalizeVirtualGroups(raw string, sourceGroups, reservedNames map[string]struct{}) (string, *VirtualGroupFailure) {
+// Source groups outside the configured catalog are kept; their names are
+// returned so the caller can remind the user without rejecting the save.
+func NormalizeVirtualGroups(raw string, sourceGroups, reservedNames map[string]struct{}) (string, []string, *VirtualGroupFailure) {
 	groups, err := ParseVirtualGroups(raw)
 	if err != nil {
-		return "", virtualGroupFailure(i18n.MsgInvalidParams, nil)
+		return "", nil, virtualGroupFailure(i18n.MsgInvalidParams, nil)
 	}
-	normalized, failure := normalizeVirtualGroupList(groups, sourceGroups, reservedNames)
+	normalized, sourceWarnings, failure := normalizeVirtualGroupList(groups, sourceGroups, reservedNames)
 	if failure != nil {
-		return "", failure
+		return "", nil, failure
 	}
 	if len(normalized) == 0 {
-		return "", nil
+		return "", nil, nil
 	}
 	encoded, err := common.Marshal(normalized)
 	if err != nil {
-		return "", virtualGroupFailure(i18n.MsgInvalidParams, nil)
+		return "", nil, virtualGroupFailure(i18n.MsgInvalidParams, nil)
 	}
-	return string(encoded), nil
+	return string(encoded), sourceWarnings, nil
 }
 
-func normalizeVirtualGroupList(groups []VirtualGroup, sourceGroups, reservedNames map[string]struct{}) ([]VirtualGroup, *VirtualGroupFailure) {
+func normalizeVirtualGroupList(groups []VirtualGroup, sourceGroups, reservedNames map[string]struct{}) ([]VirtualGroup, []string, *VirtualGroupFailure) {
 	if len(groups) > maxVirtualGroups {
-		return nil, virtualGroupFailure(i18n.MsgVirtualGroupTooMany, map[string]any{"Max": maxVirtualGroups})
+		return nil, nil, virtualGroupFailure(i18n.MsgVirtualGroupTooMany, map[string]any{"Max": maxVirtualGroups})
 	}
 	seenGroups := make(map[string]struct{}, len(groups))
+	var sourceWarnings []string
+	seenSourceWarnings := make(map[string]struct{})
 	normalized := make([]VirtualGroup, 0, len(groups))
 	for _, group := range groups {
 		name := strings.TrimSpace(group.Name)
 		if name == "" {
-			return nil, virtualGroupFailure(i18n.MsgVirtualGroupNameEmpty, nil)
+			return nil, nil, virtualGroupFailure(i18n.MsgVirtualGroupNameEmpty, nil)
 		}
 		if utf8.RuneCountInString(name) > maxVirtualGroupNameLen || strings.Contains(name, "/") || strings.ContainsAny(name, " \t\r\n") {
-			return nil, virtualGroupFailure(i18n.MsgVirtualGroupNameInvalid, map[string]any{"Name": name})
+			return nil, nil, virtualGroupFailure(i18n.MsgVirtualGroupNameInvalid, map[string]any{"Name": name})
 		}
 		if _, reserved := reservedNames[name]; reserved || name == "auto" {
-			return nil, virtualGroupFailure(i18n.MsgVirtualGroupNameReserved, map[string]any{"Name": name})
+			return nil, nil, virtualGroupFailure(i18n.MsgVirtualGroupNameReserved, map[string]any{"Name": name})
 		}
 		if _, taken := seenGroups[name]; taken {
-			return nil, virtualGroupFailure(i18n.MsgVirtualGroupNameTaken, map[string]any{"Name": name})
+			return nil, nil, virtualGroupFailure(i18n.MsgVirtualGroupNameTaken, map[string]any{"Name": name})
 		}
 		seenGroups[name] = struct{}{}
 		if len(group.Models) > maxVirtualGroupModels {
-			return nil, virtualGroupFailure(i18n.MsgVirtualGroupModelsTooMany, map[string]any{
+			return nil, nil, virtualGroupFailure(i18n.MsgVirtualGroupModelsTooMany, map[string]any{
 				"Group": name,
 				"Max":   maxVirtualGroupModels,
 			})
@@ -128,23 +132,26 @@ func normalizeVirtualGroupList(groups []VirtualGroup, sourceGroups, reservedName
 			sourceGroup := strings.TrimSpace(item.SourceGroup)
 			sourceModel := strings.TrimSpace(item.SourceModel)
 			redirect := strings.TrimSpace(item.Redirect)
-			if modelName == "" || sourceModel == "" {
-				return nil, virtualGroupFailure(i18n.MsgVirtualGroupModelEmpty, map[string]any{"Group": name})
+			if modelName == "" || sourceModel == "" || sourceGroup == "" {
+				return nil, nil, virtualGroupFailure(i18n.MsgVirtualGroupModelEmpty, map[string]any{"Group": name})
 			}
 			if utf8.RuneCountInString(modelName) > maxVirtualModelNameLen || utf8.RuneCountInString(sourceModel) > maxVirtualModelNameLen {
-				return nil, virtualGroupFailure(i18n.MsgVirtualGroupModelEmpty, map[string]any{"Group": name})
+				return nil, nil, virtualGroupFailure(i18n.MsgVirtualGroupModelEmpty, map[string]any{"Group": name})
 			}
 			if _, taken := seenModels[modelName]; taken {
-				return nil, virtualGroupFailure(i18n.MsgVirtualGroupModelTaken, map[string]any{
+				return nil, nil, virtualGroupFailure(i18n.MsgVirtualGroupModelTaken, map[string]any{
 					"Group": name,
 					"Model": modelName,
 				})
 			}
 			if _, allowed := sourceGroups[sourceGroup]; !allowed {
-				return nil, virtualGroupFailure(i18n.MsgVirtualGroupSourceDenied, map[string]any{"Group": sourceGroup})
+				if _, seen := seenSourceWarnings[sourceGroup]; !seen {
+					seenSourceWarnings[sourceGroup] = struct{}{}
+					sourceWarnings = append(sourceWarnings, sourceGroup)
+				}
 			}
 			if utf8.RuneCountInString(redirect) > maxVirtualModelNameLen {
-				return nil, virtualGroupFailure(i18n.MsgVirtualGroupRedirectInvalid, map[string]any{"Model": modelName})
+				return nil, nil, virtualGroupFailure(i18n.MsgVirtualGroupRedirectInvalid, map[string]any{"Model": modelName})
 			}
 			seenModels[modelName] = struct{}{}
 			models = append(models, VirtualGroupModel{
@@ -156,7 +163,7 @@ func normalizeVirtualGroupList(groups []VirtualGroup, sourceGroups, reservedName
 		}
 		normalized = append(normalized, VirtualGroup{Name: name, Models: models})
 	}
-	return normalized, nil
+	return normalized, sourceWarnings, nil
 }
 
 // FindVirtualGroup returns the named catalog entry.

@@ -2,6 +2,7 @@ package controller
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/i18n"
@@ -44,7 +45,8 @@ func UpdateSelfVirtualGroups(c *gin.Context) {
 		return
 	}
 	// Permission is checked when the catalog is used, against the resolved source group.
-	normalized, failure := model.NormalizeVirtualGroups(string(encoded), configuredSourceGroups(), reservedGroupNames())
+	// A source outside the configured catalog is stored and only reported here.
+	normalized, sourceWarnings, failure := model.NormalizeVirtualGroups(string(encoded), configuredSourceGroups(), reservedGroupNames())
 	if failure != nil {
 		common.ApiErrorI18n(c, failure.MessageID, failure.Data)
 		return
@@ -55,6 +57,12 @@ func UpdateSelfVirtualGroups(c *gin.Context) {
 	}
 	if err := model.PublishUserAuthCache(userID); err != nil {
 		common.ApiError(c, err)
+		return
+	}
+	if len(sourceWarnings) > 0 {
+		common.ApiSuccessI18n(c, i18n.MsgVirtualGroupSourceDenied, nil, map[string]any{
+			"Group": strings.Join(sourceWarnings, ", "),
+		})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{

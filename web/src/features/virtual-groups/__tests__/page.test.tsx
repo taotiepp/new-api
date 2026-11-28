@@ -375,6 +375,31 @@ describe('virtual groups page', () => {
     )
   })
 
+  it('saves when the source group is only a reminder', async () => {
+    vi.spyOn(api, 'put').mockResolvedValue({
+      data: {
+        success: true,
+        message: 'Group cc-max-test cannot be used as a source group',
+      },
+    })
+    const user = userEvent.setup()
+    renderPage()
+    await user.click(await screen.findByRole('button', { name: 'Edit alias' }))
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    expect(
+      await screen.findByText(
+        'Group cc-max-test cannot be used as a source group'
+      )
+    ).toBeVisible()
+    expect(
+      await screen.findByRole('button', { name: 'Edit alias' })
+    ).toBeVisible()
+    expect(
+      screen.queryByRole('textbox', { name: 'Group name' })
+    ).not.toBeInTheDocument()
+  })
+
   it('saves the open editor without returning to the list first', async () => {
     const user = userEvent.setup()
     renderPage()
